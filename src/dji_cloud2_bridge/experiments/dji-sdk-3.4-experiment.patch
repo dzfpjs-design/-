@@ -1,0 +1,112 @@
+--- a/sdk/deps/base/common/http_client/http_request_sync.cc
++++ b/sdk/deps/base/common/http_client/http_request_sync.cc
+@@ -71,40 +71,8 @@
+     }
+ }
+ 
+-static int DebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, void *userptr) {
+-    std::string text;
+-    std::string str_data = data;
+-    switch (type) {
+-        case CURLINFO_TEXT:
+-            text = "== Info: ";
+-        break;
+-        case CURLINFO_HEADER_OUT:
+-            text = "=> Send header: ";
+-        break;
+-        case CURLINFO_DATA_OUT:
+-            text = "=> Send data: ";
+-        break;
+-        case CURLINFO_SSL_DATA_OUT:
+-            text = "=> Send SSL data: ";
+-        str_data.clear();
+-        break;
+-        case CURLINFO_HEADER_IN:
+-            text = "<= Recv header: ";
+-        break;
+-        case CURLINFO_DATA_IN:
+-            text = "<= Recv data: ";
+-        str_data.clear();
+-        break;
+-        case CURLINFO_SSL_DATA_IN:
+-            text = "<= Recv SSL data: ";
+-        str_data.clear();
+-        break;
+-        default:
+-            return 0;
+-    }
+-    if (!str_data.empty()) {
+-        LOG_INFO("HttpSyncRequest %s, size = %d, data: %s", text.c_str(), (int)size, str_data.c_str());
+-    }
++// Experimental build: never log libcurl headers or payloads, even when debug is enabled.
++static int DebugCallback(CURL *, curl_infotype, char *, size_t, void *) {
+     return 0;
+ }
+ 
+@@ -323,7 +291,7 @@
+ 
+     curl_easy_setopt(easy_, CURLOPT_NOSIGNAL, 1L);
+ 
+-    curl_easy_setopt(easy_, CURLOPT_FOLLOWLOCATION, 1);
++    curl_easy_setopt(easy_, CURLOPT_FOLLOWLOCATION, 0L);
+     curl_easy_setopt(easy_, CURLOPT_AUTOREFERER, 1L);
+ 
+     // 安全默认值 —— 启用服务器证书与主机名校验。
+--- a/sdk/deps/notification_center_sdk/src/websocket/CppWebSocket.cpp
++++ b/sdk/deps/notification_center_sdk/src/websocket/CppWebSocket.cpp
+@@ -343,9 +343,7 @@
+         std::lock_guard<std::mutex> lock(auth_headers_mutex_);
+         auth_headers_ = headers;
+         ws_subprotocol_header_ = BuildSubProtocolHeader(auth_headers_);
+-        LOG_INFO("CppWebSocket: setAuthHeaders updated, keys=%zu, subprotocol=%s",
+-                 auth_headers_.size(),
+-                 ws_subprotocol_header_.c_str());
++        LOG_INFO("CppWebSocket: setAuthHeaders updated, keys=%zu", auth_headers_.size());
+     }
+ 
+     // 设置 TLS 证书验证配置(仅在下一次 connect() 生效, 与 setAuthHeaders 同语义)
+@@ -596,8 +594,7 @@
+         if (protocol_header_value.empty()) {
+             protocol_header_value = "v1.notify";
+         }
+-        LOG_INFO("CppWebSocket: 握手子协议配置: %s",
+-                 protocol_header_value.c_str());
++        LOG_INFO("CppWebSocket: 握手子协议已配置");
+ 
+         struct lws_context_creation_info info;
+         memset(&info, 0, sizeof(info));
+--- a/sdk/src/bll/http_interface/http_interface.cpp
++++ b/sdk/src/bll/http_interface/http_interface.cpp
+@@ -62,6 +62,10 @@
+ 
+     HttpGetInnerWithStatus(url, headers, 
+         [callback, session_id](const drc_sdk::common::NetworkError err_code, int http_code, const std::string& response, const std::vector<std::string>& certs, const drc_sdk::common::HttpHeaders& resp_headers) {
++            if (err_code != drc_sdk::common::NetworkError::SUCCESS || http_code < 200 || http_code >= 300) {
++                callback({}, FlightHubError::from_http(http_code, 1, "HTTP request failed"));
++                return;
++            }
+             do {
+                 auto common_response = convert_response_struct(response);
+                 if (common_response.code != 0) {
+--- a/sdk/src/bll/flight_hub_sdk_impl.cpp
++++ b/sdk/src/bll/flight_hub_sdk_impl.cpp
+@@ -154,17 +154,8 @@
+     // 如果注入了 WebSocket，先传递给 NotificationCenter（必须在 initialize 之前）
+     // NC 现在由 Session 持有，通过 SessionManager 初始化
+ 
+-    std::ostringstream ws_headers_log;
+-    bool first_ws_header = true;
+-    for (const auto& item : websocket_auth_headers_) {
+-        if (!first_ws_header) {
+-            ws_headers_log << ";";
+-        }
+-        ws_headers_log << item.key << "=" << item.value;
+-        first_ws_header = false;
+-    }
+-    LOG_INFO("[FlightHubSdkImpl] initialize websocket_auth_headers_: size=%zu, values=%s",
+-             websocket_auth_headers_.size(), ws_headers_log.str().c_str());
++    // Experimental build: never emit authentication header values.
++    LOG_INFO("[FlightHubSdkImpl] initialize websocket_auth_headers_: size=%zu", websocket_auth_headers_.size());
+ 
+     // 拼 SessionManager 初始化参数 + session 0（之后只认 int session_id）
+     SessionManagerInitParams sm_params;

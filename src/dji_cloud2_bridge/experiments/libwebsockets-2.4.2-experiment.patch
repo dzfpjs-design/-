@@ -1,0 +1,11 @@
+--- a/lib/client/client.c
++++ b/lib/client/client.c
+@@ -581,6 +581,8 @@
+ 		ah->http_response = n;
+ 
+ 	if (n == 301 || n == 302 || n == 303 || n == 307 || n == 308) {
++		cce = "HS: redirect disabled by client policy";
++		goto bail3;
+ 		p = lws_hdr_simple_ptr(wsi, WSI_TOKEN_HTTP_LOCATION);
+ 		if (!p) {
+ 			cce = "HS: Redirect code but no Location";
