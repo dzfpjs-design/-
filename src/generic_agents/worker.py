@@ -1562,6 +1562,7 @@ def run_setup(workspace_id):
     sensor_analyzer_thread = None
     mqtt_receiver_thread = None
     dji_onboarding_thread = None
+    dji_cloud2_thread = None
 
     def request_stop(signum, frame):
         stop.set()
@@ -1636,6 +1637,11 @@ def run_setup(workspace_id):
             dji_onboarding_thread = start_workspace_onboarding(workspace_id, stop)
         except Exception as error:
             print('大疆上云实验处理器未启动：错误类别 ' + type(error).__name__ + '；主处理器继续运行', flush=True)
+        try:
+            from .dji_cloud2_runtime import start_workspace_cloud2
+            dji_cloud2_thread = start_workspace_cloud2(workspace_id, stop)
+        except Exception as error:
+            print('大疆 Cloud API 2 工作区处理器未启动：错误类别 ' + type(error).__name__, flush=True)
         last_daily = None
         while not stop.is_set():
             try:
@@ -1670,6 +1676,10 @@ def run_setup(workspace_id):
             mqtt_receiver_thread.join(timeout=180)
             if mqtt_receiver_thread.is_alive():
                 print('MQTT 接收处理器尚未完全退出，请核对连接状态', flush=True)
+        if dji_cloud2_thread is not None:
+            dji_cloud2_thread.join(timeout=30)
+            if dji_cloud2_thread.is_alive():
+                print('大疆 Cloud API 2 处理器尚未完全退出，请核对连接状态', flush=True)
         if dji_onboarding_thread is not None:
             dji_onboarding_thread.join(timeout=70)
             if dji_onboarding_thread.is_alive():

@@ -149,6 +149,8 @@ from .dji_dock_status_api import router as dji_dock_status_router
 app.include_router(dji_dock_status_router)
 from .dji_cloud_api import router as dji_cloud_router
 app.include_router(dji_cloud_router)
+from .dji_cloud2_connections import router as dji_cloud2_connections_router
+app.include_router(dji_cloud2_connections_router)
 from .dji_onboarding_api import router as dji_onboarding_router
 app.include_router(dji_onboarding_router)
 from .dji_wayline_api import router as dji_wayline_router

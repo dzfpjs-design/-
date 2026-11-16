@@ -24,7 +24,7 @@ router = APIRouter(prefix='/api/file-gateway-authorizations', tags=['文件网�
 KIND='managed_file_grant_v1'; OP='managed_file_grant_operation_v1'; STOP='managed_file_grant_stop_v1'; DENY='managed_file_legacy_deny_v1'; KEY_MARKER='managed_file_key_marker_v1'
 # These protocols share the same encryption key and server-wide identity marker.
 # Marker recreation must therefore fail if *any* protocol still has ciphertext.
-SHARED_KEY_ENCRYPTED_KINDS=(KIND,'managed_ftps_grant_v1','managed_mqtt_grant_v1','dji_onboarding_v1')
+SHARED_KEY_ENCRYPTED_KINDS=(KIND,'managed_ftps_grant_v1','managed_mqtt_grant_v1','dji_onboarding_v1','dji_cloud2_connection_v1')
 MAX_ACTIVE_GRANTS=100
 
 
