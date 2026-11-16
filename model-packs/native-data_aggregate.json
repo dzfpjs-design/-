@@ -1,0 +1,169 @@
+{
+  "kind": "tool",
+  "namespace": "platform_native_queries",
+  "name": "native_data_aggregate",
+  "version": "1.0.0",
+  "owner": "平台内置数据管理",
+  "description": "授权证据记录数值汇总",
+  "allowed_agent_roles": [
+    "data"
+  ],
+  "execution": {
+    "adapter": "builtin",
+    "handler": "data_record_aggregate",
+    "query_tool": true,
+    "side_effect": false,
+    "input_bindings": {
+      "records": "data_records"
+    }
+  },
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "records",
+      "field",
+      "operation"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "records": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 200,
+        "items": {
+          "type": "object",
+          "required": [
+            "values",
+            "entity_ids",
+            "evidence_refs"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "object"
+            },
+            "entity_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 30,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "evidence_refs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 200,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "field": {
+        "type": "string",
+        "title": "登记字段",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "operation": {
+        "type": "string",
+        "title": "计算方式",
+        "enum": [
+          "mean",
+          "sum",
+          "min",
+          "max",
+          "count"
+        ]
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "records",
+      "summary"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "records": {
+        "type": "array",
+        "maxItems": 200,
+        "items": {
+          "type": "object",
+          "required": [
+            "values",
+            "entity_ids",
+            "evidence_refs"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "object",
+              "required": [
+                "value",
+                "sample_count",
+                "field",
+                "operation"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "type": "number",
+                  "title": "计算结果"
+                },
+                "sample_count": {
+                  "type": "integer",
+                  "title": "证据记录数"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "operation": {
+                  "type": "string"
+                }
+              }
+            },
+            "entity_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 30,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "evidence_refs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 200,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "summary": {
+        "type": "object"
+      }
+    }
+  },
+  "budget": {
+    "max_attempts": 2,
+    "max_concurrency": 1
+  },
+  "data_policy": {
+    "external_allowed": false
+  },
+  "specification": {
+    "sample_unit": "evidence_records",
+    "managed_native_query": "v1",
+    "method": "aggregate"
+  }
+}

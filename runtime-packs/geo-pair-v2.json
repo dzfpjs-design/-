@@ -1,0 +1,17 @@
+{
+  "id": "geo-pair-v2",
+  "default_deployment": "local",
+  "network": false,
+  "cloud_fallback": false,
+  "algorithm": "rgb_max_channel_absolute_difference",
+  "learned_model": false,
+  "max_comparison_pixels": 16000000,
+  "max_source_window_pixels": 16000000,
+  "timeout_seconds": 90,
+  "base_recipe_hash": "85f28b1a8beb66ba2fe47e80882185a8fc36aedd4ea3f60dfabb0ddff43512a5",
+  "base_runner_sha256": "300cf46ccddf6b472e242d9e58f07223ae87164cdcd4e6dd25c7936b0b6e7268",
+  "runner_sha256": "e1a7be05c1bf58f7652f249304302f8d06abab2945e2e729b4abf862137ea03b",
+  "domain_quality": "not_verified",
+  "runner_file": "geo_pair_runner_v2.py",
+  "after_coverage_policy": "intersection with explicitly saved B input window; outside is unknown"
+}

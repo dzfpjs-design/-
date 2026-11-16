@@ -1,0 +1,4 @@
+# Isolated CPU diagnostic processor; no weights, cloud SDK or API environment mutation.
+numpy==2.5.3
+pydantic==2.13.5
+Pillow==12.3.0

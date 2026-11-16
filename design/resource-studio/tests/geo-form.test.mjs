@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {savedForm,readDraft,draftKey,formPayload} from '../src/geo-form.mjs';
+const scene={id:'scene',version:7,metadata:{suggested_rgb_bands:[1,2,3]},configuration:{rgb_bands:[3,2,1],observed_at:'2026-10-08T00:30:45Z',map_image_confirmed:true}};
+test('saved capture time is China local and unchanged seconds are preserved',()=>{const f=savedForm(scene);assert.equal(f.observed,'2026-10-08T08:30');assert.equal(formPayload(f,false).observed_at,scene.configuration.observed_at);});
+test('clearing known capture time explicitly persists unknown',()=>{const f={...savedForm(scene),observed:'',dirty:true};assert.equal(formPayload(f,false).observed_at,null);});
+test('unsaved draft survives reload and retains stale version for conflict check',()=>{const f={...savedForm(scene),bands:[2,1,3],dirty:true};const got=readDraft({getItem:()=>JSON.stringify(f)},draftKey('ws','scene'),{...scene,version:8});assert.equal(got.version,7);assert.deepEqual(got.bands,[2,1,3]);assert.notEqual(draftKey('other','scene'),draftKey('ws','scene'));});
+test('unavailable or malformed draft storage restores confirmed server state',()=>{for(const storage of [{getItem:()=>'{bad'},{getItem:()=>JSON.stringify({dirty:true,version:7,bands:[1]})},{getItem:()=>{throw Error('storage blocked');}}])assert.deepEqual(readDraft(storage,'key',scene),savedForm(scene));});

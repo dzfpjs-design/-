@@ -1,0 +1,19 @@
+dialog:has(.evidence-reading-dialog){width:min(1180px,calc(100vw - 32px));max-width:none;max-height:calc(100dvh - 32px);overflow:auto;}
+.evidence-reading-dialog{max-width:1140px;min-width:0;margin:auto;overflow-wrap:anywhere;}
+.evidence-reading-dialog section,.evidence-reading-dialog article,.evidence-reading-dialog details{min-width:0;}
+.evidence-reading-dialog>section,.evidence-reading-dialog>details{margin:16px 0;padding:14px;border:1px solid #d7e1df;border-radius:10px;}
+.evidence-reading-dialog article{padding:10px 0;border-bottom:1px solid #e0e6e4;}
+.evidence-reading-dialog label{display:block;margin:10px 0;}
+.evidence-reading-dialog textarea,.evidence-reading-dialog select,.evidence-reading-dialog input:not([type=checkbox]):not([type=radio]){box-sizing:border-box;max-width:100%;width:100%;min-width:0;}
+.evidence-reading-dialog textarea{min-height:72px;resize:vertical;}
+.evidence-reading-dialog input[type=checkbox],.evidence-reading-dialog input[type=radio]{width:18px;height:18px;vertical-align:middle;}
+.evidence-reading-dialog button{max-width:100%;white-space:normal;overflow-wrap:anywhere;margin:4px 8px 4px 0;}
+.evidence-reading-dialog summary{cursor:pointer;padding:8px 0;font-weight:600;}
+.evidence-reading-dialog blockquote{white-space:pre-wrap;margin:8px 0;padding:10px 14px;background:#f3f7f5;border-left:3px solid #75988b;max-height:340px;overflow:auto;}
+.evidence-reading-boundary,.evidence-reading-warning{background:#fff7e5;padding:12px;border-radius:8px;color:#624b20;}
+.evidence-reading-references{background:#f7faf8;border-radius:8px;padding:10px;margin:12px 0;}
+.evidence-reading-editor details{border-top:1px solid #dce5df;margin:12px 0;padding:6px 12px;}
+.evidence-reading-source{max-width:100%;}
+.evidence-reading-source .ocr-page{max-width:100%;}
+.evidence-reading-actions{position:sticky;bottom:0;z-index:1;display:flex;flex-wrap:wrap;gap:8px;padding:12px 0;background:var(--panel,#fff);border-top:1px solid #d7e1df;}
+@media(max-width:700px){dialog:has(.evidence-reading-dialog){width:calc(100vw - 16px);max-height:calc(100dvh - 16px);}.evidence-reading-editor details{padding:4px 6px;}.evidence-reading-dialog>section{padding:10px;}}

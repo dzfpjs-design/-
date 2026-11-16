@@ -1,0 +1,12 @@
+.instance-observation-day-v216{border:1px solid #dbe4ee;border-radius:12px;padding:20px;margin:16px 0;background:#fff}
+.instance-observation-day-v216 h3,.instance-observation-day-v216 h4,.instance-observation-day-v216 h5{margin:0 0 8px}
+.instance-observation-day-v216 h5{font-size:16px}
+.observation-day-controls,.observation-day-filters{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:12px 0}
+.observation-day-controls label{display:grid;gap:6px}
+.observation-day-filters button[aria-pressed="true"]{background:#e9f1ff;border-color:#326ee8;color:#123d85}
+.observation-day-section{border-top:1px solid #dbe4ee;padding-top:16px;margin-top:16px}
+.observation-day-record{margin:12px 0;border-left:3px solid #b6ccee}
+.observation-day-dates{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;color:#526378;font-size:13px}
+.instance-observation-day-v216 [role="alert"]{color:#8b3c19;background:#fff4e9;padding:10px;border-radius:6px}
+.instance-observation-day-v216 p{overflow-wrap:anywhere}
+@media(max-width:600px){.instance-observation-day-v216{padding:12px}.observation-day-controls{align-items:stretch}.observation-day-controls label{width:100%}}

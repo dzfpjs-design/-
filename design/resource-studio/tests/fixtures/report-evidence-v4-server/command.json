@@ -1,0 +1,50 @@
+{
+  "consent": true,
+  "material_refs": [
+    {
+      "hash": "1eb7b7ee7e6fba1d62e4b680d70ac6dfa48725f3bcc8157bcdabb20c97f6ccf2",
+      "id": "b4d1d20d-29e9-49ec-8631-9fc7fcf4b834",
+      "version": 4
+    }
+  ],
+  "model_id": "aa4579ac-bcd5-4c9b-a2e8-504b98672aa5",
+  "note": "仅合成测试；不代表模型质量。",
+  "preview_hash": "2bf2a9f38f264e9c6eb25f2561df6f7bba2845b0f9d0035830df45a6d1f812a2",
+  "request_id": "fe_f9c42c7b-085e-47ea-b5e9-b90c612e1dbf",
+  "revision": 2,
+  "selection": {
+    "copy_ref": {
+      "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+      "id": "d06444e7-4c2d-4112-bd6b-18e546623030",
+      "version": 2
+    },
+    "generation": 1,
+    "original_ref": {
+      "hash": "1eb7b7ee7e6fba1d62e4b680d70ac6dfa48725f3bcc8157bcdabb20c97f6ccf2",
+      "id": "b4d1d20d-29e9-49ec-8631-9fc7fcf4b834",
+      "version": 4
+    },
+    "pages": [
+      {
+        "page": 1,
+        "revision_hash": "88ae6a41ce9d765429d4041f0001a65b186531888267113a9b59616f1633f1aa",
+        "revision_id": "ef8651fc-6f24-4e2c-a376-2732fbee62e8",
+        "revision_kind": "raw",
+        "unit_id": "87d3215a-a3e0-4199-885b-8222062ee26a",
+        "unit_version": 4
+      },
+      {
+        "page": 2,
+        "revision_hash": "3b5065bcecc7f69e04681186fe9ca992be3e5b29a41b0a18dc2f3b9cf36e9aa6",
+        "revision_id": "3a9a7eb4-542a-45d4-9adb-3be8a014db0e",
+        "revision_kind": "raw",
+        "unit_id": "57641891-0382-4e6b-84f1-74431611ee3d",
+        "unit_version": 4
+      }
+    ],
+    "provenance_hash": "33c22bca69db4add7d236577d7339993396f2ffecfb687111a8ce48ad4f190f9",
+    "run_id": "6256ffb6-96e7-4c5d-894a-a3e37f50d214",
+    "run_version": 9,
+    "source_mode": "docx_and_saved_ocr_v1"
+  }
+}

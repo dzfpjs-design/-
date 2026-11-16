@@ -1,0 +1,172 @@
+{
+  "files": [
+    {
+      "bytes": 1517,
+      "file": "already-used-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/fea58b1e-b478-489f-ba82-a3d3cf2ea4a1/captures/map-1",
+      "sha256": "e59b5ef0317ec43a554af1797e524aa8d222beea9dee544e74dc80d52296a753"
+    },
+    {
+      "bytes": 48628,
+      "file": "already-used-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/fea58b1e-b478-489f-ba82-a3d3cf2ea4a1",
+      "sha256": "35af1fc92ee41390ca776042e72e6414a6f06fa13843523a7bc89fa6aba7a02e"
+    },
+    {
+      "bytes": 1520,
+      "file": "deadline-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/9640ea75-a401-4c72-b5a9-aebcb67ca3cd/captures/map-1",
+      "sha256": "1f447508d63235f6c50acbb2221be448aa08a7cb231c0872066fe6efe7404f7c"
+    },
+    {
+      "bytes": 37097,
+      "file": "deadline-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/9640ea75-a401-4c72-b5a9-aebcb67ca3cd",
+      "sha256": "60d25d355cb9c0a9b4b7a53508f1b2e0a0fca605c267293923f05c5cf2791ec0"
+    },
+    {
+      "bytes": 1503,
+      "file": "eligible-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/a0ad4160-aee5-40b8-861a-19ed81d81c24/captures/map-1",
+      "sha256": "ead21993b7b4b7d77f23b3ee25c3eb26b2a89e58078c14ea6be54202b1eae016"
+    },
+    {
+      "bytes": 37097,
+      "file": "eligible-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/a0ad4160-aee5-40b8-861a-19ed81d81c24",
+      "sha256": "c98125891fb5c8f619947047f3de06160edf2ed7a353cb9f9fb56e0cae8ccb00"
+    },
+    {
+      "bytes": 1524,
+      "file": "gzip-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/3735ddc5-7a43-49f7-9e3c-97496064db03/captures/map-1",
+      "sha256": "827f6f7bf3ed31785030954feabb388ea0ace2df993639942f77e39c2b39c5da"
+    },
+    {
+      "bytes": 37097,
+      "file": "gzip-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/3735ddc5-7a43-49f7-9e3c-97496064db03",
+      "sha256": "c36a11d13861a5181a773971917b154b854c3d8dfa41a9a8936c61c37c1c9587"
+    },
+    {
+      "bytes": 1506,
+      "file": "http400-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/8c4d01d5-584f-4691-beb1-4eef1a32ca01/captures/map-1",
+      "sha256": "829a2de191ccb61fef2e5538668280f2a572c5013b7c8f0dcc56e92ec294c99c"
+    },
+    {
+      "bytes": 39660,
+      "file": "http400-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/8c4d01d5-584f-4691-beb1-4eef1a32ca01",
+      "sha256": "bdb54f04e8a2e5e7c8abb07850ff8574f9e2d287a923f2a5d19a871b702011cd"
+    },
+    {
+      "bytes": 1520,
+      "file": "partial-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/67405272-5715-45c2-969b-043fa5ebb6ed/captures/map-1",
+      "sha256": "e69dd0325f463b6964f08bde848ad57e2a6325677dcef4107738599f840ee00e"
+    },
+    {
+      "bytes": 37097,
+      "file": "partial-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/67405272-5715-45c2-969b-043fa5ebb6ed",
+      "sha256": "6027e870565a37613b1e8556223748e067a332d18571e06362c4a89d58d7efb9"
+    },
+    {
+      "bytes": 44654,
+      "file": "recovered-partial-maps.json",
+      "method": "POST",
+      "path": "/api/setup/report-evidence-readings/a0ad4160-aee5-40b8-861a-19ed81d81c24/recover-saved",
+      "sha256": "ea0544bcc4a61097b9fc8cd5cff87072dc805918090925b758a8e57c3416341c"
+    },
+    {
+      "bytes": 1457,
+      "file": "unknown-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/f83bc77f-7c92-4592-960e-a8bb02accb78/captures/map-1",
+      "sha256": "700df0eec034db9c8cb17ca9913bf845d6bc60ceb64097e55d3297befd8d6503"
+    },
+    {
+      "bytes": 37097,
+      "file": "unknown-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/f83bc77f-7c92-4592-960e-a8bb02accb78",
+      "sha256": "137e67dc354b6a97de4c8399b19c00a8a509671e702f51b8113d7f68314bb4e1"
+    },
+    {
+      "bytes": 1524,
+      "file": "unsafe-encoding-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/5961c61b-3d5d-493a-bdcf-e37ee3a7a995/captures/map-1",
+      "sha256": "7f8012d6d810d6933b465495c15a23e74cde0806d996765e22c617811e06d43a"
+    },
+    {
+      "bytes": 37097,
+      "file": "unsafe-encoding-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/5961c61b-3d5d-493a-bdcf-e37ee3a7a995",
+      "sha256": "3b926ed248e3adb40b292d335c1a764614696242ee5a035760c1e8547fb025cd"
+    }
+  ],
+  "provider": "Actual API serializer; MockTransport only; no private report or real model",
+  "scenarios": [
+    {
+      "capture": "partial-capture.json",
+      "draft": "partial-draft.json",
+      "name": "partial"
+    },
+    {
+      "capture": "deadline-capture.json",
+      "draft": "deadline-draft.json",
+      "name": "deadline"
+    },
+    {
+      "capture": "unknown-capture.json",
+      "draft": "unknown-draft.json",
+      "name": "unknown"
+    },
+    {
+      "capture": "eligible-capture.json",
+      "draft": "eligible-draft.json",
+      "name": "eligible",
+      "recovery": "recovered-partial-maps.json",
+      "request_json": {
+        "request_id": "f2123f4a-f1ca-4cf5-ba98-e6cc7ca97bb5",
+        "revision": 4
+      }
+    },
+    {
+      "capture": "http400-capture.json",
+      "draft": "http400-draft.json",
+      "name": "http400"
+    },
+    {
+      "capture": "gzip-capture.json",
+      "draft": "gzip-draft.json",
+      "name": "gzip"
+    },
+    {
+      "capture": "unsafe-encoding-capture.json",
+      "draft": "unsafe-encoding-draft.json",
+      "name": "unsafe-encoding"
+    },
+    {
+      "capture": "already-used-capture.json",
+      "draft": "already-used-draft.json",
+      "name": "already-used"
+    }
+  ],
+  "schema": "report-evidence-native-public-api-fixtures-v1"
+}

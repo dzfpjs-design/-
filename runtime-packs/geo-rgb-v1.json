@@ -1,0 +1,34 @@
+{
+  "id": "geo-rgb-v1",
+  "environment": {
+    "numpy": "2.5.3",
+    "click": "8.5.0",
+    "rasterio": "1.4.4",
+    "pyproj": "3.7.2",
+    "certifi": "2026.7.22",
+    "cligj": "0.7.2",
+    "affine": "3.0.1",
+    "attrs": "26.1.0",
+    "pillow": "11.3.0",
+    "click-plugins": "1.1.1.2",
+    "pyparsing": "3.3.3"
+  },
+  "input": "local GTiff only",
+  "max_upload_bytes": 536870912,
+  "max_pixels": 1000000000,
+  "max_bands": 64,
+  "preview_edge": 2048,
+  "window_edge": 1024,
+  "geometry_vertex_limit": 8192,
+  "network": false,
+  "sources": [
+    "https://rasterio.readthedocs.io/en/stable/topics/windowed-rw.html",
+    "https://pyproj4.github.io/pyproj/stable/api/geod.html"
+  ],
+  "default_deployment": "local",
+  "crs_policy": "affine plus declared map image; GCP/RPC-only unsupported",
+  "area_method": "ellipsoidal geodesic using source geodetic CRS; no fabricated scale",
+  "runner_sha256": "300cf46ccddf6b472e242d9e58f07223ae87164cdcd4e6dd25c7936b0b6e7268",
+  "max_block_bytes": 134217728,
+  "max_inference_pixels": 16000000
+}

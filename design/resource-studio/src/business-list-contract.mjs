@@ -1,0 +1,22 @@
+import {businessNames,changeBusinesses} from './business-schema.js';
+import {withoutSecrets} from './catalog.js';
+import {readDraftRecovery,stageOwnedDraft,resolveDraftRecovery,readDraftRecord,draftOutboxKey} from './draft-cache-contract.mjs';
+const ownObject=value=>value&&typeof value==='object'&&!Array.isArray(value);
+const aliases=value=>{if(value!=null&&(!ownObject(value)||Object.values(value).some(item=>typeof item!=='string')))throw Error('业务改名关联无法核对，原记录保留。');return Object.fromEntries(Object.entries(value||{}).sort(([a],[b])=>a.localeCompare(b)));};
+export const businessListBasis=workspace=>({names:businessNames(workspace),aliases:aliases(workspace.businessAliases)});
+export function businessListKey(account,surface='business',runtime=false){if(!['business','automation','prototype'].includes(surface))throw Error('业务清单编辑位置无法核对。');if(runtime&&(!account?.workspace_id||!account?.username))throw Error('当前账号范围尚未确定，原输入保留。');return runtime?'ga-business-list:'+encodeURIComponent(account.workspace_id)+':'+encodeURIComponent(account.username)+':'+surface:'ga-business-list:prototype:'+surface;}
+function validRows(rows){return Array.isArray(rows)&&rows.every(row=>ownObject(row)&&typeof row.name==='string'&&(row.original===undefined||typeof row.original==='string'));}
+function checkForm(form){if(form?.kind!=='business_list_edit'||!validRows(form.rows)||!Array.isArray(form.basis?.names)||form.basis.names.some(name=>typeof name!=='string')||!ownObject(form.basis.aliases))throw Error('业务清单编辑稿无法核对，原记录保留；请恢复浏览器存储后重试。');return form;}
+export function openBusinessListEditor(storage,tabStorage,key,workspace,fresh=false){const recovery=readDraftRecovery(storage,key,tabStorage);for(const row of recovery.candidates)checkForm(row.configuration);const original=fresh?null:recovery.local,form=original?checkForm(original.configuration):{kind:'business_list_edit',rows:businessNames(workspace).map(name=>({original:name,name})),basis:businessListBasis(workspace)};return {storage,tabStorage,key,owner:crypto.randomUUID(),generation:0,original,latest:null,form,restored:!!original,candidates:recovery.candidates};}
+export function storeBusinessListRows(editor,rows){if(!validRows(rows))throw Error('业务名称无法保存，原输入保留。');const form={...editor.form,rows};if(JSON.stringify(withoutSecrets(form))!==JSON.stringify(form))throw Error('输入可能含凭证，敏感文本未写入编辑稿，请移除后继续。');const row={revision:1,pending:true,draft_owner:editor.owner,draft_generation:editor.generation+1,configuration:form};stageOwnedDraft(editor.storage,editor.tabStorage,editor.key,row);editor.generation=row.draft_generation;editor.latest=row;editor.form=form;return row;}
+export function businessListBasisMatches(workspace,form){const current=businessListBasis(workspace);if(JSON.stringify(current)===JSON.stringify(form.basis))return true;const names=form.rows.map(row=>row.name.trim());return JSON.stringify(current.names)===JSON.stringify(names)&&form.rows.every(row=>!row.original||row.original===row.name.trim()||current.aliases[row.name.trim()]===row.original);}
+export function businessListMessage(error){if(error?.name==='TypeError'||error?.name==='SyntaxError'||error?.name==='RangeError')return '已保存配置或编辑记录暂时无法核对，本页输入保留；请重新读取配置后重试。';if(error?.name==='QuotaExceededError')return '浏览器暂时无法保存编辑稿，本页输入仍在；请检查存储空间后重试。';return error?.message||'保存未完成，本页输入保留，请重试。';}
+export async function applyBusinessListEditor(editor,workspace,rows,{onCommit,onSave,onApplied,onClose}){
+ const submitted=storeBusinessListRows(editor,rows);
+ if(!businessListBasisMatches(workspace,editor.form))throw Error('当前业务清单已与编辑前不同。原输入已恢复并保留，请对照当前清单后重新核对；不会覆盖其他页面新增的业务。');
+ const next=changeBusinesses(workspace,rows);if(!await onCommit(next))return {applied:false,message:'业务清单尚未提交，编辑稿已保留；请处理顶部保存提示后重试。'};
+ if(onSave){const saved=await onSave(next);if(!saved?.configuration||JSON.stringify(businessListBasis(saved.configuration))!==JSON.stringify(businessListBasis(next)))throw Error('服务器当前业务清单与本次保存不同，原编辑稿保留，请重新核对。');}
+ const original=submitted;await resolveDraftRecovery(editor.storage,editor.tabStorage,editor.key,original,{revision:1,configuration:{}},false);
+ if(editor.original){const current=readDraftRecord(editor.storage,draftOutboxKey(editor.key,editor.original.draft_owner));if(current?.pending&&current.draft_generation===editor.original.draft_generation)try{await resolveDraftRecovery(editor.storage,editor.tabStorage,editor.key,editor.original,{revision:1,configuration:{}},false);}catch{}}
+ onApplied?.(rows);onClose?.();return {applied:true};
+}

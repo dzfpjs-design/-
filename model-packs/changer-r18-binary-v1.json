@@ -1,0 +1,33 @@
+{
+  "pack_id": "changer-r18-binary-v1",
+  "version": "1.0.0",
+  "title": "ChangerEx R18 local binary change candidates",
+  "default_deployment": "local",
+  "default_backend": "cpu",
+  "cloud_fallback": false,
+  "remote_code": false,
+  "source": "prepared_local",
+  "files": [
+    {
+      "name": "changer-r18.safetensors",
+      "bytes": 45624736,
+      "sha256": "507932767138639cc64079bcfd5df2861aeeef9c26e924b799e2d4de92bce2a6"
+    }
+  ],
+  "pipeline_hash": "a795976e9d21a8f04ebcdb2f1b9f3c189fb4196953c0266db835d93eb83f1f9f",
+  "installer_sha256": "48ccbc6c37e9e80d2b1e72b1deb5d815fe43cacf79263807c69e9cab3443244d",
+  "license": "Author model repository declares Apache-2.0; production rights review pending",
+  "license_evidence": "https://huggingface.co/likyoo/Open-CD_Model_Zoo",
+  "limitations": "Building-pretrained binary candidates; domain accuracy and upstream numerical equivalence unverified; paired workflow registration pending",
+  "hidden_in_setup_until_paired_workflow": true,
+  "input_kind": "paired_geotiff",
+  "parameters": {
+    "threshold_default": 0.5
+  },
+  "environment": {
+    "torch": "2.8.0",
+    "numpy": "2.5.3",
+    "Pillow": "11.3.0",
+    "safetensors": "0.6.2"
+  }
+}

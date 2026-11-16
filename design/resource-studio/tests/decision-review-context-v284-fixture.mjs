@@ -1,0 +1,20 @@
+// Synthetic display fixture; not model, authorization or received-data proof.
+import {BUSINESS_DECISION_REVIEW_RESULT,BUSINESS_DECISION_REVIEW_CONTEXT} from '../src/business-decision-review-v284.mjs';
+const id=n=>'28400000-0000-4000-8000-'+String(n).padStart(12,'0');
+const clone=value=>JSON.parse(JSON.stringify(value));
+const flags=['can_dispatch','permissions_verified','source_authenticity_verified','current_outcome_verified','goal_completion_verified','data_reception_verified'];
+const quote=(source,text)=>({source_ref:source.source_ref,quote_start:0,quote_end:Array.from(text??source.text).length,quote:text??source.text});
+
+export function decisionReviewContextFixture(){
+ const scope={task_id:id(1),activation_id:'reasoner:original',goal_snapshot_hash:'b'.repeat(64),entity_ids:[id(2)]};
+ const source={source_ref:'capability_1',kind:'capability',source_id:id(3),content_hash:'c'.repeat(64),text:'{"operation":"resense_from_context","ports":["temperature_c"]}',readability:'readable'};
+ const fact={fact_ref:'declaration_1',kind:'capability_declaration',entity_id:id(2),field:'capability_declaration',unit:null,semantics:'statement',time_scope:{start:null,end:null},value:'已登记可申请温度观测的能力。',source_refs:[quote(source)]};
+ const requirement={requirement_ref:'need_temperature',entity_id:id(2),field:'temperature_c',value_type:'number',unit:'Cel',semantics:'instantaneous',time_scope:{start:'2026-11-01T12:00:00+00:00',end:'2026-11-01T12:10:00+00:00'},required_kind:'observation',time_mode:'bounded'};
+ const capability={capability_ref:'cap_resense',capability_id:id(3),capability_hash:source.content_hash,release_version:'2.0.0',input_schema_hash:'d'.repeat(64),output_schema_hash:'e'.repeat(64),source_ref:source.source_ref,action_kind:'information_acquisition',output_ports:[],information_targets:[{port_ref:'port_1',pointer:'/requested_observation/temperature_c',field:'temperature_c',value_type:'number',unit:'Cel'}]};
+ const candidate={candidate_ref:'candidate_2',proposal:'请求原批准范围内的模拟温度观测，取得后另行核查。',capability_refs:[capability.capability_ref],requirement_mappings:[{requirement_ref:requirement.requirement_ref,capability_ref:capability.capability_ref,delivery:'requested_observation',port_ref:'port_1'}],claims:[]};
+ const decision_input={schema:'business-decision-input-v274',decision_intent:'information_acquisition',scope:clone(scope),requirements:[requirement],sources:[source],capabilities:[capability],candidates:[candidate],facts:[fact],known_conflicts:[]};
+ const model_value={schema:'business-decision-review-value-v284',candidate_reviews:[{candidate_ref:candidate.candidate_ref,suitability:'suitable',reasoning:'登记端口可以申请所需字段，尚未取得未来观测。',supporting_fact_refs:[fact.fact_ref],blocking_conditions:[]}],source_reviews:[{source_ref:source.source_ref,assessment:'reviewed',reason:'已阅读原登记声明。'}],conflicts:[],recommendation:{candidate_ref:candidate.candidate_ref,reason:'建议补充信息，不把申请当作观测结果。',supporting_fact_refs:[fact.fact_ref]}};
+ const mechanical_review={candidates:[{candidate_ref:candidate.candidate_ref,capability_refs:[capability.capability_ref],requirement_refs:[requirement.requirement_ref],covered_requirement_refs:[requirement.requirement_ref],uncovered_requirement_refs:[],unknown_requirement_refs:[],applicability:'applicable',support:'supported',blocking_conditions:[]}],sources:[{source_ref:source.source_ref,assigned_fact_refs:[fact.fact_ref],assessment:'reviewed'}],missing_requirement_refs:[requirement.requirement_ref],fact_consistency:'unknown',current_facts_sufficient:false,conflicts:[]};
+ const result={schema:BUSINESS_DECISION_REVIEW_RESULT,input_hash:'a'.repeat(64),decision_intent:'information_acquisition',scope:clone(scope),model_value,mechanical_review,review_state:'ready_for_review',...Object.fromEntries(flags.map(key=>[key,false]))};
+ return {schema:BUSINESS_DECISION_REVIEW_CONTEXT,task_id:id(1),activation_id:scope.activation_id,invocation_id:id(4),input_hash:result.input_hash,result,decision_input,fields:[{entity_id:id(2),field:'temperature_c',label:'温度',value_type:'number',unit:'Cel'}],fact_values:[{fact_ref:fact.fact_ref,text:'已登记可申请温度观测的能力。'}],simulation_only:true};
+}

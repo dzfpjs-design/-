@@ -1,0 +1,6 @@
+import {initialWorkspace,withoutSecrets} from './catalog.js';
+import {productWorkspace} from './product-copy.js';
+export const WORKSPACE_KEY='three-agent-resource-design-v1';
+export function loadWorkspace(storage){const raw=storage.getItem(WORKSPACE_KEY);if(raw===null)return initialWorkspace();let w;try{w=JSON.parse(raw);}catch{throw Error('已保存的配置无法读取，请重试或恢复上一份备份；不会覆盖原记录。');}if(w?.version!==1||!Array.isArray(w.resources)||!Array.isArray(w.connections))throw Error('已保存的配置格式不完整，原记录保留。');return productWorkspace(w);}
+export function persistWorkspace(storage,w){if(w.readError)throw Error('请先恢复已保存的配置。');const next={...withoutSecrets(w),savedAt:new Date().toISOString()},previous=storage.getItem(WORKSPACE_KEY);storage.setItem(WORKSPACE_KEY,JSON.stringify(next));if(previous)try{const parsed=JSON.parse(previous);if(parsed.version===1&&Array.isArray(parsed.resources)&&Array.isArray(parsed.connections))storage.setItem(WORKSPACE_KEY+'-backup',previous);}catch{}return next;}
+export function restoreWorkspace(storage){const raw=storage.getItem(WORKSPACE_KEY+'-backup');if(!raw)throw Error('没有可恢复的备份，原记录仍保留。');const v=JSON.parse(raw);if(v?.version!==1||!Array.isArray(v.resources)||!Array.isArray(v.connections))throw Error('备份无法读取，原记录仍保留。');storage.setItem(WORKSPACE_KEY,raw);return productWorkspace(v);}

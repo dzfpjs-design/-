@@ -1,0 +1,31 @@
+{
+  "contract_version": "1.0",
+  "namespace": "inspection",
+  "name": "sites",
+  "version": "1.0.0",
+  "owner": "平台操作者",
+  "description": "观测核查业务包（通用示例）",
+  "kind": "domain_package",
+  "specification": {
+    "entity_schemas": {
+      "site": {
+        "type": "object",
+        "required": [
+          "name",
+          "temperature"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "对象名称"
+          },
+          "temperature": {
+            "type": "number",
+            "title": "温度（℃）"
+          }
+        }
+      }
+    }
+  }
+}

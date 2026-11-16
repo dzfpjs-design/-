@@ -1,0 +1,41 @@
+{
+  "files": [
+    {
+      "bytes": 64500,
+      "file": "large-reduce-preview.json",
+      "sha256": "9f6cba8eea7c218749ec702c0cf92a0a8bdda5d344a797422d58fe4e1ea55b9c"
+    },
+    {
+      "bytes": 126507,
+      "file": "large-reduce-start.json",
+      "sha256": "fd3532db85ea5040963e6e2a5a97edbfcc981539a2d3d058ce4f4eb610fe5329"
+    },
+    {
+      "bytes": 704082,
+      "file": "large-reduced.json",
+      "sha256": "b1130696d687b8a1985acbf0adc2485f0de4af90d68f0fc42e978a351db3cac9"
+    },
+    {
+      "bytes": 704082,
+      "file": "large-semantic.json",
+      "sha256": "b1130696d687b8a1985acbf0adc2485f0de4af90d68f0fc42e978a351db3cac9"
+    },
+    {
+      "bytes": 60566,
+      "file": "mapped.json",
+      "sha256": "08a747b52e7a4fd64923b901bde978eeed1fca9ec128df58a37bddca17e64bf2"
+    },
+    {
+      "bytes": 46683,
+      "file": "preview.json",
+      "sha256": "93ccf4834dc89e555fe52a7c5e2e87ed60c9a43cf3b1e4bcaefae3c835d1e277"
+    },
+    {
+      "bytes": 49284,
+      "file": "start.json",
+      "sha256": "8721e402c50077258c9ee87ca40734abfdacec8a4d42805245f5e3d000473abf"
+    }
+  ],
+  "schema": "report-evidence-public-synthetic-large-serializer-fixture-v1",
+  "scope": "MockTransport only; validates structural capacity, not real 32768-token feasibility or quality"
+}

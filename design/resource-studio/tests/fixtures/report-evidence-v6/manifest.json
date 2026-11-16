@@ -1,0 +1,46 @@
+{
+  "files": [
+    {
+      "bytes": 150002,
+      "file": "human-save.json",
+      "sha256": "5a7f68239c7796d769bb726224cb5f6e0676f544271fe99750d97e162c34820b"
+    },
+    {
+      "bytes": 62037,
+      "file": "mapped.json",
+      "sha256": "fdd48faf4efde576f1256692e38ddd16481c677502e920f4dc86b483363a0dbb"
+    },
+    {
+      "bytes": 48136,
+      "file": "preview.json",
+      "sha256": "5e6450a2d986a16c14450b634144d82c0624cb06634b1c1679e376a4358d6867"
+    },
+    {
+      "bytes": 67794,
+      "file": "reduce-preview.json",
+      "sha256": "533b730427c7e0aed02cb888cea7932d71cf102eff6371f41aad73cdabd0e248"
+    },
+    {
+      "bytes": 131272,
+      "file": "reduce-start.json",
+      "sha256": "85bcf3953ba605a9168486df4790f3e7d1ee7faafb768045c124de804233f3be"
+    },
+    {
+      "bytes": 140779,
+      "file": "reduced.json",
+      "sha256": "7dfaab3d7a3b43d1d92501508aeeabce335796f5711174e8b8838cf0dc792d04"
+    },
+    {
+      "bytes": 3954,
+      "file": "saved-facts.json",
+      "sha256": "295e3a9db024625742cda49682371f26a8dae40bd1fff3158959e45da1f44a9f"
+    },
+    {
+      "bytes": 50737,
+      "file": "start.json",
+      "sha256": "ccdffb66d00aff42849a6c78b3ff2718f59b83e01763451ce70fcec8d8df2adf"
+    }
+  ],
+  "provider": "MockTransport only; no actual model or private report",
+  "schema": "report-evidence-public-synthetic-serializer-fixture-v1"
+}

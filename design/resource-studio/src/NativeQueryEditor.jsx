@@ -1,0 +1,95 @@
+import React,{useState} from 'react';
+import {nativeQueryStatus} from './native-query-status.mjs';
+import {buildNativeQuery,emptyQueryCriterion,nativeQueryMetadata,queryInputFields,queryOutputFields,queryMethodLabels,queryOperationLabels} from './native-query-contract.mjs';
+import {numericDisplay} from './typed-numbers-v132.mjs';
+
+const operators={eq:'等于',gt:'大于',gte:'至少',lt:'小于',lte:'至多'};
+const kinds={number:'数值',integer:'整数',string:'文本',boolean:'是否'};
+const primitive=value=>['string','number','boolean'].includes(typeof value);
+const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+const shown=value=>typeof value==='number'?numericDisplay(value):primitive(value)?String(value):'';
+const numeric=kind=>['number','integer'].includes(kind);
+const stamp=value=>value?new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}):'未核实';
+
+export default function NativeQueryEditor({form,onChange,metadata,disabled=false}){
+ const rows=Array.isArray(form.querySteps)?form.querySteps:[],malformed=Object.hasOwn(form,'querySteps')&&!Array.isArray(form.querySteps);
+ const condition=Object.hasOwn(form,'queryCriterion')?form.queryCriterion:emptyQueryCriterion(),validCondition=record(condition)&&typeof condition.enabled==='boolean';
+ const {tools,error}=nativeQueryMetadata(metadata);let draftError='';try{buildNativeQuery(form,metadata,{typedNumbers:true});}catch(e){draftError=e.message;}
+ function change(index,patch){onChange({...form,querySteps:rows.map((row,i)=>i===index?{...row,...patch}:row)});}
+ function parameter(index,key,value){change(index,{parameters:{...rows[index].parameters,[key]:value}});}
+ function criterion(patch){onChange({...form,queryCriterion:{...condition,...patch}});}
+ const last=tools.find(tool=>tool.id===rows.at(-1)?.capabilityId),output=queryOutputFields(form,metadata,rows.length-1,tools),selected=output.find(field=>field.key===condition?.field);
+ return <details className="native-query-editor media-form" open={rows.length>0||malformed||!validCondition||undefined}>
+ <summary>筛选、检索或计算已有资料（可选）{rows.length?' · 已设置'+rows.length+'步':''}</summary>
+ <p>{tools.length&&!error?'数据管理已随业务版本配置本机处理。':'数据管理随已确认业务版本提供本机处理，当前可用方式以清单为准。'}只设置本任务的字段、筛选文字或计算要求；原始记录由服务器从已选对象和原目标资料中绑定，保持原值。</p>
+ {error&&<p role="alert">本业务查询方式暂时无法核对：{error}。原查询草稿保留，已设置查询时不能省略后提交。</p>}
+ {!error&&!tools.length&&<p>当前业务版本尚无已固定的本机查询方式。已有查询草稿须由管理员恢复对应版本后核对。</p>}
+ {draftError&&<p role="alert">{draftError}</p>}
+ {malformed?<button type="button" className="btn" disabled={disabled} onClick={()=>onChange({...form,querySteps:[],queryCriterion:emptyQueryCriterion()})}>明确移除无法恢复的查询草稿</button>:<>
+ {rows.map((row,index)=>{
+  if(!record(row))return <article className="media-session" key={index}><h5>查询步骤 {index+1}</h5><p role="alert">此项原稿无法读取，尚未丢弃。</p><button type="button" className="btn" disabled={disabled} onClick={()=>onChange({...form,querySteps:rows.filter((_,i)=>i!==index)})}>明确移除此查询步骤</button></article>;
+  const tool=tools.find(item=>item.id===row.capabilityId),fields=queryInputFields(form,metadata,index,tools),schema=tool?.parameters_schema,parameters=record(row.parameters)?row.parameters:{};
+  const sources=['evidence',...rows.slice(0,index).filter(record).map(item=>item.id)];
+  return <fieldset key={typeof row.id==='string'?row.id:index} className="media-session" disabled={disabled} style={{minWidth:0}}><legend>查询步骤 {index+1}</legend>
+   <label>要怎样处理资料<select aria-label={'查询步骤'+(index+1)+'的处理方式'} value={typeof row.capabilityId==='string'?row.capabilityId:''} onChange={event=>change(index,{capabilityId:event.target.value})}><option value="">请选择筛选、检索或计算</option>{row.capabilityId&&!tool&&<option value={row.capabilityId}>原选方式不属于当前版本，请重新核对</option>}{tools.map(item=><option key={item.id} value={item.id}>{queryMethodLabels[item.method]} · {item.name}</option>)}</select></label>
+   <label>输入资料<select aria-label={'查询步骤'+(index+1)+'的输入资料'} value={typeof row.inputFrom==='string'?row.inputFrom:''} onChange={event=>change(index,{inputFrom:event.target.value})}>{!sources.includes(row.inputFrom)&&<option value={typeof row.inputFrom==='string'?row.inputFrom:''}>原依赖已不可用，请重新核对</option>}<option value="evidence">原目标范围内的来源证据</option>{rows.slice(0,index).filter(record).map((item,i)=><option key={item.id||i} value={item.id}>第 {i+1} 步结果</option>)}</select></label>
+   {tool&&<p>登记版本 {tool.version} · 本机只读处理。{tool.method==='aggregate'?'统计单位是证据记录，不是去重对象数。记录数可核对文本或是否字段；其他计算需数值，缺项或非有限值会阻止统计。':tool.method==='fulltext'?'结果来自已选记录的文字匹配，仍需核对原文。后续统计只覆盖返回的记录。':'按登记字段匹配文字，保留命中的原来源。'}</p>}
+   {!tool&&record(row.parameters)&&Object.keys(row.parameters).length>0&&<section><h6>保留的原查询参数</h6><dl>{Object.entries(row.parameters).filter(([key])=>['field','text','operation','top_k','min_score','match_mode'].includes(key)).map(([key,value])=><React.Fragment key={key}><dt>{({field:'原处理字段',text:'原匹配文字',operation:'原计算方式',top_k:'原返回数量上限',min_score:'原匹配分下限',match_mode:'原匹配方式'})[key]}</dt><dd>{!primitive(value)?'原参数需重新核对，未丢弃':key==='field'?metadata.fields?.[value]||'原字段当前不可用':key==='operation'||key==='match_mode'?queryOperationLabels[value]||'原方式当前不可用':String(value)}</dd></React.Fragment>)}</dl></section>}
+   {schema&&Object.entries(schema.properties).map(([key,definition])=>{
+    const value=parameters[key],label=key==='match_mode'?'匹配方式':definition.title||({field:'处理哪个字段',text:'需要匹配的文字',operation:'计算方式',top_k:'最多返回几条证据',min_score:'最低全文匹配分',match_mode:'匹配方式'})[key],aria='查询步骤'+(index+1)+'的'+label;
+    if(key==='field'){const allowed=Object.values(fields).filter(field=>tool.method==='aggregate'?parameters.operation==='count'||numeric(field.kind):field.kind==='string');return <label key={key}>{label}<select aria-label={aria} value={shown(value)} onChange={event=>parameter(index,key,event.target.value)}><option value="">请选择本输入资料的字段</option>{value&&!allowed.some(field=>field.key===value)&&<option value={shown(value)}>原字段不适用于当前输入或处理方式</option>}{allowed.map(field=><option key={field.key} value={field.key}>{field.label}（{kinds[field.kind]}{field.unit?'，'+field.unit:''}）</option>)}</select></label>;}
+    if(definition.enum||definition.type==='boolean'){const values=definition.enum||[true,false];return <label key={key}>{label}<select aria-label={aria} value={shown(value)} onChange={event=>parameter(index,key,definition.type==='boolean'?event.target.value==='true'?true:event.target.value==='false'?false:'':event.target.value)}><option value="">请选择</option>{primitive(value)&&value!==''&&!values.some(item=>String(item)===String(value))&&<option value={shown(value)}>原参数不属于当前登记范围</option>}{values.map(item=><option key={String(item)} value={String(item)}>{queryOperationLabels[item]||(typeof item==='boolean'?(item?'是':'否'):String(item))}</option>)}</select></label>;}
+    return <label key={key}>{label}<input aria-label={aria} value={shown(value)} type="text" inputMode={numeric(definition.type)?'decimal':undefined} maxLength={definition.maxLength} onChange={event=>parameter(index,key,event.target.value)}/></label>;
+   })}
+   {tool&&(!record(row.parameters)||Object.keys(parameters).some(key=>!Object.hasOwn(schema.properties,key)))&&<p role="alert">原参数与当前方式不符，原值仍保留，须明确重置后重新填写。</p>}
+   {tool&&<button type="button" className="btn" onClick={()=>change(index,{parameters:{}})}>明确重置此步骤参数</button>}
+   <button type="button" className="btn" onClick={()=>onChange({...form,querySteps:rows.filter((_,i)=>i!==index)})}>移除查询步骤 {index+1}</button>
+  </fieldset>;
+ })}
+ <button type="button" className="btn" disabled={disabled||!!error||!tools.length||rows.length>=6} onClick={()=>onChange({...form,querySteps:[...rows,{id:'query_'+crypto.randomUUID().replaceAll('-',''),capabilityId:'',inputFrom:rows.at(-1)?.id||'evidence',parameters:{}}]})}>添加资料处理步骤</button>
+ </>}
+ {!validCondition?<><p role="alert">原派生结果标准无法恢复，尚未丢弃。</p><button type="button" className="btn" disabled={disabled} onClick={()=>onChange({...form,queryCriterion:emptyQueryCriterion()})}>明确移除无法恢复的派生标准</button></>:<fieldset disabled={disabled} style={{border:0,padding:0,minWidth:0}}><label className="checkbox"><input aria-label="设置派生结果完成标准" type="checkbox" checked={condition.enabled} onChange={event=>criterion({enabled:event.target.checked})}/>最后一步结果还需满足具体完成标准</label>
+ {condition.enabled&&<><label>核对最后一步哪个输出<select aria-label="派生结果完成字段" value={shown(condition.field)} onChange={event=>criterion({field:event.target.value})}><option value="">请选择登记输出</option>{condition.field&&!selected&&<option value={shown(condition.field)}>原输出不属于最后一步，请重新核对</option>}{output.map(field=><option key={field.key} value={field.key}>{field.label}（{kinds[field.kind]}{field.unit?'，'+field.unit:''}）</option>)}</select></label>
+ {!output.length&&<p>最后一步尚无登记的可比较单值输出。查询仍可取回来源结果；具体完成标准需使用已登记的最后一步输出。</p>}
+ <label>比较方式<select aria-label="派生结果比较方式" value={shown(condition.operator)} onChange={event=>criterion({operator:event.target.value})}>{(!Object.hasOwn(operators,condition.operator)||!numeric(selected?.kind)&&condition.operator!=='eq')&&<option value={shown(condition.operator)}>原比较方式需重新核对</option>}{Object.entries(operators).filter(([key])=>key==='eq'||numeric(selected?.kind)).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+ {selected?.kind==='boolean'?<label>期望结果<select aria-label="派生结果期望值" value={shown(condition.expected)} onChange={event=>criterion({expected:event.target.value})}><option value="">请选择是或否</option>{primitive(condition.expected)&&!['','true','false'].includes(String(condition.expected))&&<option value={shown(condition.expected)}>原期望值需重新核对</option>}<option value="true">是</option><option value="false">否</option></select></label>:<label>期望{numeric(selected?.kind)?'数值':'内容'}{selected?.unit?'（'+selected.unit+'）':''}<input aria-label="派生结果期望值" inputMode={numeric(selected?.kind)?'decimal':undefined} value={shown(condition.expected)} onChange={event=>criterion({expected:event.target.value})}/></label>}
+ {numeric(selected?.kind)&&!selected?.unit&&<p>单位未声明，保持登记原值，不推断或换算。</p>}</>}
+ </fieldset>}
+ <p>最多6个查询步骤，仍受原目标累计12次调用及完成条件合计12项约束。查询完成后原人工流程和最终目标验收仍需分别保存。</p>
+ {!metadata.relation_types?.length?<p>关系查询暂不可用：当前业务版本尚未确认关系类型及其来源，不按对象名称推断关系或自动建边。</p>:<p>资料处理沿用上方已确认的关系范围；关系链和来源改变时须按原目标重新核查。</p>}
+ </details>;
+}
+
+const resultLabels={value:'计算结果',sample_count:'证据记录数',field:'依据字段',operation:'计算方式',records:'证据记录',values:'登记值',summary:'处理摘要',method:'处理方法',sample_unit:'统计单位',scanned_records:'读取证据记录数',matched_records:'匹配证据记录数',returned_records:'返回证据记录数',ranking:'排序依据',score:'全文匹配分',text:'匹配文字',top_k:'最多返回证据数',min_score:'最低匹配分',match_mode:'匹配方式',records_in:'输入记录数',records_out:'输出记录数'};
+const resultStates={not_requested:'尚未发起查询',queued:'等待本机查询',running:'本机查询处理中',waiting_recovery:'后台执行已中断，等待核对恢复',worker_unverified:'后台执行状态待核实',accepted_history:'已验收目标的保存查询结果',stopped_history:'已停止目标的保存查询历史',historical:'已保存的历史查询',sufficient:'来源与计算已核对',insufficient:'资料不足，尚未完成',conflict:'来源存在冲突',blocked_evidence:'来源已变化或不满足要求',needs_review:'推导结果等待核查',failed:'查询未完成',cancelled:'后续查询已停止',rejected:'推导结果已拒绝',awaiting_collection:'等待数据归集回执'};
+function QueryValues({value,fields={},units={},output=[],context={},name=null,full=false}){
+ const [limit,setLimit]=useState(25);
+ if(value===null||value===undefined)return <span>未提供，保持未知</span>;
+ if(primitive(value))return <span style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{name==='source'?({resource_entity:'已有业务档案',observation:'已登记观测'})[value]||'原保存来源':name==='status'?({sufficient:'来源充分',succeeded:'已保存实际成功回执',recorded:'原始登记',confirmed:'已人工核查'})[value]||'原保存状态待核实':name==='field'?fields[value]||output.find(item=>item.key===value)?.label||'原登记字段':name==='operation'||name==='match_mode'?queryOperationLabels[value]||'已登记方式':name==='method'?({registered_evidence_record_aggregate:'按原证据登记值计算',registered_field_keyword_filter:'按原字段文字筛选',bounded_fulltext_bm25:'按已选内容匹配排序'})[value]||'已保存的处理方法':name==='sample_unit'&&value==='evidence_records'?'证据记录':typeof value==='boolean'?(value?'是':'否'):typeof value==='number'?numericDisplay(value):String(value)}{typeof value==='number'&&(Object.hasOwn(fields,name)||output.some(item=>item.key===name)||['value','sample_count','scanned_records','matched_records','returned_records'].includes(name))&&<small> · {units[name]||output.find(item=>item.key===name)?.unit||(['sample_count','scanned_records','matched_records','returned_records'].includes(name)?'证据记录':'单位未声明，保持原值')}</small>}</span>;
+ if(Array.isArray(value)){const count=full?value.length:Math.min(limit,value.length);return <div><p>共 {value.length} 项，显示 {count} 项。</p>{value.slice(0,count).map((item,index)=><div className="media-form" key={index}><strong>第 {index+1} 项</strong><QueryValues {...{value:item,fields,units,output,context,full}}/></div>)}{count<value.length&&<button type="button" onClick={()=>setLimit(previous=>previous+25)}>再显示25项</button>}</div>;}
+ if(!record(value))return <span>原保存值需进一步核对</span>;
+ const hidden=/^(?:id|.*_id|.*_ids|.*_hash|hash|request_key|evidence_refs|capability_id|capability_hash|release_version)$/;
+ return <dl>{Object.entries(value).filter(([key])=>!hidden.test(key)).map(([key,item])=><React.Fragment key={key}><dt>{fields[key]||output.find(field=>field.key===key)?.label||resultLabels[key]||({attributes:'原登记字段',observed_at:'登记时间',source:'来源类别',version:'保存版本',source_name:'来源名称',status:'保存状态',error:'未完成原因'})[key]||'已保存内容'}</dt><dd>{key==='observed_at'?stamp(item):<QueryValues {...{value:item,fields,units,output,context,name:key,full}}/>}</dd></React.Fragment>)}{Array.isArray(value.evidence_refs)&&<><dt>原来源凭据</dt><dd>{value.evidence_refs.length} 条已保存版本依据<ul>{value.evidence_refs.map((reference,index)=>{const parts=typeof reference==='string'?reference.split(':'):[],source=context.references?.[reference];return <li key={index}>{parts[0]==='observation'?'原观测 · ':'原档案 · '}{source?.name||context.entityNames?.[parts[1]]||(parts[0]==='observation'?'原观测（来源名称未提供）':'原对象（名称未提供）')} · 版本 {source?.version||parts.at(-1)||'未核实'}{source?.observed_at?' · 登记 '+stamp(source.observed_at):''}</li>;})}</ul></dd></>}{typeof value.entity_id==='string'&&<><dt>原来源对象</dt><dd>{context.entityNames?.[value.entity_id]||'来源对象名称未提供'}</dd></>}{Array.isArray(value.entity_ids)&&<><dt>已授权对象范围</dt><dd>{value.entity_ids.length} 个来源对象：{value.entity_ids.map(identifier=>context.entityNames?.[identifier]||'来源对象名称未提供').join('、')}</dd></>}</dl>;
+}
+
+function savedQueryForm(goal){return {fields:goal.goal?.required_fields||[],querySteps:(goal.goal?.data_query?.tool_steps||[]).map(step=>({id:step.id,capabilityId:step.capability_id,inputFrom:step.input_from,parameters:step.parameters}))};}
+
+export function SavedQueryGoal({goal}){
+ const steps=goal.goal?.data_query?.tool_steps;if(!steps)return null;const {tools,error}=nativeQueryMetadata(goal),savedForm=savedQueryForm(goal),finalFields=queryOutputFields(savedForm,goal,steps.length-1,tools);
+ return <section aria-label="已固定的原目标查询"><h5>已确认资料处理要求</h5>{error&&<p role="alert">原查询要求保留，当前登记清单待核对：{error}</p>}<ol>{steps.map((step,index)=>{const tool=tools.find(item=>item.id===step.capability_id);return <li key={step.id||index}><strong>{tool?.name||'原目标登记的查询方式'}</strong><p>输入：{step.input_from==='evidence'?'原目标来源证据':'第 '+(steps.findIndex(item=>item.id===step.input_from)+1)+' 步结果'}。{tool?'登记版本 '+tool.version+' · 本机只读处理。':'当前方式不可用，旧条件仍保留。'}</p><QueryValues value={step.parameters} fields={goal.fields} units={goal.field_units}/></li>;})}</ol>{(goal.goal.criteria||[]).filter(item=>item.kind==='query_value').map(item=>{const field=finalFields.find(field=>field.key===item.field);return <p key={item.id}>最后一步{field?.label||'原登记输出'} {operators[item.operator]||'按原比较标准'} {typeof item.expected==='boolean'?(item.expected?'是':'否'):typeof item.expected==='number'?numericDisplay(item.expected):String(item.expected)}{field?.unit?' '+field.unit:''}。</p>;})}<p>原查询条件已随目标固定；刷新和重核沿用同一目标，不自动完成原人工步骤或认定现场状态。</p></section>;
+}
+
+export function NativeQueryResult({goal}){
+ if(!goal.goal?.data_query)return null;
+ const {query,invalid,reason,status,historical}=nativeQueryStatus(goal),result=query?.result||goal.check?.evidence,trace=result?.tool_trace?.length?result.tool_trace:query?.tool_trace||[];
+ const blocker=invalid||['insufficient','conflict','blocked_evidence','failed','rejected'].includes(status)?reason||'当前查询依据尚未通过核查':null;
+ const {tools}=nativeQueryMetadata(goal),savedForm=savedQueryForm(goal),derived=result?.derived_records,source=result?.evidence||[],observations=result?.observation_evidence||[];
+ const context={entityNames:goal.entity_names||{},references:Object.fromEntries([...source,...observations].map(row=>[(row.observation_id?'observation:'+row.observation_id:'entity:'+row.entity_id)+':'+row.version,{name:row.source_name||goal.entity_names?.[row.entity_id],version:row.version,observed_at:row.observed_at}]))};
+ return <section className="media-session" aria-label="原任务查询进度与真实结果"><h5>当前目标的本机资料查询</h5><p role="status">{resultStates[status]||'查询状态尚待核实'}{query?.progress?.message?' · '+query.progress.message:''}。</p>{blocker&&<p role="alert">{invalid?'以下是已保存历史，当前依据未通过：':''}{blocker}。旧来源与已保存回执保留；请按原要求重新核查，旧结果不能替代当前验收依据。</p>}{!blocker&&reason&&<p>{reason}</p>}{query?.late_result_preserved&&<p>停止后到达的处理回执已保留，不会继续采用为本目标的完成依据。</p>}
+ <p>{['waiting_recovery','worker_unverified'].includes(status)?'本页只核对已保存进度，不领取后台任务或重发调用。等待有权限的处理者核对原任务后恢复。':historical?'此为原任务已保存历史；不据此启动新查询，也不撤回原正式验收。':'此查询隶属当前原任务，后台保存处理进度；停止目标协调会停止后续查询，已发生处理与原结果保留。网络异常先核对原请求，再按原编号恢复。'}</p>
+ {source.length+observations.length>0&&<details><summary>核对完整原来源记录（{source.length+observations.length}）</summary><p>以下是本次已授权来源记录，保持原登记值；与下方筛选或计算结果分别核对。</p><QueryValues value={[...source,...observations]} fields={goal.fields} units={goal.field_units} context={context} full/></details>}
+ {trace.map((step,index)=>{const tool=tools.find(item=>item.id===step.capability_id);return <article className="media-form" key={index}><h6>第 {index+1} 步 · {step.title||tool?.name||'原登记查询'}</h6><p>{step.status==='succeeded'?'实际处理回执已保存':step.status==='failed'?'处理未完成':'处理状态待核查'} · 本机只读处理。</p><details><summary>核对本步骤完整实际输入与来源</summary><QueryValues value={step.inputs} fields={goal.fields} units={goal.field_units} output={queryOutputFields(savedForm,goal,index,tools)} context={context} full/></details>{step.output!==undefined&&<section><strong>本步骤已保存真实输出</strong><QueryValues value={step.output} fields={goal.fields} units={goal.field_units} output={queryOutputFields(savedForm,goal,index,tools)} context={context}/></section>}{step.error&&<p role="alert">{typeof step.error==='string'?step.error:'本步骤未完成，原错误回执已保存'}</p>}</article>;})}
+ {Array.isArray(derived)?<section aria-label="已保存派生查询结果"><h6>最后一步派生结果</h6>{derived.length?<QueryValues value={derived} fields={goal.fields} units={goal.field_units} output={queryOutputFields(savedForm,goal,savedForm.querySteps.length-1,tools)} context={context}/>:<p>本范围未返回匹配记录；不能证明其他对象或现场不存在异常。</p>}<p>{result.derivation_verification==='deterministic_registered_computation'?'结果来自已登记的本机确定性处理。':'推导确认等级须按服务端保存依据核对。'}计算的统计单位是证据记录，检索后计算仅覆盖返回子集。查询结果不改变原档案、不认定现场状态，也不会自动发布可信经验。</p></section>:<p>尚无已保存的最后一步查询结果；不会用原字段齐全或计划文字代替。</p>}
+ <p>如来源、关系、能力版本或已确认目标改变，原结果须阻断复用；只有原流程、数据归集、真实结果及目标标准均通过，才能单独保存最终人工验收。</p>
+ </section>;
+}

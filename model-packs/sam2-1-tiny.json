@@ -1,0 +1,56 @@
+{
+  "pack_id": "sam2-1-tiny",
+  "version": "1.0.0",
+  "title": "SAM 2.1 Tiny 实例掩膜",
+  "repository": "facebook/sam2.1-hiera-tiny",
+  "revision": "de431c4043854a71d8101e17995dfe596bf101a5",
+  "license": "Apache-2.0",
+  "license_evidence": "https://huggingface.co/facebook/sam2.1-hiera-tiny",
+  "code_license_evidence": "https://github.com/huggingface/transformers/blob/v4.57.6/LICENSE",
+  "training_origin": "SA-1B/SA-V image-video segmentation; data rights and domain suitability require separate review",
+  "limitations": "只输出无语义实例掩膜候选，不能直接识别树冠、病害或业务异常；缺地理参考不生成真实位置或平方米。尚未完成遥感领域评测。",
+  "files": [
+    {
+      "name": "config.json",
+      "bytes": 5695,
+      "sha256": "860aff9751b139d83a4ad7df1e5535416fded533e0ead02625edbefcb9953cce"
+    },
+    {
+      "name": "preprocessor_config.json",
+      "bytes": 683,
+      "sha256": "6ebf229ee259368ce4a8d4f2fe893a72b053023710853e257253939e601f583d"
+    },
+    {
+      "name": "processor_config.json",
+      "bytes": 95,
+      "sha256": "f8a68e865cfad115c1c2763f3d93eca7b1c622da06da2a9273eb437fb2389b6d"
+    },
+    {
+      "name": "model.safetensors",
+      "bytes": 155908064,
+      "sha256": "48c14467e5cf9e51870511feb72c89688e82dd74523142c0538b663e193ac2a7"
+    }
+  ],
+  "environment": {
+    "torch": "2.8.0",
+    "torchvision": "0.23.0",
+    "transformers": "4.57.6",
+    "safetensors": "0.6.2",
+    "Pillow": "11.3.0",
+    "scipy": "1.16.2"
+  },
+  "default_deployment": "local",
+  "default_backend": "cpu",
+  "cloud_fallback": false,
+  "weight_hash_evidence": "https://huggingface.co/facebook/sam2.1-hiera-tiny/blob/main/model.safetensors",
+  "parameters": {
+    "tile_size": 1024,
+    "tile_overlap": 128,
+    "points_per_crop": 8,
+    "points_per_batch": 4,
+    "stability_score_thresh": 0.9,
+    "merge_iou": 0.55,
+    "max_candidates": 80
+  },
+  "max_output_bytes": 8388608
+}

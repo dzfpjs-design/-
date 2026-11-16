@@ -1,0 +1,9 @@
+export const modalities={imagery:'影像',audio:'音频',video:'视频',archive:'业务档案',observations:'登记观测数据'};
+export const blankAssessment=()=>({purpose:'',goal:'current_state',required_modalities:['imagery'],lookback_hours:24,entity_ids:[]});
+export function readyAssessment(form,objects){return !!form.purpose?.trim()&&form.entity_ids?.length>0&&new Set(form.entity_ids).size===form.entity_ids.length&&form.entity_ids.every(id=>objects.some(o=>o.id===id))&&form.required_modalities?.length>0&&new Set(form.required_modalities).size===form.required_modalities.length&&form.required_modalities.every(m=>m in modalities)&&Number.isInteger(form.lookback_hours)&&form.lookback_hours>=1&&form.lookback_hours<=8760;}
+export function retryAssessment(action,instanceId){return !!action&&action.instance_id===instanceId&&typeof action.request_id==='string'&&action.request_id.length>=12&&action.entity_ids?.length>0;}
+export function manualBusinesses(release,enabled){return (release?.snapshot?.businesses||[]).filter(b=>b.available&&enabled.includes(b.id)&&b.flow.steps.every(s=>s.agent==='人工确认'));}
+export function taskAssessmentRequest(row,release,business,requestId){if(!row?.result||!manualBusinesses(release,[business]).length||row.status!=='completed'||row.request.release_id!==release.id)throw Error('请选择当前版本已启用的人工核查业务；原结果保留。');return {release_id:release.id,business_id:business,entity_ids:row.request.entity_ids,title:'资料缺口核查：'+row.request.purpose.slice(0,240),request_id:requestId,assessment_id:row.id};}
+
+export function savedAssessmentCount(result){return result.saved_records??result.processing_records;}
+export function displayReportedValue(value){if(value==null)return '未填写';if(typeof value==='boolean')return value?'是':'否';if(Array.isArray(value))return '结构化内容（'+value.length+'项，详见导出）';if(typeof value==='object')return '结构化内容（详见导出）';return String(value);}

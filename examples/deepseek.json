@@ -1,0 +1,23 @@
+{
+  "contract_version": "1.0",
+  "namespace": "inspection",
+  "name": "deepseek",
+  "version": "1.0.0",
+  "owner": "平台操作者",
+  "description": "DeepSeek云端推理（需配置凭证）",
+  "kind": "foundation_model",
+  "execution": {
+    "provider": "deepseek",
+    "model": "deepseek-v4-pro",
+    "secret_ref": "DEEPSEEK_API_KEY",
+    "max_tokens": 2048,
+    "thinking_mode": "disabled"
+  },
+  "data_policy": {
+    "cloud_allowed": true,
+    "redact_fields": [
+      "contact",
+      "location"
+    ]
+  }
+}

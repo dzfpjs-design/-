@@ -1,0 +1,30 @@
+.full-source-review{display:grid;grid-template-columns:minmax(210px,270px) minmax(0,1fr);gap:12px 20px;margin:14px 0;padding:22px;background:#fff;border:1px solid #b8cbea;border-radius:12px;color:#24364d;line-height:1.65}
+.full-source-review>*{grid-column:1/-1;min-width:0;margin:0}
+.full-source-review>h3{font-size:22px;line-height:1.4;color:#122b4c}
+.full-source-review>p{font-size:13px;color:#52657d}
+.full-source-review>label{grid-column:auto;display:flex;align-items:center;gap:10px;font-weight:600}
+.full-source-review button{font:inherit;font-size:13px;line-height:1.5;padding:8px 12px;border:1px solid #c6d3e5;border-radius:7px;background:#fff;color:#24415f;cursor:pointer;min-height:38px}
+.full-source-review button:hover:not(:disabled){border-color:#2167df;background:#f0f6ff}
+.full-source-review button:disabled{opacity:.55;cursor:default}
+.full-source-review button:focus-visible,.full-source-review select:focus-visible,.full-source-review textarea:focus-visible{outline:3px solid #96bbff;outline-offset:2px}
+.full-source-review select,.full-source-review textarea{font:inherit;font-size:14px;border:1px solid #bdcce0;border-radius:7px;background:#fff;color:#24364d;padding:9px 10px;max-width:100%;box-sizing:border-box}
+.full-source-review select{min-height:40px;flex:1}
+.full-source-review .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.full-source-review>nav[aria-label="待核设计条目"]{grid-column:1;align-self:start;max-height:70vh;overflow:auto;padding:4px 10px 4px 0;scrollbar-gutter:stable}
+.full-source-review>nav>button{display:block;text-align:left;width:100%;margin-bottom:8px;overflow-wrap:anywhere}
+.full-source-review>nav>button[aria-pressed="true"]{border-color:#2167df;background:#edf4ff;color:#164d9e;font-weight:600}
+.full-source-review>section[aria-label="当前私人核对"]{grid-column:2;align-self:start;padding:16px;background:#f7faff;border:1px solid #dce6f4;border-radius:9px;min-width:0}
+.full-source-review h4{font-size:17px;line-height:1.5;margin:0 0 8px;color:#183a63}
+.full-source-review h5{font-size:15px;margin:4px 0 12px;color:#24496e}
+.full-source-review h6{font-size:14px;margin:0 0 10px;color:#24496e}
+.full-source-review .source-review-columns{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:16px;margin:18px 0}
+.full-source-review .source-review-columns>div{min-width:0;padding:14px;background:#fff;border:1px solid #dce6f4;border-radius:8px}
+.full-source-review .source-review-columns p{margin:5px 0 10px;font-size:13px}
+.full-source-review dl{margin:0}.full-source-review dt{font-size:12px;color:#687c95;margin-top:8px}.full-source-review dd{margin:0;overflow-wrap:anywhere}
+.full-source-review blockquote{margin:8px 0;padding:12px;background:#eef4ff;border-left:3px solid #4f86dc;border-radius:0 6px 6px 0;font-size:14px;overflow-wrap:anywhere}
+.full-source-review details{margin:8px 0}.full-source-review summary{font-size:13px;color:#2c5f99;cursor:pointer}.full-source-review details article{padding:10px 0;border-bottom:1px solid #e0e8f3}
+.full-source-review section[aria-label="当前私人核对"]>label{display:block;font-size:13px;font-weight:600;margin-top:14px}.full-source-review section[aria-label="当前私人核对"]>label>select,.full-source-review textarea{display:block;width:100%;margin-top:7px}.full-source-review textarea{min-height:100px;resize:vertical;font-weight:400}
+.full-source-review section[aria-label="当前私人核对"]>.row{margin-top:14px}.full-source-review section[aria-label="当前私人核对"]>.row>button:first-child{background:#2167df;border-color:#2167df;color:#fff}
+.full-source-review [role="status"]{padding:10px 12px;background:#edf8f2;border-radius:7px;color:#1f674a}.full-source-review [role="alert"]{padding:10px 12px;background:#fff3ed;border:1px solid #f3cbb4;border-radius:7px;color:#81451f}
+@media(max-width:1100px){.full-source-review .source-review-columns{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:760px){.full-source-review{grid-template-columns:minmax(0,1fr);padding:14px}.full-source-review>label,.full-source-review>nav[aria-label="待核设计条目"],.full-source-review>section[aria-label="当前私人核对"]{grid-column:1}.full-source-review>nav[aria-label="待核设计条目"]{max-height:220px}}

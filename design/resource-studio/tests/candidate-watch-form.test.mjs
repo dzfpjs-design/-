@@ -1,0 +1,7 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {candidateWatchBody} from '../src/candidate-watch-form.mjs';
+const profiles=[{key:'local:model',name:'本地候选',value_kind:'number'},{key:'native:AudioRun',name:'转写',value_kind:'text'}],objects=[{id:'object',name:'对象'}];
+const form={object:'object',profile:'local:model',operator:'gte',threshold:'1',confirmed:true};
+test('confirmed local scope and original model filter are explicit',()=>{const b=candidateWatchBody({...form,label:'person',minScore:'0.7'},profiles,objects,'fixed-request');assert.equal(b.entity_id,'object');assert.equal(b.min_score,.7);assert.equal(b.label,'person');assert.equal(b.request_id,'fixed-request');});
+test('empty zero-atleast fractional and unsafe counts cannot publish a rule',()=>{for(const threshold of ['',0,'1.2','NaN','9007199254740992'])assert.throws(()=>candidateWatchBody({...form,threshold},profiles,objects,'x'));assert.throws(()=>candidateWatchBody({...form,confirmed:false},profiles,objects,'x'));});
+test('text match is literal trimmed and does not inherit numeric condition',()=>{const b=candidateWatchBody({...form,profile:'native:AudioRun',needle:' 着火 '},profiles,objects,'x');assert.equal(b.needle,'着火');assert.equal(b.operator,'contains');assert.equal(b.threshold,undefined);assert.throws(()=>candidateWatchBody({...form,profile:'native:AudioRun',needle:' '},profiles,objects,'x'));});

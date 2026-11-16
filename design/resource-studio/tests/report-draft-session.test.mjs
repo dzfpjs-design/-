@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {ReportDraftSession} from '../src/report-draft-session.mjs';
+const account={user_id:'70000000-0000-4000-8000-000000000001',workspace_id:'70000000-0000-4000-8000-000000000002',role:'operator'};
+const memory=()=>{const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k),key:i=>[...m.keys()][i],get length(){return m.size;}};};
+test('actual session protects the last character synchronously and owners cannot overwrite each other',()=>{const storage=memory(),a=new ReportDraftSession({account,materialID:'material',storage}),b=new ReportDraftSession({account,materialID:'material',storage});a.editForm({note:'甲末字Z'});b.editForm({note:'乙末字Q'});assert.notEqual(a.owner,b.owner);assert.equal(a.state.form.note,'甲末字Z');assert.equal(b.state.form.note,'乙末字Q');assert.equal(a.foreign().some(r=>r.form.note==='乙末字Q'),true);});
+test('actual session retains latest memory on quota failure and cannot claim a local save',()=>{const storage=memory(),a=new ReportDraftSession({account,materialID:'material',storage});storage.setItem=()=>{throw Error('quota');};a.editForm({note:'失败末字X'});assert.equal(a.state.form.note,'失败末字X');assert.equal(a.localSaved,false);assert.equal(a.canClose(),false);});

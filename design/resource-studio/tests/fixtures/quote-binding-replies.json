@@ -1,0 +1,4688 @@
+{
+  "synthetic_only": true,
+  "synthetic_empty_database": true,
+  "real_ocr_or_runtime_proof": false,
+  "provenance": "Root-owned empty PostgreSQL HTTP captures; source/copy/image/confirmation fixtures are synthetic.",
+  "raw_options": {
+    "schema": "report-source-region-options-v1",
+    "workspace_id": "bc250fde-fb61-4d92-a07e-b0356b13f7d5",
+    "handoff_id": "19d54315-dbfd-4479-9a26-463ff660b8f7",
+    "candidate_index": 0,
+    "configuration": {
+      "revision": 3,
+      "hash": "93341f252bc93da2fccbfc59109069294a047fab40340db9b502ac3bc7b7ff4e",
+      "fact_hash": "4ac8f40deb40ddf03491a958724d4dd902f45a57acbd2da1d0b9087c1f57c2de",
+      "mapping_basis_hash": "05dfe07787e146ff766c2762e871cddb6aec32d6f9af9b14565d2287f059b8f6"
+    },
+    "copies": [
+      {
+        "anchor": {
+          "source_ref": {
+            "id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+            "version": 4,
+            "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d"
+          },
+          "source_evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+          "source_name": "synthetic-original.docx",
+          "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+          "copy_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+          "copy_evidence_id": "c2daafe1-a6d9-45d4-a1ca-0fd82cf0c033",
+          "provenance_hash": "8f9f6a5b3404d798748bebeb7bc57982ed2afc746fbb18792374118b25392690",
+          "run_id": "dbbf6bd6-b1d9-4203-ac4e-e540da7e06c6",
+          "generation": 1
+        },
+        "copy_ref": {
+          "id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+          "version": 2,
+          "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d"
+        },
+        "copy_name": "synthetic-original（本地最终修订副本）.pdf",
+        "page_count": 2,
+        "prepared_pages": 2,
+        "confirmed_pages": 0,
+        "whole_document_confirmed": false,
+        "reason_code": "binding_confirmation_pending",
+        "reason": "页面选择可保存为私有核对稿，正式来源复核仍须全部页面及整篇确认"
+      }
+    ],
+    "quotes": [
+      {
+        "reference": {
+          "scope": "current",
+          "path": "/business/citations/0",
+          "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+          "version": 4,
+          "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+          "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+          "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "9019d7b3b46874a6b5f473d56c37fe79a63b28b54892b8b910d1fd79625e7a20",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current",
+                "path": "/business/citations/0",
+                "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                "version": 4,
+                "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1",
+                    "2",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1",
+                    "24",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "778b541d810c68be7c176cc77ccb0a7bcbc2093bf0c1708864cd6f68bc4a454e",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/9b3ceafd-b422-4ee2-966a-2f1d3599c8c8/ocr/units/7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3/image?run_id=dbbf6bd6-b1d9-4203-ac4e-e540da7e06c6&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "current",
+          "path": "/steps/0/citations/0",
+          "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+          "version": 4,
+          "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+          "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+          "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "de1bd58378a4fff56614ac936a15b3da659885ed45e57afe6c03886f857fbe5b",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current",
+                "path": "/steps/0/citations/0",
+                "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                "version": 4,
+                "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1",
+                    "2",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1",
+                    "24",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "b76135fb391289e77e498cf0acc29565b1906bae7d5295c66736b00e78e9c075",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/9b3ceafd-b422-4ee2-966a-2f1d3599c8c8/ocr/units/7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3/image?run_id=dbbf6bd6-b1d9-4203-ac4e-e540da7e06c6&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "original",
+          "path": "/business/citations/0",
+          "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+          "version": 4,
+          "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+          "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+          "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "ab31bdae8088e5c2753dcab22901322f0aa49a3b9e5b5cd6d4c5160df3dce5cd",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "original",
+                "path": "/business/citations/0",
+                "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                "version": 4,
+                "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1",
+                    "2",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1",
+                    "24",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "68f5788b776f24528c6f9afa7d465bc68fa315eb89d3cba5044f53638b672a8f",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/9b3ceafd-b422-4ee2-966a-2f1d3599c8c8/ocr/units/7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3/image?run_id=dbbf6bd6-b1d9-4203-ac4e-e540da7e06c6&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "original",
+          "path": "/steps/0/citations/0",
+          "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+          "version": 4,
+          "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+          "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+          "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "b2fc5a0c3d345d1e6b4ab98535566b446ba4d413e54f13d0b1cf5977b396682f",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "original",
+                "path": "/steps/0/citations/0",
+                "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                "version": 4,
+                "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1",
+                    "2",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1",
+                    "24",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "34e441b67f624fb7829e129f1389f363fe993058734a71490bb97ec1f2d4495f",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/9b3ceafd-b422-4ee2-966a-2f1d3599c8c8/ocr/units/7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3/image?run_id=dbbf6bd6-b1d9-4203-ac4e-e540da7e06c6&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "current_flow",
+          "path": "/business/citations/0",
+          "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+          "version": 4,
+          "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+          "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+          "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "d19b91f4701623226b24653c2600c3335478c83647c3afb614acb0db900cd69b",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current_flow",
+                "path": "/business/citations/0",
+                "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                "version": 4,
+                "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1",
+                    "2",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1",
+                    "24",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "a4e0b7a076d1abaf7c2cb5a5edd313a6cb4ea9b2e97b32b29d00235679cf6a98",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/9b3ceafd-b422-4ee2-966a-2f1d3599c8c8/ocr/units/7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3/image?run_id=dbbf6bd6-b1d9-4203-ac4e-e540da7e06c6&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "current_flow",
+          "path": "/steps/0/citations/0",
+          "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+          "version": 4,
+          "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+          "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+          "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "183829ea88f9e8b0b345076da622147bba522f31cfa4007d9423755fc6898922",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current_flow",
+                "path": "/steps/0/citations/0",
+                "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                "version": 4,
+                "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1",
+                    "2",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                  "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                  "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                  "revision_kind": "raw",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1",
+                    "24",
+                    "90",
+                    "20"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "7e615dcf31b0d15833bfba565362f21aee59021b49889515c173ae572f2c950e",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/9b3ceafd-b422-4ee2-966a-2f1d3599c8c8/ocr/units/7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3/image?run_id=dbbf6bd6-b1d9-4203-ac4e-e540da7e06c6&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      }
+    ],
+    "can_apply": false,
+    "can_publish": false,
+    "options_hash": "c4d73a020eb0a88a1df6d552e6b0e021411bc475d4a37801d16c6c0e9ecea0fe"
+  },
+  "raw_reply": {
+    "draft": {
+      "schema": "report-quote-binding-draft-v1",
+      "id": "00b4093b-f071-489c-bfdd-16f6e5364679",
+      "workspace_id": "bc250fde-fb61-4d92-a07e-b0356b13f7d5",
+      "actor_id": "461da525-df7e-47d8-bf54-19200cbfdb00",
+      "handoff_id": "19d54315-dbfd-4479-9a26-463ff660b8f7",
+      "candidate_index": 0,
+      "revision": 1,
+      "anchor": {
+        "copies": [
+          {
+            "run_id": "dbbf6bd6-b1d9-4203-ac4e-e540da7e06c6",
+            "generation": 1,
+            "source_ref": {
+              "id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+              "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+              "version": 4
+            },
+            "copy_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+            "source_name": "synthetic-original.docx",
+            "provenance_hash": "8f9f6a5b3404d798748bebeb7bc57982ed2afc746fbb18792374118b25392690",
+            "copy_evidence_id": "c2daafe1-a6d9-45d4-a1ca-0fd82cf0c033",
+            "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+            "source_evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec"
+          }
+        ],
+        "handoff_id": "19d54315-dbfd-4479-9a26-463ff660b8f7",
+        "candidate_index": 0
+      },
+      "value": {
+        "bindings": [
+          {
+            "spans": [
+              {
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ],
+                "end": 5,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r1",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+              },
+              {
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ],
+                "end": 7,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r2",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+              }
+            ],
+            "reference": {
+              "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+              "path": "/business/citations/0",
+              "quote": "巡护🙂记录必须人工核验。",
+              "scope": "current",
+              "version": 4,
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+              "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+              "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+            },
+            "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+          },
+          {
+            "spans": [
+              {
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ],
+                "end": 5,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r1",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+              },
+              {
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ],
+                "end": 7,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r2",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+              }
+            ],
+            "reference": {
+              "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+              "path": "/steps/0/citations/0",
+              "quote": "巡护🙂记录必须人工核验。",
+              "scope": "current",
+              "version": 4,
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+              "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+              "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+            },
+            "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+          },
+          {
+            "spans": [
+              {
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ],
+                "end": 5,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r1",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+              },
+              {
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ],
+                "end": 7,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r2",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+              }
+            ],
+            "reference": {
+              "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+              "path": "/business/citations/0",
+              "quote": "巡护🙂记录必须人工核验。",
+              "scope": "original",
+              "version": 4,
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+              "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+              "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+            },
+            "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+          },
+          {
+            "spans": [
+              {
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ],
+                "end": 5,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r1",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+              },
+              {
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ],
+                "end": 7,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r2",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+              }
+            ],
+            "reference": {
+              "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+              "path": "/steps/0/citations/0",
+              "quote": "巡护🙂记录必须人工核验。",
+              "scope": "original",
+              "version": 4,
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+              "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+              "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+            },
+            "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+          },
+          {
+            "spans": [
+              {
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ],
+                "end": 5,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r1",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+              },
+              {
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ],
+                "end": 7,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r2",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+              }
+            ],
+            "reference": {
+              "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+              "path": "/business/citations/0",
+              "quote": "巡护🙂记录必须人工核验。",
+              "scope": "current_flow",
+              "version": 4,
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+              "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+              "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+            },
+            "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+          },
+          {
+            "spans": [
+              {
+                "box": [
+                  "1",
+                  "2",
+                  "90",
+                  "20"
+                ],
+                "end": 5,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r1",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+              },
+              {
+                "box": [
+                  "1",
+                  "24",
+                  "90",
+                  "20"
+                ],
+                "end": 7,
+                "page": 1,
+                "start": 0,
+                "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                "region_id": "r2",
+                "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                "revision_kind": "raw",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+              }
+            ],
+            "reference": {
+              "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+              "path": "/steps/0/citations/0",
+              "quote": "巡护🙂记录必须人工核验。",
+              "scope": "current_flow",
+              "version": 4,
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+              "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+              "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+            },
+            "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+          }
+        ],
+        "copy_refs": [
+          {
+            "id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+            "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+            "version": 2
+          }
+        ],
+        "fact_hash": "4ac8f40deb40ddf03491a958724d4dd902f45a57acbd2da1d0b9087c1f57c2de",
+        "configuration_hash": "93341f252bc93da2fccbfc59109069294a047fab40340db9b502ac3bc7b7ff4e",
+        "mapping_basis_hash": "05dfe07787e146ff766c2762e871cddb6aec32d6f9af9b14565d2287f059b8f6",
+        "configuration_revision": 3
+      },
+      "value_hash": "bd76091d6a3b00ff2126f44075ff121cb460ccadeb09b67832b61b7398540f46",
+      "draft_hash": "22a21c7462733a218b20d9110d1608a82f11df65a5bc87ba0bd67a693936bf5d",
+      "history": [
+        {
+          "revision": 1,
+          "value": {
+            "bindings": [
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1",
+                      "2",
+                      "90",
+                      "20"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r1",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1",
+                      "24",
+                      "90",
+                      "20"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r2",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                  "path": "/business/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "current",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                  "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                  "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+                },
+                "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1",
+                      "2",
+                      "90",
+                      "20"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r1",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1",
+                      "24",
+                      "90",
+                      "20"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r2",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                  "path": "/steps/0/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "current",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                  "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                  "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+                },
+                "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1",
+                      "2",
+                      "90",
+                      "20"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r1",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1",
+                      "24",
+                      "90",
+                      "20"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r2",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                  "path": "/business/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "original",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                  "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                  "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+                },
+                "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1",
+                      "2",
+                      "90",
+                      "20"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r1",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1",
+                      "24",
+                      "90",
+                      "20"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r2",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                  "path": "/steps/0/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "original",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                  "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                  "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+                },
+                "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1",
+                      "2",
+                      "90",
+                      "20"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r1",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1",
+                      "24",
+                      "90",
+                      "20"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r2",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                  "path": "/business/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "current_flow",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                  "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                  "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+                },
+                "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1",
+                      "2",
+                      "90",
+                      "20"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r1",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1",
+                      "24",
+                      "90",
+                      "20"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "7b6f7cda-66d8-4b3c-9df6-c78afda3c5a3",
+                    "region_id": "r2",
+                    "revision_id": "8c79778c-4abf-4c50-bf87-d42bbfa330da",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "7737ca0795fd20c42f6d62f5340d43815a24b87e0e74e3139db8897b810ffaf6",
+                    "revision_kind": "raw",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+                  "path": "/steps/0/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "current_flow",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+                  "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+                  "reading_hash": "ca0dfc64bda236e534d2b880e140733c32347d3b795bed6e9eab18ad09c67c4f"
+                },
+                "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8"
+              }
+            ],
+            "copy_refs": [
+              {
+                "id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+                "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+                "version": 2
+              }
+            ],
+            "fact_hash": "4ac8f40deb40ddf03491a958724d4dd902f45a57acbd2da1d0b9087c1f57c2de",
+            "configuration_hash": "93341f252bc93da2fccbfc59109069294a047fab40340db9b502ac3bc7b7ff4e",
+            "mapping_basis_hash": "05dfe07787e146ff766c2762e871cddb6aec32d6f9af9b14565d2287f059b8f6",
+            "configuration_revision": 3
+          },
+          "value_hash": "bd76091d6a3b00ff2126f44075ff121cb460ccadeb09b67832b61b7398540f46",
+          "draft_hash": "22a21c7462733a218b20d9110d1608a82f11df65a5bc87ba0bd67a693936bf5d",
+          "request_id": "b9bb2411-96b5-4e34-a3ec-8f0a6bd2dbe7"
+        }
+      ],
+      "current": {
+        "matches": true,
+        "reason_code": null,
+        "reason": null
+      },
+      "can_save": true,
+      "can_apply": false,
+      "can_publish": false,
+      "view_hash": "de4a6614dc61c573a0eb64e2f33037436d62b00bbeecf7d2287be0e6952dae0b"
+    },
+    "receipt": {
+      "action": "quote_binding_draft_save",
+      "schema": "report-quote-binding-receipt-v1",
+      "actor_id": "461da525-df7e-47d8-bf54-19200cbfdb00",
+      "draft_id": "00b4093b-f071-489c-bfdd-16f6e5364679",
+      "draft_hash": "22a21c7462733a218b20d9110d1608a82f11df65a5bc87ba0bd67a693936bf5d",
+      "handoff_id": "19d54315-dbfd-4479-9a26-463ff660b8f7",
+      "request_id": "b9bb2411-96b5-4e34-a3ec-8f0a6bd2dbe7",
+      "value_hash": "bd76091d6a3b00ff2126f44075ff121cb460ccadeb09b67832b61b7398540f46",
+      "command_hash": "841c73fff91c326eecc8a6535e01e6c78307974ac390eede9909d582646cd86a",
+      "receipt_hash": "96982981739def78bc5c5f6dd637e37b1e5f118b3c7246d4683c166d94c7fbe4",
+      "workspace_id": "bc250fde-fb61-4d92-a07e-b0356b13f7d5",
+      "candidate_index": 0,
+      "accepted_revision": 1
+    },
+    "current_matches": true
+  },
+  "raw_configuration": {
+    "id": "390bb9e2-1e38-406a-a94c-039cae8f9c9c",
+    "revision": 3,
+    "configuration": {
+      "flows": {
+        "合成巡护记录核验": {
+          "steps": [
+            {
+              "id": "53b53cf2-7382-5df0-b388-afb8a6c56971",
+              "name": "人工核对",
+              "role": "引文核对责任人",
+              "agent": "人工确认",
+              "elseId": "end",
+              "nextId": "end",
+              "output": "人工核验记录",
+              "purpose": "对照原文核对登记内容",
+              "citation": "p1：巡护🙂记录必须人工核验。",
+              "sourceId": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+              "citations": [
+                {
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "block_id": "p1",
+                  "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d"
+                }
+              ],
+              "condition": "",
+              "inferenceReason": ""
+            }
+          ],
+          "output": "人工核验记录",
+          "trigger": "人工登记记录",
+          "citations": [
+            {
+              "quote": "巡护🙂记录必须人工核验。",
+              "block_id": "p1",
+              "material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d"
+            }
+          ],
+          "confirmedAt": null,
+          "reportSource": {
+            "handoff_id": "19d54315-dbfd-4479-9a26-463ff660b8f7",
+            "candidate_index": 0
+          },
+          "inferenceReason": "",
+          "confirmedSignature": null
+        }
+      },
+      "version": 1,
+      "materials": [
+        {
+          "id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+          "ocr": {
+            "total": 1,
+            "reason": null,
+            "run_id": null,
+            "confirmed": 0,
+            "run_status": null,
+            "coverage_status": "needs_ocr",
+            "force_all_pages": false,
+            "coverage_profile": null,
+            "coverage_contract_version": 1
+          },
+          "hash": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+          "kind": "业务资料",
+          "name": "synthetic-original.docx",
+          "note": "",
+          "size": 2086,
+          "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "error": null,
+          "blocks": [
+            {
+              "id": "b1",
+              "kind": "paragraph",
+              "text": "巡护🙂记录必须人工核验。",
+              "location": {
+                "body_index": 1
+              }
+            }
+          ],
+          "engine": "native-docx-v1",
+          "job_id": "fa89200b-42ae-4293-a18c-6e73e85cad99",
+          "status": "needs_input",
+          "version": 4,
+          "archived": false,
+          "warnings": [
+            "已读取正文与表格；图片、文本框、脚注、修订及精确页码需增强解析核对"
+          ],
+          "createdAt": "2026-10-16T23:25:12.949596-07:00",
+          "block_count": 1,
+          "document_copy": null
+        },
+        {
+          "id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+          "ocr": {
+            "total": 2,
+            "reason": null,
+            "run_id": null,
+            "confirmed": 0,
+            "run_status": null,
+            "coverage_status": "needs_ocr",
+            "force_all_pages": true,
+            "coverage_profile": "document_copy_full_pages_v1",
+            "coverage_contract_version": 2
+          },
+          "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+          "kind": "业务资料",
+          "name": "synthetic-original（本地最终修订副本）.pdf",
+          "note": "",
+          "size": 547,
+          "type": "application/pdf",
+          "error": null,
+          "blocks": [],
+          "engine": "native-pdf-v1",
+          "job_id": null,
+          "status": "needs_input",
+          "version": 2,
+          "archived": false,
+          "warnings": [
+            "以下页没有可读取文字，需要OCR：1,2",
+            "synthetic converter; no quality claim",
+            "此文件为本地呈现的最终修订 PDF 副本；须核对全部页面，不能据此断言完整保留 Word 的所有语义。"
+          ],
+          "createdAt": "2026-10-16T23:25:12.992804-07:00",
+          "block_count": 0,
+          "document_copy": {
+            "job_id": "df96d215-5437-4fcb-9173-50552d8a9376",
+            "receipt": {
+              "warnings": [
+                "synthetic converter; no quality claim"
+              ],
+              "engine_id": "libreoffice-docx-final-v1",
+              "page_count": 2,
+              "pdf_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+              "manifest_hash": "82aebb9c571e0597c1bad0fcccec6549c169eb95552a7499afd7edbad6951ce0",
+              "source_sha256": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+              "revision_policy": "accepted_final_v1"
+            },
+            "copy_name": "synthetic-original（本地最终修订副本）.pdf",
+            "engine_id": "libreoffice-docx-final-v1",
+            "pdf_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+            "request_id": "ed2bc2e9-b1f6-426d-b18b-6d07ea05bb23",
+            "source_name": "synthetic-original.docx",
+            "workspace_id": "bc250fde-fb61-4d92-a07e-b0356b13f7d5",
+            "source_sha256": "ac42d6680d8bf150d9c432ff4b78b1da8a2da1547a74c7a816822f5a4fafa60d",
+            "integrity_hash": "8f9f6a5b3404d798748bebeb7bc57982ed2afc746fbb18792374118b25392690",
+            "revision_policy": "accepted_final_v1",
+            "contract_version": 1,
+            "copy_evidence_id": "c2daafe1-a6d9-45d4-a1ca-0fd82cf0c033",
+            "copy_material_id": "9b3ceafd-b422-4ee2-966a-2f1d3599c8c8",
+            "request_body_hash": "3b2781d291ecea1bcecc5ad506635ec44cbff272af0afe2e531cf752985d1d39",
+            "source_evidence_id": "8406a97d-d46f-4355-b205-93d13d07f3ec",
+            "source_material_id": "cbebae65-65c2-47cb-bf37-e2aec3701c1d",
+            "engine_manifest_hash": "82aebb9c571e0597c1bad0fcccec6549c169eb95552a7499afd7edbad6951ce0",
+            "source_material_version": 4
+          }
+        }
+      ],
+      "resources": [],
+      "businesses": [
+        "合成巡护记录核验"
+      ],
+      "connections": [],
+      "instanceProfile": {
+        "name": "通用配置",
+        "domain": "设备运维"
+      }
+    },
+    "understanding": {
+      "status": "available",
+      "reason": "选择已发布云模型并核对发送内容后生成待确认建议"
+    },
+    "automation_review": {
+      "version": 1,
+      "businesses": [
+        {
+          "business_id": "business_813676798545e07e",
+          "business_name": "合成巡护记录核验",
+          "flow_hash": "cb43a25af4b08ae5e623d4abc937bce234dbe204c8ab3fcf9e11c9c7feb1f854",
+          "policy_hash": null,
+          "status": "missing",
+          "reason": "尚未保存此业务的自动化范围，请回第4步配置。"
+        }
+      ]
+    }
+  },
+  "confirmed_options": {
+    "schema": "report-source-region-options-v1",
+    "workspace_id": "7535b499-5f86-49c8-9d40-93b0474ac493",
+    "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+    "candidate_index": 0,
+    "configuration": {
+      "revision": 3,
+      "hash": "a989bc32571953d58d70ce897a4b9843a4809021a0a66d85ea72968ec37c28cf",
+      "fact_hash": "ab864730f54b879dc696ce0c6d35d15e363c475fe996f8022afcde4412fd1b5d",
+      "mapping_basis_hash": "e89c8062a646b25e5b3dbf89f4866495afa682c7e32c6d6a4ead34df44e0c034"
+    },
+    "copies": [
+      {
+        "anchor": {
+          "source_ref": {
+            "id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+            "version": 4,
+            "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848"
+          },
+          "source_evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "source_name": "synthetic-original.docx",
+          "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "copy_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+          "copy_evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+          "provenance_hash": "b1d0dc682d3913eab37d36798a642dfa44d7944fd265b6c8e4d96fb8df76282f",
+          "run_id": "dbf66ea4-3b61-44b1-96b2-f1faa306d59f",
+          "generation": 1
+        },
+        "copy_ref": {
+          "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "version": 3,
+          "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d"
+        },
+        "copy_name": "synthetic-original（本地最终修订副本）.pdf",
+        "page_count": 2,
+        "prepared_pages": 2,
+        "confirmed_pages": 2,
+        "whole_document_confirmed": true,
+        "reason_code": null,
+        "reason": null
+      }
+    ],
+    "quotes": [
+      {
+        "reference": {
+          "scope": "current",
+          "path": "/business/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "921e2f8ba7df3d55fad5e8806b68ecce6fc3936dd85e94464dd177eb5f2520c7",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current",
+                "path": "/business/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "0fdcfe4c1dfa759fedaf9c95c0dd2513160856b3cce19f9801011b12a4ee4936",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "current",
+          "path": "/steps/0/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "7445408baa7d0d7dbe448191ba1e98675d9613d93ace2d279e24b8d3aa9070b6",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current",
+                "path": "/steps/0/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "c390f157871f7dc785b9e91b7227568cd024ad3993408d0503f952818987b163",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "original",
+          "path": "/business/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "3fe2b5e741009e4ba4d35abac87161e3808c86922593db3be5296e7de1b81a87",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "original",
+                "path": "/business/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "7ec72ff9a8a872debec06dbed9920ffb204384a3c87c85d69db5ac1f780fba68",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "original",
+          "path": "/steps/0/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "df91ff42c6165446f734d19745861451346f2501c343ce056c5038ae3efa7f86",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "original",
+                "path": "/steps/0/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "e09dc084095101fdbc631bd605702ae6b558357e27fcaf3e17e4bce41a0fdea6",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "current_flow",
+          "path": "/business/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "890a5c16b20c712d50c87f137e298e5c9c7ad304a1a74e3c7c10645a38bae04b",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current_flow",
+                "path": "/business/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "875b9d8df1971e8622678c70bf5963146f6582b7690cc18c108803f81142d2f7",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "current_flow",
+          "path": "/steps/0/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "2fe9d8b0cc943a7f3f827948f255107377916a5868d3e50f3fd9ef1b43e74728",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current_flow",
+                "path": "/steps/0/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "3a3dbd68935d049ef6e290b3f3a0e01cd22a3033ef21a43c1d827b3436c692d8",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      }
+    ],
+    "can_apply": false,
+    "can_publish": false,
+    "options_hash": "127f7b6d00745e43bea2edb5a5826a0564d454fee58209acb4d3cdfa33ca7c49"
+  },
+  "formal_private_reply": {
+    "draft": {
+      "schema": "report-quote-binding-draft-v1",
+      "id": "95a78394-5c46-42ce-9fb3-5789a4de3110",
+      "workspace_id": "7535b499-5f86-49c8-9d40-93b0474ac493",
+      "actor_id": "a1456f4f-978c-43e5-8d7c-4940e3dae056",
+      "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+      "candidate_index": 0,
+      "revision": 2,
+      "anchor": {
+        "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+        "candidate_index": 0,
+        "copies": [
+          {
+            "source_ref": {
+              "id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+              "version": 4,
+              "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848"
+            },
+            "source_evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+            "source_name": "synthetic-original.docx",
+            "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "copy_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+            "copy_evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+            "provenance_hash": "b1d0dc682d3913eab37d36798a642dfa44d7944fd265b6c8e4d96fb8df76282f",
+            "run_id": "dbf66ea4-3b61-44b1-96b2-f1faa306d59f",
+            "generation": 1
+          }
+        ]
+      },
+      "value": {
+        "configuration_revision": 4,
+        "configuration_hash": "dc4ef51fd319fa1e9ee2f4c470e626e2bae483fa5c5ecb70621ac33eaa5c44e8",
+        "fact_hash": "ab864730f54b879dc696ce0c6d35d15e363c475fe996f8022afcde4412fd1b5d",
+        "mapping_basis_hash": "277f8b95b494c9367eea77fe5985e7ef0bea30560edbd03313b54f60f5dcd254",
+        "copy_refs": [
+          {
+            "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "version": 3,
+            "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d"
+          }
+        ],
+        "bindings": []
+      },
+      "value_hash": "e447f7dbaab3bf01232e9231627851540a38e413819814aa2f63fccff1d2e353",
+      "draft_hash": "c1c8cd8c396685b284f5452941235497a44fa609bd910b3aa286d08b2b1013db",
+      "history": [
+        {
+          "revision": 1,
+          "value": {
+            "bindings": [
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1.0",
+                      "2.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r1",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1.0",
+                      "24.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r2",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                  "path": "/business/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "current",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                  "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                  "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a"
+                },
+                "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1.0",
+                      "2.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r1",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1.0",
+                      "24.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r2",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                  "path": "/steps/0/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "current",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                  "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                  "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a"
+                },
+                "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1.0",
+                      "2.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r1",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1.0",
+                      "24.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r2",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                  "path": "/business/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "original",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                  "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                  "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a"
+                },
+                "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1.0",
+                      "2.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r1",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1.0",
+                      "24.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r2",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                  "path": "/steps/0/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "original",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                  "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                  "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a"
+                },
+                "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1.0",
+                      "2.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r1",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1.0",
+                      "24.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r2",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                  "path": "/business/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "current_flow",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                  "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                  "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a"
+                },
+                "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1"
+              },
+              {
+                "spans": [
+                  {
+                    "box": [
+                      "1.0",
+                      "2.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 5,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r1",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+                  },
+                  {
+                    "box": [
+                      "1.0",
+                      "24.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "end": 7,
+                    "page": 1,
+                    "start": 0,
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r2",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "revision_kind": "confirmed",
+                    "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+                  }
+                ],
+                "reference": {
+                  "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                  "path": "/steps/0/citations/0",
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "scope": "current_flow",
+                  "version": 4,
+                  "block_id": "p1",
+                  "location": {
+                    "view": "accepted_final_v1",
+                    "body_index": 1,
+                    "paragraph_index": 1
+                  },
+                  "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                  "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                  "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a"
+                },
+                "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1"
+              }
+            ],
+            "copy_refs": [
+              {
+                "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+                "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+                "version": 3
+              }
+            ],
+            "fact_hash": "ab864730f54b879dc696ce0c6d35d15e363c475fe996f8022afcde4412fd1b5d",
+            "configuration_hash": "a989bc32571953d58d70ce897a4b9843a4809021a0a66d85ea72968ec37c28cf",
+            "mapping_basis_hash": "e89c8062a646b25e5b3dbf89f4866495afa682c7e32c6d6a4ead34df44e0c034",
+            "configuration_revision": 3
+          },
+          "value_hash": "209f30404a90cd7160ca9493033745977ea1aa176efc6b980c6bc30ec8fb5e00",
+          "draft_hash": "7508f54c971503f1bd2b449b021397d46c5446e645fb38a3d869748b4867e202",
+          "request_id": "cedb39be-b092-4cb1-ac4f-4e2bd74cc151"
+        },
+        {
+          "revision": 2,
+          "value": {
+            "configuration_revision": 4,
+            "configuration_hash": "dc4ef51fd319fa1e9ee2f4c470e626e2bae483fa5c5ecb70621ac33eaa5c44e8",
+            "fact_hash": "ab864730f54b879dc696ce0c6d35d15e363c475fe996f8022afcde4412fd1b5d",
+            "mapping_basis_hash": "277f8b95b494c9367eea77fe5985e7ef0bea30560edbd03313b54f60f5dcd254",
+            "copy_refs": [
+              {
+                "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+                "version": 3,
+                "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d"
+              }
+            ],
+            "bindings": []
+          },
+          "value_hash": "e447f7dbaab3bf01232e9231627851540a38e413819814aa2f63fccff1d2e353",
+          "draft_hash": "c1c8cd8c396685b284f5452941235497a44fa609bd910b3aa286d08b2b1013db",
+          "request_id": "fa9ffe33-79a2-47c2-8824-9723059ee5c2"
+        }
+      ],
+      "current": {
+        "matches": true,
+        "reason_code": null,
+        "reason": null
+      },
+      "can_save": true,
+      "can_apply": false,
+      "can_publish": false,
+      "view_hash": "af468ec8185f0d03cd4d61dba3aa715dd133fadf264da0728bb654de924e2f62"
+    },
+    "receipt": {
+      "schema": "report-quote-binding-receipt-v1",
+      "action": "quote_binding_draft_save",
+      "draft_id": "95a78394-5c46-42ce-9fb3-5789a4de3110",
+      "actor_id": "a1456f4f-978c-43e5-8d7c-4940e3dae056",
+      "workspace_id": "7535b499-5f86-49c8-9d40-93b0474ac493",
+      "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+      "candidate_index": 0,
+      "request_id": "fa9ffe33-79a2-47c2-8824-9723059ee5c2",
+      "command_hash": "8e92d3bb6ad54daf32159ab9a56db58708cb840cbf1ac263b5dabb2eafeb4629",
+      "accepted_revision": 2,
+      "value_hash": "e447f7dbaab3bf01232e9231627851540a38e413819814aa2f63fccff1d2e353",
+      "draft_hash": "c1c8cd8c396685b284f5452941235497a44fa609bd910b3aa286d08b2b1013db",
+      "receipt_hash": "5a993802003c97de6b80c0a135b37a4acf5d9525218c733584a21a372f05f7fb"
+    },
+    "current_matches": true
+  },
+  "formal_options": {
+    "schema": "report-source-region-options-v1",
+    "workspace_id": "7535b499-5f86-49c8-9d40-93b0474ac493",
+    "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+    "candidate_index": 0,
+    "configuration": {
+      "revision": 4,
+      "hash": "dc4ef51fd319fa1e9ee2f4c470e626e2bae483fa5c5ecb70621ac33eaa5c44e8",
+      "fact_hash": "ab864730f54b879dc696ce0c6d35d15e363c475fe996f8022afcde4412fd1b5d",
+      "mapping_basis_hash": "277f8b95b494c9367eea77fe5985e7ef0bea30560edbd03313b54f60f5dcd254"
+    },
+    "copies": [
+      {
+        "anchor": {
+          "source_ref": {
+            "id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+            "version": 4,
+            "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848"
+          },
+          "source_evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "source_name": "synthetic-original.docx",
+          "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "copy_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+          "copy_evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+          "provenance_hash": "b1d0dc682d3913eab37d36798a642dfa44d7944fd265b6c8e4d96fb8df76282f",
+          "run_id": "dbf66ea4-3b61-44b1-96b2-f1faa306d59f",
+          "generation": 1
+        },
+        "copy_ref": {
+          "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "version": 3,
+          "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d"
+        },
+        "copy_name": "synthetic-original（本地最终修订副本）.pdf",
+        "page_count": 2,
+        "prepared_pages": 2,
+        "confirmed_pages": 2,
+        "whole_document_confirmed": true,
+        "reason_code": null,
+        "reason": null
+      }
+    ],
+    "quotes": [
+      {
+        "reference": {
+          "scope": "current",
+          "path": "/business/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "921e2f8ba7df3d55fad5e8806b68ecce6fc3936dd85e94464dd177eb5f2520c7",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current",
+                "path": "/business/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "0fdcfe4c1dfa759fedaf9c95c0dd2513160856b3cce19f9801011b12a4ee4936",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "current",
+          "path": "/steps/0/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "7445408baa7d0d7dbe448191ba1e98675d9613d93ace2d279e24b8d3aa9070b6",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current",
+                "path": "/steps/0/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "c390f157871f7dc785b9e91b7227568cd024ad3993408d0503f952818987b163",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "original",
+          "path": "/business/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "3fe2b5e741009e4ba4d35abac87161e3808c86922593db3be5296e7de1b81a87",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "original",
+                "path": "/business/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "7ec72ff9a8a872debec06dbed9920ffb204384a3c87c85d69db5ac1f780fba68",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "original",
+          "path": "/steps/0/citations/0",
+          "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+          "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+          "block_id": "p1",
+          "location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "df91ff42c6165446f734d19745861451346f2501c343ce056c5038ae3efa7f86",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "original",
+                "path": "/steps/0/citations/0",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "version": 4,
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+                "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+                "block_id": "p1",
+                "location": {
+                  "view": "accepted_final_v1",
+                  "body_index": 1,
+                  "paragraph_index": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "e09dc084095101fdbc631bd605702ae6b558357e27fcaf3e17e4bce41a0fdea6",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "current_flow",
+          "path": "/business/citations/0",
+          "material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "version": 3,
+          "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+          "evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+          "reading_hash": null,
+          "block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+          "location": {
+            "ocr": {
+              "box": [
+                "1.0",
+                "2.0",
+                "90.0",
+                "20.0"
+              ],
+              "run_id": "dbf66ea4-3b61-44b1-96b2-f1faa306d59f",
+              "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+              "region_id": "r1",
+              "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+              "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+              "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+              "confirmation_id": "ab158190-886a-41f7-abbe-2df8a5af9a54",
+              "confirmation_hash": "12cea575e1cb1bbdcd52eca67539be0fd90d4160fe21691e73c03204f4367a33"
+            },
+            "page": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "7169a04b629c5b2ef3779db8da119bcfc5bc00dfc0e202d8678f880b80d7997e",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current_flow",
+                "path": "/business/citations/0",
+                "material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+                "version": 3,
+                "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+                "evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+                "reading_hash": null,
+                "block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+                "location": {
+                  "ocr": {
+                    "box": [
+                      "1.0",
+                      "2.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "run_id": "dbf66ea4-3b61-44b1-96b2-f1faa306d59f",
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r1",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "confirmation_id": "ab158190-886a-41f7-abbe-2df8a5af9a54",
+                    "confirmation_hash": "12cea575e1cb1bbdcd52eca67539be0fd90d4160fe21691e73c03204f4367a33"
+                  },
+                  "page": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "6d2431749080e56b43ab670b010dc081af3e9edc93aee97b526d6ec20c5a9e1f",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      },
+      {
+        "reference": {
+          "scope": "current_flow",
+          "path": "/steps/0/citations/0",
+          "material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "version": 3,
+          "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+          "evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+          "reading_hash": null,
+          "block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+          "location": {
+            "ocr": {
+              "box": [
+                "1.0",
+                "2.0",
+                "90.0",
+                "20.0"
+              ],
+              "run_id": "dbf66ea4-3b61-44b1-96b2-f1faa306d59f",
+              "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+              "region_id": "r1",
+              "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+              "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+              "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+              "confirmation_id": "ab158190-886a-41f7-abbe-2df8a5af9a54",
+              "confirmation_hash": "12cea575e1cb1bbdcd52eca67539be0fd90d4160fe21691e73c03204f4367a33"
+            },
+            "page": 1
+          },
+          "quote": "巡护🙂记录必须人工核验。"
+        },
+        "reference_hash": "c06c63a08e948dcb29d9e1213c66338d90e2a196d0741abc00b2b2e81db0a62b",
+        "candidates": [
+          {
+            "binding": {
+              "reference": {
+                "scope": "current_flow",
+                "path": "/steps/0/citations/0",
+                "material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+                "version": 3,
+                "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+                "evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+                "reading_hash": null,
+                "block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+                "location": {
+                  "ocr": {
+                    "box": [
+                      "1.0",
+                      "2.0",
+                      "90.0",
+                      "20.0"
+                    ],
+                    "run_id": "dbf66ea4-3b61-44b1-96b2-f1faa306d59f",
+                    "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                    "region_id": "r1",
+                    "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                    "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                    "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                    "confirmation_id": "ab158190-886a-41f7-abbe-2df8a5af9a54",
+                    "confirmation_hash": "12cea575e1cb1bbdcd52eca67539be0fd90d4160fe21691e73c03204f4367a33"
+                  },
+                  "page": 1
+                },
+                "quote": "巡护🙂记录必须人工核验。"
+              },
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "spans": [
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r1",
+                  "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                  "box": [
+                    "1.0",
+                    "2.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 5
+                },
+                {
+                  "page": 1,
+                  "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                  "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                  "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                  "revision_kind": "confirmed",
+                  "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                  "region_id": "r2",
+                  "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                  "box": [
+                    "1.0",
+                    "24.0",
+                    "90.0",
+                    "20.0"
+                  ],
+                  "start": 0,
+                  "end": 7
+                }
+              ]
+            },
+            "binding_id": "31bdcaa3a63eea974c890715c626c737c5838fc74cf2586bb9cb38d5887494c1",
+            "regions": [
+              {
+                "id": "r1",
+                "text": "巡护🙂记录",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ]
+              },
+              {
+                "id": "r2",
+                "text": "必须人工核验。",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ]
+              }
+            ],
+            "image_url": "/api/setup/materials/11b001cc-46a1-4eb7-9aed-8acf7b7071a1/ocr/units/8d2db67b-71b0-4c91-87c6-6be4dc9f95b6/image?run_id=dbf66ea4-3b61-44b1-96b2-f1faa306d59f&image_sha256=8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+          }
+        ]
+      }
+    ],
+    "can_apply": false,
+    "can_publish": false,
+    "options_hash": "10d51e80c92335eb7567e7e013c2d779990661cc1acad6358be4c0439f4146fe"
+  },
+  "formal_configuration_before": {
+    "id": "17116721-9116-4a5b-9594-8fd30d626688",
+    "revision": 4,
+    "configuration": {
+      "flows": {
+        "合成巡护记录核验": {
+          "steps": [
+            {
+              "id": "07cbc1f0-7488-55bf-8368-7bfb3b555f4d",
+              "name": "人工核对",
+              "role": "引文核对责任人",
+              "agent": "人工确认",
+              "elseId": "end",
+              "nextId": "end",
+              "output": "人工核验记录",
+              "purpose": "对照原文核对登记内容",
+              "citation": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1：巡护🙂记录必须人工核验。",
+              "sourceId": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "citations": [
+                {
+                  "quote": "巡护🙂记录必须人工核验。",
+                  "block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+                  "material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+                  "span_binding_id": "3a3dbd68935d049ef6e290b3f3a0e01cd22a3033ef21a43c1d827b3436c692d8"
+                }
+              ],
+              "condition": "",
+              "inferenceReason": ""
+            }
+          ],
+          "output": "人工核验记录",
+          "trigger": "人工登记记录",
+          "citations": [
+            {
+              "quote": "巡护🙂记录必须人工核验。",
+              "block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+              "material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "span_binding_id": "875b9d8df1971e8622678c70bf5963146f6582b7690cc18c108803f81142d2f7"
+            }
+          ],
+          "confirmedAt": null,
+          "reportSource": {
+            "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+            "candidate_index": 0,
+            "source_review_id": "62828aa2-a110-4c31-9057-571b9ad0401e"
+          },
+          "inferenceReason": "",
+          "confirmedSignature": null
+        }
+      },
+      "version": 1,
+      "materials": [
+        {
+          "id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "ocr": {
+            "total": 1,
+            "reason": null,
+            "run_id": null,
+            "confirmed": 0,
+            "run_status": null,
+            "coverage_status": "needs_ocr",
+            "force_all_pages": false,
+            "coverage_profile": null,
+            "coverage_contract_version": 1
+          },
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "kind": "业务资料",
+          "name": "synthetic-original.docx",
+          "note": "",
+          "size": 2086,
+          "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "error": null,
+          "blocks": [
+            {
+              "id": "b1",
+              "kind": "paragraph",
+              "text": "巡护🙂记录必须人工核验。",
+              "location": {
+                "body_index": 1
+              }
+            }
+          ],
+          "engine": "native-docx-v1",
+          "job_id": "e3a394a1-6010-41f0-aeb2-600437602887",
+          "status": "needs_input",
+          "version": 4,
+          "archived": false,
+          "warnings": [
+            "已读取正文与表格；图片、文本框、脚注、修订及精确页码需增强解析核对"
+          ],
+          "createdAt": "2026-10-16T23:25:22.556953-07:00",
+          "block_count": 1,
+          "document_copy": null
+        },
+        {
+          "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "ocr": {
+            "total": 2,
+            "reason": null,
+            "run_id": null,
+            "confirmed": 0,
+            "run_status": null,
+            "coverage_status": "needs_ocr",
+            "force_all_pages": true,
+            "coverage_profile": "document_copy_full_pages_v1",
+            "coverage_contract_version": 2
+          },
+          "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+          "kind": "业务资料",
+          "name": "synthetic-original（本地最终修订副本）.pdf",
+          "note": "",
+          "size": 547,
+          "type": "application/pdf",
+          "error": null,
+          "blocks": [],
+          "engine": "native-pdf-v1",
+          "job_id": null,
+          "status": "parsed",
+          "version": 3,
+          "archived": false,
+          "warnings": [
+            "以下页没有可读取文字，需要OCR：1,2",
+            "synthetic converter; no quality claim",
+            "此文件为本地呈现的最终修订 PDF 副本；须核对全部页面，不能据此断言完整保留 Word 的所有语义。"
+          ],
+          "createdAt": "2026-10-16T23:25:22.592821-07:00",
+          "block_count": 0,
+          "evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+          "document_copy": {
+            "job_id": "2c126720-5584-4240-8423-0978cc039fa5",
+            "receipt": {
+              "warnings": [
+                "synthetic converter; no quality claim"
+              ],
+              "engine_id": "libreoffice-docx-final-v1",
+              "page_count": 2,
+              "pdf_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+              "manifest_hash": "82aebb9c571e0597c1bad0fcccec6549c169eb95552a7499afd7edbad6951ce0",
+              "source_sha256": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+              "revision_policy": "accepted_final_v1"
+            },
+            "copy_name": "synthetic-original（本地最终修订副本）.pdf",
+            "engine_id": "libreoffice-docx-final-v1",
+            "pdf_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+            "request_id": "b74dfb3c-cd35-4922-aee1-d88e0c6263db",
+            "source_name": "synthetic-original.docx",
+            "workspace_id": "7535b499-5f86-49c8-9d40-93b0474ac493",
+            "source_sha256": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+            "integrity_hash": "b1d0dc682d3913eab37d36798a642dfa44d7944fd265b6c8e4d96fb8df76282f",
+            "revision_policy": "accepted_final_v1",
+            "contract_version": 1,
+            "copy_evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+            "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "request_body_hash": "f83b317d903a32b2ca313cf87fbd31404b6df58b74953d7630b8b9be5f24910c",
+            "source_evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+            "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+            "engine_manifest_hash": "82aebb9c571e0597c1bad0fcccec6549c169eb95552a7499afd7edbad6951ce0",
+            "source_material_version": 4
+          }
+        }
+      ],
+      "resources": [],
+      "businesses": [
+        "合成巡护记录核验"
+      ],
+      "connections": [],
+      "instanceProfile": {
+        "name": "通用配置",
+        "domain": "设备运维"
+      }
+    },
+    "understanding": {
+      "status": "available",
+      "reason": "选择已发布云模型并核对发送内容后生成待确认建议"
+    },
+    "automation_review": {
+      "version": 1,
+      "businesses": [
+        {
+          "business_id": "business_813676798545e07e",
+          "business_name": "合成巡护记录核验",
+          "flow_hash": "eb9c420616bd10f8e71dd56d6996ea918202d0eda608edfb8e0509d88ed8a84d",
+          "policy_hash": null,
+          "status": "missing",
+          "reason": "尚未保存此业务的自动化范围，请回第4步配置。"
+        }
+      ]
+    }
+  },
+  "formal_reply": {
+    "receipt": {
+      "schema": "report-configuration-receipt-v1",
+      "kind": "source_review",
+      "actor_id": "a1456f4f-978c-43e5-8d7c-4940e3dae056",
+      "workspace_id": "7535b499-5f86-49c8-9d40-93b0474ac493",
+      "report_id": "505773d3-6afd-4f8c-9d9c-5fecb28b45a5",
+      "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+      "request_id": "c7bc59a1-083f-4ed6-8916-20a4cf641d35",
+      "command_hash": "97c37c81f3085a7351ccc1a794b8f8f9e2dd35135091f1ddd4ed1294778a1fb5",
+      "preview_hash": null,
+      "accepted_revision": 4,
+      "configuration_hash": "dc4ef51fd319fa1e9ee2f4c470e626e2bae483fa5c5ecb70621ac33eaa5c44e8",
+      "record_hash": "7eba070d8c55163af9b01bbfd6611e562b767ed85eb327c1187f0664edbdfc23",
+      "source_review_id": "62828aa2-a110-4c31-9057-571b9ad0401e",
+      "receipt_hash": "578a0cfeba4677d3d3dbfc81e45a00c193123445459973e97c815a66fd73a002"
+    },
+    "configuration": {
+      "id": "17116721-9116-4a5b-9594-8fd30d626688",
+      "revision": 4,
+      "configuration": {
+        "flows": {
+          "合成巡护记录核验": {
+            "steps": [
+              {
+                "id": "07cbc1f0-7488-55bf-8368-7bfb3b555f4d",
+                "name": "人工核对",
+                "role": "引文核对责任人",
+                "agent": "人工确认",
+                "elseId": "end",
+                "nextId": "end",
+                "output": "人工核验记录",
+                "purpose": "对照原文核对登记内容",
+                "citation": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1：巡护🙂记录必须人工核验。",
+                "sourceId": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+                "citations": [
+                  {
+                    "quote": "巡护🙂记录必须人工核验。",
+                    "block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+                    "material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+                    "span_binding_id": "3a3dbd68935d049ef6e290b3f3a0e01cd22a3033ef21a43c1d827b3436c692d8"
+                  }
+                ],
+                "condition": "",
+                "inferenceReason": ""
+              }
+            ],
+            "output": "人工核验记录",
+            "trigger": "人工登记记录",
+            "citations": [
+              {
+                "quote": "巡护🙂记录必须人工核验。",
+                "block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+                "material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+                "span_binding_id": "875b9d8df1971e8622678c70bf5963146f6582b7690cc18c108803f81142d2f7"
+              }
+            ],
+            "confirmedAt": null,
+            "reportSource": {
+              "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+              "candidate_index": 0,
+              "source_review_id": "62828aa2-a110-4c31-9057-571b9ad0401e"
+            },
+            "inferenceReason": "",
+            "confirmedSignature": null
+          }
+        },
+        "version": 1,
+        "materials": [
+          {
+            "id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+            "ocr": {
+              "total": 1,
+              "reason": null,
+              "run_id": null,
+              "confirmed": 0,
+              "run_status": null,
+              "coverage_status": "needs_ocr",
+              "force_all_pages": false,
+              "coverage_profile": null,
+              "coverage_contract_version": 1
+            },
+            "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+            "kind": "业务资料",
+            "name": "synthetic-original.docx",
+            "note": "",
+            "size": 2086,
+            "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "error": null,
+            "blocks": [
+              {
+                "id": "b1",
+                "kind": "paragraph",
+                "text": "巡护🙂记录必须人工核验。",
+                "location": {
+                  "body_index": 1
+                }
+              }
+            ],
+            "engine": "native-docx-v1",
+            "job_id": "e3a394a1-6010-41f0-aeb2-600437602887",
+            "status": "needs_input",
+            "version": 4,
+            "archived": false,
+            "warnings": [
+              "已读取正文与表格；图片、文本框、脚注、修订及精确页码需增强解析核对"
+            ],
+            "createdAt": "2026-10-16T23:25:22.556953-07:00",
+            "block_count": 1,
+            "document_copy": null
+          },
+          {
+            "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "ocr": {
+              "total": 2,
+              "reason": null,
+              "run_id": null,
+              "confirmed": 0,
+              "run_status": null,
+              "coverage_status": "needs_ocr",
+              "force_all_pages": true,
+              "coverage_profile": "document_copy_full_pages_v1",
+              "coverage_contract_version": 2
+            },
+            "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+            "kind": "业务资料",
+            "name": "synthetic-original（本地最终修订副本）.pdf",
+            "note": "",
+            "size": 547,
+            "type": "application/pdf",
+            "error": null,
+            "blocks": [],
+            "engine": "native-pdf-v1",
+            "job_id": null,
+            "status": "parsed",
+            "version": 3,
+            "archived": false,
+            "warnings": [
+              "以下页没有可读取文字，需要OCR：1,2",
+              "synthetic converter; no quality claim",
+              "此文件为本地呈现的最终修订 PDF 副本；须核对全部页面，不能据此断言完整保留 Word 的所有语义。"
+            ],
+            "createdAt": "2026-10-16T23:25:22.592821-07:00",
+            "block_count": 0,
+            "document_copy": {
+              "job_id": "2c126720-5584-4240-8423-0978cc039fa5",
+              "receipt": {
+                "warnings": [
+                  "synthetic converter; no quality claim"
+                ],
+                "engine_id": "libreoffice-docx-final-v1",
+                "page_count": 2,
+                "pdf_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+                "manifest_hash": "82aebb9c571e0597c1bad0fcccec6549c169eb95552a7499afd7edbad6951ce0",
+                "source_sha256": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "revision_policy": "accepted_final_v1"
+              },
+              "copy_name": "synthetic-original（本地最终修订副本）.pdf",
+              "engine_id": "libreoffice-docx-final-v1",
+              "pdf_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+              "request_id": "b74dfb3c-cd35-4922-aee1-d88e0c6263db",
+              "source_name": "synthetic-original.docx",
+              "workspace_id": "7535b499-5f86-49c8-9d40-93b0474ac493",
+              "source_sha256": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+              "integrity_hash": "b1d0dc682d3913eab37d36798a642dfa44d7944fd265b6c8e4d96fb8df76282f",
+              "revision_policy": "accepted_final_v1",
+              "contract_version": 1,
+              "copy_evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "request_body_hash": "f83b317d903a32b2ca313cf87fbd31404b6df58b74953d7630b8b9be5f24910c",
+              "source_evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+              "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+              "engine_manifest_hash": "82aebb9c571e0597c1bad0fcccec6549c169eb95552a7499afd7edbad6951ce0",
+              "source_material_version": 4
+            },
+            "evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07"
+          }
+        ],
+        "resources": [],
+        "businesses": [
+          "合成巡护记录核验"
+        ],
+        "connections": [],
+        "instanceProfile": {
+          "name": "通用配置",
+          "domain": "设备运维"
+        }
+      },
+      "understanding": {
+        "status": "available",
+        "reason": "选择已发布云模型并核对发送内容后生成待确认建议"
+      },
+      "automation_review": {
+        "version": 1,
+        "businesses": [
+          {
+            "business_id": "business_813676798545e07e",
+            "business_name": "合成巡护记录核验",
+            "flow_hash": "eb9c420616bd10f8e71dd56d6996ea918202d0eda608edfb8e0509d88ed8a84d",
+            "policy_hash": null,
+            "status": "missing",
+            "reason": "尚未保存此业务的自动化范围，请回第4步配置。"
+          }
+        ]
+      }
+    },
+    "current_matches": true,
+    "source_review": {
+      "schema": "report-configuration-source-review-v1",
+      "id": "62828aa2-a110-4c31-9057-571b9ad0401e",
+      "actor_id": "a1456f4f-978c-43e5-8d7c-4940e3dae056",
+      "workspace_id": "7535b499-5f86-49c8-9d40-93b0474ac493",
+      "report_id": "505773d3-6afd-4f8c-9d9c-5fecb28b45a5",
+      "configuration_id": "17116721-9116-4a5b-9594-8fd30d626688",
+      "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+      "source_hash": "5b96b336415d823d937ebdfa1a32da6d3a1c173a19a6cf5306b06893d4dbdc46",
+      "candidate_index": 0,
+      "request_id": "c7bc59a1-083f-4ed6-8916-20a4cf641d35",
+      "command_hash": "97c37c81f3085a7351ccc1a794b8f8f9e2dd35135091f1ddd4ed1294778a1fb5",
+      "fact_hash": "ab864730f54b879dc696ce0c6d35d15e363c475fe996f8022afcde4412fd1b5d",
+      "basis_hash": "277f8b95b494c9367eea77fe5985e7ef0bea30560edbd03313b54f60f5dcd254",
+      "material_refs": [
+        {
+          "id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848"
+        }
+      ],
+      "materials": [
+        {
+          "role": "origin",
+          "id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "name": "synthetic-original.docx",
+          "version": 4,
+          "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+          "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec"
+        },
+        {
+          "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "version": 3,
+          "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+          "evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+          "blocks_hash": "3ccd7c1cf037c65ff7b585e8a2249f3e44cd7a23ae1ae7006566eea1f20b42f7",
+          "coverage_hash": "e2d479fa4431ea5880711c890a635eebe06df55e8f7e32e73abb567a65430e3a",
+          "confirmation_id": "ab158190-886a-41f7-abbe-2df8a5af9a54",
+          "name": "synthetic-original（本地最终修订副本）.pdf",
+          "role": "confirmed_view",
+          "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "provenance_hash": "b1d0dc682d3913eab37d36798a642dfa44d7944fd265b6c8e4d96fb8df76282f",
+          "conversion_receipt_hash": "6890584bdb73444cc2d5e695cc4c6381e15a6250d3e31714433118a60a84955d",
+          "engine_manifest_hash": "82aebb9c571e0597c1bad0fcccec6549c169eb95552a7499afd7edbad6951ce0",
+          "confirmation_hash": "12cea575e1cb1bbdcd52eca67539be0fd90d4160fe21691e73c03204f4367a33",
+          "page_count": 2,
+          "confirmed_pages": 2
+        }
+      ],
+      "projection": {
+        "schema": "report-source-projection-v2",
+        "review_mode": "confirmed_final_view_regions_v2",
+        "final_view_confirmed": true,
+        "projection_refs": [
+          {
+            "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+            "copy_ref": {
+              "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "version": 3,
+              "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d"
+            },
+            "provenance_hash": "b1d0dc682d3913eab37d36798a642dfa44d7944fd265b6c8e4d96fb8df76282f"
+          }
+        ],
+        "quote_binding_draft_ref": {
+          "id": "95a78394-5c46-42ce-9fb3-5789a4de3110",
+          "revision": 1,
+          "value_hash": "209f30404a90cd7160ca9493033745977ea1aa176efc6b980c6bc30ec8fb5e00",
+          "draft_hash": "7508f54c971503f1bd2b449b021397d46c5446e645fb38a3d869748b4867e202"
+        },
+        "region_bindings": [
+          {
+            "reference": {
+              "scope": "current",
+              "path": "/business/citations/0",
+              "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+              "version": 4,
+              "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+              "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+              "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "巡护🙂记录必须人工核验。"
+            },
+            "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "spans": [
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r1",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 5
+              },
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r2",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 7
+              }
+            ]
+          },
+          {
+            "reference": {
+              "scope": "current",
+              "path": "/steps/0/citations/0",
+              "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+              "version": 4,
+              "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+              "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+              "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "巡护🙂记录必须人工核验。"
+            },
+            "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "spans": [
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r1",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 5
+              },
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r2",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 7
+              }
+            ]
+          },
+          {
+            "reference": {
+              "scope": "original",
+              "path": "/business/citations/0",
+              "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+              "version": 4,
+              "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+              "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+              "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "巡护🙂记录必须人工核验。"
+            },
+            "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "spans": [
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r1",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 5
+              },
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r2",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 7
+              }
+            ]
+          },
+          {
+            "reference": {
+              "scope": "original",
+              "path": "/steps/0/citations/0",
+              "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+              "version": 4,
+              "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+              "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+              "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "巡护🙂记录必须人工核验。"
+            },
+            "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "spans": [
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r1",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 5
+              },
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r2",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 7
+              }
+            ]
+          },
+          {
+            "reference": {
+              "scope": "current_flow",
+              "path": "/business/citations/0",
+              "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+              "version": 4,
+              "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+              "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+              "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "巡护🙂记录必须人工核验。"
+            },
+            "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "spans": [
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r1",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 5
+              },
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r2",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 7
+              }
+            ]
+          },
+          {
+            "reference": {
+              "scope": "current_flow",
+              "path": "/steps/0/citations/0",
+              "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+              "version": 4,
+              "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+              "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+              "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "巡护🙂记录必须人工核验。"
+            },
+            "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "spans": [
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r1",
+                "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857",
+                "box": [
+                  "1.0",
+                  "2.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 5
+              },
+              {
+                "page": 1,
+                "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+                "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+                "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+                "revision_kind": "confirmed",
+                "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+                "region_id": "r2",
+                "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6",
+                "box": [
+                  "1.0",
+                  "24.0",
+                  "90.0",
+                  "20.0"
+                ],
+                "start": 0,
+                "end": 7
+              }
+            ]
+          }
+        ]
+      },
+      "binding_context": {
+        "anchor": {
+          "copies": [
+            {
+              "run_id": "dbf66ea4-3b61-44b1-96b2-f1faa306d59f",
+              "generation": 1,
+              "source_ref": {
+                "id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+                "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+                "version": 4
+              },
+              "copy_sha256": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+              "source_name": "synthetic-original.docx",
+              "provenance_hash": "b1d0dc682d3913eab37d36798a642dfa44d7944fd265b6c8e4d96fb8df76282f",
+              "copy_evidence_id": "14f2c405-4f94-47b1-8b45-828abb1fed07",
+              "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+              "source_evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec"
+            }
+          ],
+          "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+          "candidate_index": 0
+        },
+        "configuration_revision": 3,
+        "configuration_hash": "a989bc32571953d58d70ce897a4b9843a4809021a0a66d85ea72968ec37c28cf",
+        "fact_hash": "ab864730f54b879dc696ce0c6d35d15e363c475fe996f8022afcde4412fd1b5d",
+        "mapping_basis_hash": "e89c8062a646b25e5b3dbf89f4866495afa682c7e32c6d6a4ead34df44e0c034",
+        "copy_refs": [
+          {
+            "id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+            "hash": "87689efc14b09cb33f1cfc274098ca5c1c3f2ac5d36d461db1c90d8ba6e20f8d",
+            "version": 3
+          }
+        ]
+      },
+      "mapping_basis": {
+        "business": {
+          "sourceId": null,
+          "citation": null,
+          "citations": [
+            {
+              "quote": "巡护🙂记录必须人工核验。",
+              "block_id": "p1",
+              "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2"
+            }
+          ],
+          "inferenceReason": ""
+        },
+        "steps": [
+          {
+            "id": "07cbc1f0-7488-55bf-8368-7bfb3b555f4d",
+            "sourceId": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+            "citation": "p1：巡护🙂记录必须人工核验。",
+            "citations": [
+              {
+                "quote": "巡护🙂记录必须人工核验。",
+                "block_id": "p1",
+                "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2"
+              }
+            ],
+            "inferenceReason": ""
+          }
+        ]
+      },
+      "mappings": [
+        {
+          "scope": "current",
+          "path": "/business/citations/0",
+          "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "target_block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+          "target_location": {
+            "page": 1,
+            "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+            "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+            "region_id": "r1",
+            "box": [
+              "1.0",
+              "2.0",
+              "90.0",
+              "20.0"
+            ],
+            "start": 0,
+            "end": 5
+          },
+          "quote": "巡护🙂记录必须人工核验。",
+          "span_binding_id": "0fdcfe4c1dfa759fedaf9c95c0dd2513160856b3cce19f9801011b12a4ee4936"
+        },
+        {
+          "scope": "current",
+          "path": "/steps/0/citations/0",
+          "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "target_block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+          "target_location": {
+            "page": 1,
+            "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+            "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+            "region_id": "r1",
+            "box": [
+              "1.0",
+              "2.0",
+              "90.0",
+              "20.0"
+            ],
+            "start": 0,
+            "end": 5
+          },
+          "quote": "巡护🙂记录必须人工核验。",
+          "span_binding_id": "c390f157871f7dc785b9e91b7227568cd024ad3993408d0503f952818987b163"
+        },
+        {
+          "scope": "original",
+          "path": "/business/citations/0",
+          "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "target_block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+          "target_location": {
+            "page": 1,
+            "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+            "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+            "region_id": "r1",
+            "box": [
+              "1.0",
+              "2.0",
+              "90.0",
+              "20.0"
+            ],
+            "start": 0,
+            "end": 5
+          },
+          "quote": "巡护🙂记录必须人工核验。",
+          "span_binding_id": "7ec72ff9a8a872debec06dbed9920ffb204384a3c87c85d69db5ac1f780fba68"
+        },
+        {
+          "scope": "original",
+          "path": "/steps/0/citations/0",
+          "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "target_block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+          "target_location": {
+            "page": 1,
+            "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+            "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+            "region_id": "r1",
+            "box": [
+              "1.0",
+              "2.0",
+              "90.0",
+              "20.0"
+            ],
+            "start": 0,
+            "end": 5
+          },
+          "quote": "巡护🙂记录必须人工核验。",
+          "span_binding_id": "e09dc084095101fdbc631bd605702ae6b558357e27fcaf3e17e4bce41a0fdea6"
+        },
+        {
+          "scope": "current_flow",
+          "path": "/business/citations/0",
+          "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "target_block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+          "target_location": {
+            "page": 1,
+            "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+            "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+            "region_id": "r1",
+            "box": [
+              "1.0",
+              "2.0",
+              "90.0",
+              "20.0"
+            ],
+            "start": 0,
+            "end": 5
+          },
+          "quote": "巡护🙂记录必须人工核验。",
+          "span_binding_id": "875b9d8df1971e8622678c70bf5963146f6582b7690cc18c108803f81142d2f7"
+        },
+        {
+          "scope": "current_flow",
+          "path": "/steps/0/citations/0",
+          "source_material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1",
+          "target_block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+          "target_location": {
+            "page": 1,
+            "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+            "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+            "region_id": "r1",
+            "box": [
+              "1.0",
+              "2.0",
+              "90.0",
+              "20.0"
+            ],
+            "start": 0,
+            "end": 5
+          },
+          "quote": "巡护🙂记录必须人工核验。",
+          "span_binding_id": "3a3dbd68935d049ef6e290b3f3a0e01cd22a3033ef21a43c1d827b3436c692d8"
+        }
+      ],
+      "accepted_revision": 4,
+      "configuration_hash": "dc4ef51fd319fa1e9ee2f4c470e626e2bae483fa5c5ecb70621ac33eaa5c44e8",
+      "record_hash": "7eba070d8c55163af9b01bbfd6611e562b767ed85eb327c1187f0664edbdfc23"
+    }
+  },
+  "evidence": {
+    "schema": "report-source-region-binding-view-v1",
+    "workspace_id": "7535b499-5f86-49c8-9d40-93b0474ac493",
+    "handoff_id": "d3c65489-5dbd-417e-b6d8-fb5c65ac96e9",
+    "source_review_id": "62828aa2-a110-4c31-9057-571b9ad0401e",
+    "record_hash": "7eba070d8c55163af9b01bbfd6611e562b767ed85eb327c1187f0664edbdfc23",
+    "binding_id": "0fdcfe4c1dfa759fedaf9c95c0dd2513160856b3cce19f9801011b12a4ee4936",
+    "binding": {
+      "spans": [
+        {
+          "box": [
+            "1.0",
+            "2.0",
+            "90.0",
+            "20.0"
+          ],
+          "end": 5,
+          "page": 1,
+          "start": 0,
+          "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+          "region_id": "r1",
+          "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+          "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+          "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+          "revision_kind": "confirmed",
+          "region_text_hash": "3047ed802ed8763694a19c2b91904b69dd18154144ec69c0ac2a0633d7e7d857"
+        },
+        {
+          "box": [
+            "1.0",
+            "24.0",
+            "90.0",
+            "20.0"
+          ],
+          "end": 7,
+          "page": 1,
+          "start": 0,
+          "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+          "region_id": "r2",
+          "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+          "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b",
+          "revision_hash": "10401052e3d17f9fffe601ffb8b9fc0994cc982359e1e406d5770a9f6406eae1",
+          "revision_kind": "confirmed",
+          "region_text_hash": "c5fce7ffcf0d0d16e06726a7f45fc1fdb327656b0e89ef743c66bcc9389545a6"
+        }
+      ],
+      "reference": {
+        "hash": "7045a42e53aea5c5137f80856983bc4c6db245dd44346a218cb855903e47d848",
+        "path": "/business/citations/0",
+        "quote": "巡护🙂记录必须人工核验。",
+        "scope": "current",
+        "version": 4,
+        "block_id": "p1",
+        "location": {
+          "view": "accepted_final_v1",
+          "body_index": 1,
+          "paragraph_index": 1
+        },
+        "evidence_id": "8414838f-abf3-43d3-8b47-b982aca32fec",
+        "material_id": "c2c1acec-9472-4bff-a537-9f59e86bbcd2",
+        "reading_hash": "a539a67e0b84e74b2ace77ff95456a618b2018e896926a2959f774eb1111c97a"
+      },
+      "copy_material_id": "11b001cc-46a1-4eb7-9aed-8acf7b7071a1"
+    },
+    "locations": [
+      {
+        "page": 1,
+        "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+        "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+        "region_id": "r1",
+        "box": [
+          "1.0",
+          "2.0",
+          "90.0",
+          "20.0"
+        ],
+        "start": 0,
+        "end": 5
+      },
+      {
+        "page": 1,
+        "unit_id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+        "revision_id": "5973d026-0114-4d2a-8be7-17934db43e86",
+        "region_id": "r2",
+        "box": [
+          "1.0",
+          "24.0",
+          "90.0",
+          "20.0"
+        ],
+        "start": 0,
+        "end": 7
+      }
+    ],
+    "first_block_id": "ocr-ab158190-886a-41f7-abbe-2df8a5af9a54-1-1",
+    "material_name": "synthetic-original（本地最终修订副本）.pdf",
+    "run_id": "dbf66ea4-3b61-44b1-96b2-f1faa306d59f",
+    "confirmation_id": "ab158190-886a-41f7-abbe-2df8a5af9a54",
+    "unit": {
+      "id": "8d2db67b-71b0-4c91-87c6-6be4dc9f95b6",
+      "kind": "pdf_page",
+      "page": 1,
+      "title": "PDF 第 1 页",
+      "width": 97,
+      "height": 60,
+      "image_sha256": "8eb12e2128c2bece2a2e6596826a1a723889c6c0b0558d0112ec4b73b268c17b"
+    },
+    "regions": [
+      {
+        "id": "r1",
+        "text": "巡护🙂记录",
+        "box": [
+          "1.0",
+          "2.0",
+          "90.0",
+          "20.0"
+        ]
+      },
+      {
+        "id": "r2",
+        "text": "必须人工核验。",
+        "box": [
+          "1.0",
+          "24.0",
+          "90.0",
+          "20.0"
+        ]
+      }
+    ],
+    "view_hash": "3be90c013cbc91a5750022d356c2b7ea9eadfb96f31de3300a279d0d249c4c49"
+  }
+}

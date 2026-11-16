@@ -1,0 +1,26 @@
+{
+  "contract_version": "1.0",
+  "namespace": "inspection",
+  "name": "qwen_embedding",
+  "version": "1.0.0",
+  "owner": "平台操作者",
+  "description": "Qwen文字向量模型（仅语义检索）",
+  "kind": "foundation_model",
+  "execution": {
+    "provider": "qwen",
+    "model": "text-embedding-v4",
+    "task": "embedding",
+    "secret_ref": "DASHSCOPE_API_KEY",
+    "dimensions": 64
+  },
+  "data_policy": {
+    "cloud_allowed": true,
+    "redact_fields": [
+      "contact",
+      "location"
+    ]
+  },
+  "allowed_agent_roles": [
+    "data"
+  ]
+}

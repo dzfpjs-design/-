@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {audioFields,confirmAudioAssociation} from '../src/workflow-audio-form.mjs';
+test('task freezes exactly one audio association and ignores another business draft',()=>{const ids=['a'];const x=audioFields(true,ids);ids[0]='b';assert.deepEqual(x,{audio_ids:['a']});assert.deepEqual(audioFields(false,ids),{})});
+test('missing duplicate or invalid audio selection cannot submit',()=>{for(const ids of [[],[''],['a','a'],['a','b'],[null],null])assert.throws(()=>audioFields(true,ids))});
+test('lost-response recovery confirms request original source and fixed settings',()=>{const intent={request_id:'r',source_run_id:'s',source_snapshot_hash:'h'},row={request_id:'r',snapshot_hash:'h',snapshot:{source_run_id:'s'}};assert.equal(confirmAudioAssociation(row,intent),row);for(const patch of [{request_id:'different'},{snapshot_hash:'different'},{snapshot:{source_run_id:'different'}}])assert.throws(()=>confirmAudioAssociation({...row,...patch},intent))});

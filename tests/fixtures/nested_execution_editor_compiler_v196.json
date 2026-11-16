@@ -1,0 +1,2815 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "causal_bindings": {
+          "entry_ports": [],
+          "input_bindings": [
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "input_path": "/business/flows/0/completion/inputs/0",
+              "sources": [
+                "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0/outputs/0",
+                "/business/flows/0/phases/0/branches/1/phases/0/steps/0/outputs/0"
+              ]
+            }
+          ],
+          "output_contracts": [
+            {
+              "contract": {
+                "data_type": "boolean",
+                "unit": null
+              },
+              "path": "/business/flows/0/phases/0/decision/outputs/0"
+            },
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "path": "/business/flows/0/phases/0/branches/0/phases/0/dispatch/outputs/0"
+            },
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0/outputs/0"
+            },
+            {
+              "contract": {
+                "data_type": "boolean",
+                "unit": null
+              },
+              "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/decision/outputs/0"
+            },
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0/steps/0/outputs/0"
+            },
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "path": "/business/flows/0/phases/0/branches/1/phases/0/steps/0/outputs/0"
+            },
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "path": "/business/flows/0/completion/outputs/0"
+            }
+          ],
+          "schema": "business-flow-nested-causal-bindings-v192",
+          "scope_binding_hash": "6a26482b886f8f8b7e14e6176a07f1070c3494bdb919a58fd10362cb227a327f",
+          "source_plan_hash": "bea9ecd93d42436826873b062147f6520da93e003964612b83b55247b6e37436"
+        },
+        "execution_bindings": {
+          "conditions": [
+            {
+              "false_branch_index": 1,
+              "path": "/business/flows/0/phases/0",
+              "predicate_id": "condition_0",
+              "true_branch_index": 0
+            },
+            {
+              "false_branch_index": 1,
+              "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0",
+              "predicate_id": "condition_2",
+              "true_branch_index": 0
+            }
+          ],
+          "contract_schemas": [
+            {
+              "contract": {
+                "data_type": "boolean",
+                "unit": null
+              },
+              "kind": "boolean",
+              "nullable": false
+            },
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false
+            }
+          ],
+          "entries": {},
+          "guards": {
+            "exception": null,
+            "precondition": null,
+            "start": null,
+            "stop": null
+          },
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "loops": [],
+          "nodes": {
+            "/business/flows/0/completion": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [
+                {
+                  "ordinal": 0,
+                  "reference": "input_6_0"
+                }
+              ],
+              "kind": "human",
+              "output_ports": [
+                {
+                  "field": "output_1",
+                  "ordinal": 0
+                }
+              ],
+              "output_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "output_1": {
+                    "title": "记录本次处理结果记录",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "output_1"
+                ],
+                "type": "object"
+              },
+              "role": "资料核查人员"
+            },
+            "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "execution": {
+                "adapter": "builtin",
+                "agent_role": "business",
+                "arguments": {},
+                "capability_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "capability_id": "19600000-0000-4000-8000-000000000102",
+                "input_bindings": {},
+                "input_schema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "max_attempts": 1,
+                "output_schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "result": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ],
+                  "type": "object"
+                },
+                "release_version": "1.0.0"
+              },
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [],
+              "kind": "ability",
+              "output_ports": [
+                {
+                  "field": "result",
+                  "ordinal": 0
+                }
+              ]
+            },
+            "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0/steps/0": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "execution": {
+                "adapter": "builtin",
+                "agent_role": "perception",
+                "arguments": {},
+                "capability_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "capability_id": "19600000-0000-4000-8000-000000000104",
+                "input_bindings": {},
+                "input_schema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "max_attempts": 1,
+                "output_schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "result": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ],
+                  "type": "object"
+                },
+                "release_version": "1.0.0"
+              },
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [],
+              "kind": "ability",
+              "output_ports": [
+                {
+                  "field": "result",
+                  "ordinal": 0
+                }
+              ]
+            },
+            "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/decision": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [],
+              "kind": "human",
+              "output_ports": [
+                {
+                  "field": "output_1",
+                  "ordinal": 0
+                }
+              ],
+              "output_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "output_1": {
+                    "title": "核对飞行条件记录",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "output_1"
+                ],
+                "type": "object"
+              },
+              "role": "资料核查人员"
+            },
+            "/business/flows/0/phases/0/branches/0/phases/0/dispatch": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "execution": {
+                "adapter": "builtin",
+                "agent_role": "business",
+                "arguments": {},
+                "capability_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "capability_id": "19600000-0000-4000-8000-000000000101",
+                "input_bindings": {},
+                "input_schema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "required": [],
+                  "type": "object"
+                },
+                "max_attempts": 1,
+                "output_schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "result": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "result"
+                  ],
+                  "type": "object"
+                },
+                "release_version": "1.0.0"
+              },
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [],
+              "kind": "ability",
+              "output_ports": [
+                {
+                  "field": "result",
+                  "ordinal": 0
+                }
+              ]
+            },
+            "/business/flows/0/phases/0/branches/1/phases/0/steps/0": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [],
+              "kind": "human",
+              "output_ports": [
+                {
+                  "field": "output_1",
+                  "ordinal": 0
+                }
+              ],
+              "output_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "output_1": {
+                    "title": "记录退回理由记录",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "output_1"
+                ],
+                "type": "object"
+              },
+              "role": "资料核查人员"
+            },
+            "/business/flows/0/phases/0/decision": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [],
+              "kind": "human",
+              "output_ports": [
+                {
+                  "field": "output_1",
+                  "ordinal": 0
+                }
+              ],
+              "output_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "output_1": {
+                    "title": "确认修复建议记录",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "output_1"
+                ],
+                "type": "object"
+              },
+              "role": "资料核查人员"
+            }
+          },
+          "predicates": {
+            "condition_0": {
+              "left": {
+                "key": "condition_result_0",
+                "op": "ref"
+              },
+              "op": "eq",
+              "right": {
+                "kind": "boolean",
+                "op": "value",
+                "value": true
+              }
+            },
+            "condition_2": {
+              "left": {
+                "key": "condition_result_2",
+                "op": "ref"
+              },
+              "op": "eq",
+              "right": {
+                "kind": "boolean",
+                "op": "value",
+                "value": true
+              }
+            }
+          },
+          "references": {
+            "condition_result_0": {
+              "field": "output_1",
+              "kind": "boolean",
+              "node_id": "/business/flows/0/phases/0/decision",
+              "nullable": false,
+              "source": "output"
+            },
+            "condition_result_2": {
+              "field": "output_1",
+              "kind": "boolean",
+              "node_id": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/decision",
+              "nullable": false,
+              "source": "output"
+            },
+            "input_6_0": {
+              "candidates": [
+                {
+                  "field": "result",
+                  "node_id": "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0"
+                },
+                {
+                  "field": "output_1",
+                  "node_id": "/business/flows/0/phases/0/branches/1/phases/0/steps/0"
+                }
+              ],
+              "consumer_node_id": "/business/flows/0/completion",
+              "kind": "string",
+              "nullable": false,
+              "schema": "exclusive-output-reference-v195",
+              "source": "exclusive_output",
+              "unit": null
+            }
+          },
+          "schema": "business-flow-nested-execution-bindings-v195"
+        },
+        "external_node_ids": [],
+        "node_actions": {
+          "a_02": "observe",
+          "a_03": "observe",
+          "a_05": "observe"
+        },
+        "role_bindings": {
+          "业务驱动智能体": "19600000-0000-4000-8000-000000000001",
+          "多模感知智能体": "19600000-0000-4000-8000-000000000001",
+          "资料核查人员": "19600000-0000-4000-8000-000000000001"
+        }
+      },
+      "expected_graph_hash": "ae1fd64e66724128c46583d6e6ee54056e5b6768d250c547332aa400efd6eca7",
+      "name": "conditional",
+      "source_binding": {
+        "allowed_span_refs_hash": "e96e3858aec5a5730c5a231c6b5cc555fe2ecd5abcdc0f38c1016abf99457e4f",
+        "catalog_hash": "b425ccb61629d240d8d16f37156e89fd12a62af64f0c1d7027e1ad2d8577bb47",
+        "context_hash": "3096dd14800a2c8cc4ee6ce1be719d00244decb2eef53aa5e6106f9308f05fdf",
+        "global_input_claims_hash": "020680f0ccc4536fb8354666dcdf44cf468737fbfdca5f5983803cce183a05a7",
+        "global_input_count": 2,
+        "global_input_order_hash": "4e33d3fda95b8e5e28d0bfa676cc246232fee3d66cd79adb9a1900f734e7f018",
+        "name": "综合监测",
+        "plan_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "schema": "report-business-flow-binding-v182",
+        "scope_id": "forest:monitoring",
+        "selected_claims_hash": "020680f0ccc4536fb8354666dcdf44cf468737fbfdca5f5983803cce183a05a7",
+        "selected_global_input_ids": [
+          "public-source:0",
+          "public-source:1"
+        ],
+        "selected_global_positions": [
+          0,
+          1
+        ],
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_snapshot_hash": "d1c8302ec3b3d1b1f36beca23b5f947e1352bafcd57306ef337b46136b272b92",
+        "spans_hash": "32672e97b33ea6a0b587798dac3d53926bc2eb30c43d5080a3941ff93666c18a"
+      },
+      "ui_context": {
+        "action_ports": [
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_01",
+            "input_ports": [],
+            "name": "确认修复建议",
+            "output_ports": [
+              {
+                "label": "确认修复建议记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/decision/outputs/0"
+              }
+            ],
+            "part": "decision",
+            "path": "/business/flows/0/phases/0/decision",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "business_agent",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "parallel",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_02",
+            "input_ports": [],
+            "name": "组织通知与补核",
+            "output_ports": [
+              {
+                "label": "组织通知与补核记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/dispatch/outputs/0"
+              }
+            ],
+            "part": "dispatch",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0/dispatch",
+            "phase_index": 0,
+            "role": "业务驱动智能体"
+          },
+          {
+            "actor": "business_agent",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "parallel",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "parallel_branch",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "steps",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_03",
+            "input_ports": [],
+            "name": "通知责任人员",
+            "output_ports": [
+              {
+                "label": "通知责任人员记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0/outputs/0"
+              }
+            ],
+            "part": "step",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0",
+            "phase_index": 0,
+            "role": "业务驱动智能体"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "parallel",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0"
+              },
+              {
+                "branch_index": 1,
+                "kind": "parallel_branch",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1"
+              },
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_04",
+            "input_ports": [],
+            "name": "核对飞行条件",
+            "output_ports": [
+              {
+                "label": "核对飞行条件记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/decision/outputs/0"
+              }
+            ],
+            "part": "decision",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/decision",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "perception_agent",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "parallel",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0"
+              },
+              {
+                "branch_index": 1,
+                "kind": "parallel_branch",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1"
+              },
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "steps",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_05",
+            "input_ports": [],
+            "name": "开展补充观察",
+            "output_ports": [
+              {
+                "label": "开展补充观察记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0/steps/0/outputs/0"
+              }
+            ],
+            "part": "step",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0/steps/0",
+            "phase_index": 0,
+            "role": "多模感知智能体"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 1,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/1"
+              },
+              {
+                "branch_index": null,
+                "kind": "steps",
+                "path": "/business/flows/0/phases/0/branches/1/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_06",
+            "input_ports": [],
+            "name": "记录退回理由",
+            "output_ports": [
+              {
+                "label": "记录退回理由记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/1/phases/0/steps/0/outputs/0"
+              }
+            ],
+            "part": "step",
+            "path": "/business/flows/0/phases/0/branches/1/phases/0/steps/0",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_07",
+            "input_ports": [
+              {
+                "label": "当前实际分支的处置结果",
+                "ordinal": 0,
+                "path": "/business/flows/0/completion/inputs/0"
+              }
+            ],
+            "name": "记录本次处理结果",
+            "output_ports": [
+              {
+                "label": "记录本次处理结果记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/completion/outputs/0"
+              }
+            ],
+            "part": "completion",
+            "path": "/business/flows/0/completion",
+            "phase_index": null,
+            "role": "资料核查人员"
+          }
+        ],
+        "adopted_flows": [],
+        "all_action_ports": [
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_01",
+            "input_ports": [],
+            "name": "确认修复建议",
+            "output_ports": [
+              {
+                "label": "确认修复建议记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/decision/outputs/0"
+              }
+            ],
+            "part": "decision",
+            "path": "/business/flows/0/phases/0/decision",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "business_agent",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "parallel",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_02",
+            "input_ports": [],
+            "name": "组织通知与补核",
+            "output_ports": [
+              {
+                "label": "组织通知与补核记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/dispatch/outputs/0"
+              }
+            ],
+            "part": "dispatch",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0/dispatch",
+            "phase_index": 0,
+            "role": "业务驱动智能体"
+          },
+          {
+            "actor": "business_agent",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "parallel",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "parallel_branch",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "steps",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_03",
+            "input_ports": [],
+            "name": "通知责任人员",
+            "output_ports": [
+              {
+                "label": "通知责任人员记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0/outputs/0"
+              }
+            ],
+            "part": "step",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0",
+            "phase_index": 0,
+            "role": "业务驱动智能体"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "parallel",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0"
+              },
+              {
+                "branch_index": 1,
+                "kind": "parallel_branch",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1"
+              },
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_04",
+            "input_ports": [],
+            "name": "核对飞行条件",
+            "output_ports": [
+              {
+                "label": "核对飞行条件记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/decision/outputs/0"
+              }
+            ],
+            "part": "decision",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/decision",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "perception_agent",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "parallel",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0"
+              },
+              {
+                "branch_index": 1,
+                "kind": "parallel_branch",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1"
+              },
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0"
+              },
+              {
+                "branch_index": 0,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0"
+              },
+              {
+                "branch_index": null,
+                "kind": "steps",
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_05",
+            "input_ports": [],
+            "name": "开展补充观察",
+            "output_ports": [
+              {
+                "label": "开展补充观察记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0/steps/0/outputs/0"
+              }
+            ],
+            "part": "step",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0/steps/0",
+            "phase_index": 0,
+            "role": "多模感知智能体"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "decision",
+                "path": "/business/flows/0/phases/0"
+              },
+              {
+                "branch_index": 1,
+                "kind": "decision_branch",
+                "path": "/business/flows/0/phases/0/branches/1"
+              },
+              {
+                "branch_index": null,
+                "kind": "steps",
+                "path": "/business/flows/0/phases/0/branches/1/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_06",
+            "input_ports": [],
+            "name": "记录退回理由",
+            "output_ports": [
+              {
+                "label": "记录退回理由记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/branches/1/phases/0/steps/0/outputs/0"
+              }
+            ],
+            "part": "step",
+            "path": "/business/flows/0/phases/0/branches/1/phases/0/steps/0",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_07",
+            "input_ports": [
+              {
+                "label": "当前实际分支的处置结果",
+                "ordinal": 0,
+                "path": "/business/flows/0/completion/inputs/0"
+              }
+            ],
+            "name": "记录本次处理结果",
+            "output_ports": [
+              {
+                "label": "记录本次处理结果记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/completion/outputs/0"
+              }
+            ],
+            "part": "completion",
+            "path": "/business/flows/0/completion",
+            "phase_index": null,
+            "role": "资料核查人员"
+          }
+        ],
+        "allowed_entry_modes": [
+          "engineering_manual"
+        ],
+        "can_apply": false,
+        "can_execute": false,
+        "capabilities": [
+          {
+            "adapter": "builtin",
+            "allowed_agent_roles": [
+              "business"
+            ],
+            "cloud_allowed": false,
+            "eligible_agent_roles": [
+              "business"
+            ],
+            "external": false,
+            "external_allowed": false,
+            "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "id": "19600000-0000-4000-8000-000000000101",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "kind": "tool",
+            "max_attempts": 1,
+            "name": "纯编译公开能力 组织通知与补核",
+            "output_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "result": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "result"
+              ],
+              "type": "object"
+            },
+            "registered_input_bindings": {},
+            "release_version": "1.0.0",
+            "requires_approved_plan": false
+          },
+          {
+            "adapter": "builtin",
+            "allowed_agent_roles": [
+              "business"
+            ],
+            "cloud_allowed": false,
+            "eligible_agent_roles": [
+              "business"
+            ],
+            "external": false,
+            "external_allowed": false,
+            "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "id": "19600000-0000-4000-8000-000000000102",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "kind": "tool",
+            "max_attempts": 1,
+            "name": "纯编译公开能力 通知责任人员",
+            "output_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "result": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "result"
+              ],
+              "type": "object"
+            },
+            "registered_input_bindings": {},
+            "release_version": "1.0.0",
+            "requires_approved_plan": false
+          },
+          {
+            "adapter": "builtin",
+            "allowed_agent_roles": [
+              "perception"
+            ],
+            "cloud_allowed": false,
+            "eligible_agent_roles": [
+              "perception"
+            ],
+            "external": false,
+            "external_allowed": false,
+            "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "id": "19600000-0000-4000-8000-000000000104",
+            "input_schema": {
+              "additionalProperties": false,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "kind": "tool",
+            "max_attempts": 1,
+            "name": "纯编译公开能力 开展补充观察",
+            "output_schema": {
+              "additionalProperties": false,
+              "properties": {
+                "result": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "result"
+              ],
+              "type": "object"
+            },
+            "registered_input_bindings": {},
+            "release_version": "1.0.0",
+            "requires_approved_plan": false
+          }
+        ],
+        "configuration_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "configuration_revision": 1,
+        "controls": [
+          {
+            "branches": [
+              {
+                "branch_index": 0,
+                "condition": "结果为肯定"
+              },
+              {
+                "branch_index": 1,
+                "condition": "结果为否定"
+              }
+            ],
+            "finish_if": null,
+            "kind": "decision",
+            "path": "/business/flows/0/phases/0",
+            "repeat_if": null,
+            "wait_mode": null
+          },
+          {
+            "branches": [
+              {
+                "branch_index": 0,
+                "condition": null
+              },
+              {
+                "branch_index": 1,
+                "condition": null
+              }
+            ],
+            "finish_if": null,
+            "kind": "parallel",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0",
+            "repeat_if": null,
+            "wait_mode": "all"
+          },
+          {
+            "branches": [
+              {
+                "branch_index": 0,
+                "condition": "结果为肯定"
+              },
+              {
+                "branch_index": 1,
+                "condition": "结果为否定"
+              }
+            ],
+            "finish_if": null,
+            "kind": "decision",
+            "path": "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0",
+            "repeat_if": null,
+            "wait_mode": null
+          }
+        ],
+        "current_source_checked": false,
+        "flow_index": 0,
+        "issues": [],
+        "members": [
+          {
+            "membership_role": "operator",
+            "user_id": "19600000-0000-4000-8000-000000000001",
+            "username": "公开纯编译操作者"
+          }
+        ],
+        "name": "资料核验流程",
+        "qualification_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "qualification_id": "19600000-0000-4000-8000-000000000002",
+        "review_mode": "engineering_simulation",
+        "roles": [
+          "资料核查人员",
+          "业务驱动智能体",
+          "多模感知智能体"
+        ],
+        "schema": "business-flow-nested-execution-context-v195",
+        "scope_binding": {
+          "allowed_span_refs_hash": "e96e3858aec5a5730c5a231c6b5cc555fe2ecd5abcdc0f38c1016abf99457e4f",
+          "catalog_hash": "b425ccb61629d240d8d16f37156e89fd12a62af64f0c1d7027e1ad2d8577bb47",
+          "context_hash": "3096dd14800a2c8cc4ee6ce1be719d00244decb2eef53aa5e6106f9308f05fdf",
+          "global_input_claims_hash": "020680f0ccc4536fb8354666dcdf44cf468737fbfdca5f5983803cce183a05a7",
+          "global_input_count": 2,
+          "global_input_order_hash": "4e33d3fda95b8e5e28d0bfa676cc246232fee3d66cd79adb9a1900f734e7f018",
+          "name": "综合监测",
+          "plan_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "schema": "report-business-flow-binding-v182",
+          "scope_id": "forest:monitoring",
+          "selected_claims_hash": "020680f0ccc4536fb8354666dcdf44cf468737fbfdca5f5983803cce183a05a7",
+          "selected_global_input_ids": [
+            "public-source:0",
+            "public-source:1"
+          ],
+          "selected_global_positions": [
+            0,
+            1
+          ],
+          "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_snapshot_hash": "d1c8302ec3b3d1b1f36beca23b5f947e1352bafcd57306ef337b46136b272b92",
+          "spans_hash": "32672e97b33ea6a0b587798dac3d53926bc2eb30c43d5080a3941ff93666c18a"
+        },
+        "scope_binding_hash": "6a26482b886f8f8b7e14e6176a07f1070c3494bdb919a58fd10362cb227a327f",
+        "semantic_quality_verified": false,
+        "simulation_only": true,
+        "source_flow": {
+          "completion": {
+            "actor": "human",
+            "attribution": {
+              "citations": [
+                "w:p1/s1"
+              ],
+              "inferred": false,
+              "reason": "按该合成原片段核对；不证明业务语义质量。"
+            },
+            "inputs": [
+              "当前实际分支的处置结果"
+            ],
+            "name": "记录本次处理结果",
+            "outputs": [
+              "记录本次处理结果记录"
+            ],
+            "responsibility": "核对收到的信息并形成记录。",
+            "role": "资料核查人员"
+          },
+          "name": "资料核验流程",
+          "phase_order": {
+            "citations": [
+              "w:p1/s1"
+            ],
+            "inferred": false,
+            "reason": "按原阶段顺序衔接，仍待业务核对。"
+          },
+          "phases": [
+            {
+              "attribution": {
+                "citations": [
+                  "w:p1/s1"
+                ],
+                "inferred": false,
+                "reason": "按该合成原片段核对；不证明业务语义质量。"
+              },
+              "branches": [
+                {
+                  "attribution": {
+                    "citations": [
+                      "w:p1/s1"
+                    ],
+                    "inferred": false,
+                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                  },
+                  "condition": "结果为肯定",
+                  "phases": [
+                    {
+                      "attribution": {
+                        "citations": [
+                          "w:p1/s1"
+                        ],
+                        "inferred": false,
+                        "reason": "按该合成原片段核对；不证明业务语义质量。"
+                      },
+                      "branches": [
+                        {
+                          "phases": [
+                            {
+                              "attribution": {
+                                "citations": [
+                                  "w:p1/s1"
+                                ],
+                                "inferred": false,
+                                "reason": "按该合成原片段核对；不证明业务语义质量。"
+                              },
+                              "kind": "steps",
+                              "steps": [
+                                {
+                                  "actor": "business_agent",
+                                  "attribution": {
+                                    "citations": [
+                                      "w:p1/s1"
+                                    ],
+                                    "inferred": false,
+                                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                  },
+                                  "inputs": [],
+                                  "name": "通知责任人员",
+                                  "outputs": [
+                                    "通知责任人员记录"
+                                  ],
+                                  "responsibility": "核对收到的信息并形成记录。",
+                                  "role": "业务驱动智能体"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "phases": [
+                            {
+                              "attribution": {
+                                "citations": [
+                                  "w:p1/s1"
+                                ],
+                                "inferred": false,
+                                "reason": "按该合成原片段核对；不证明业务语义质量。"
+                              },
+                              "branches": [
+                                {
+                                  "attribution": {
+                                    "citations": [
+                                      "w:p1/s1"
+                                    ],
+                                    "inferred": false,
+                                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                  },
+                                  "condition": "结果为肯定",
+                                  "phases": [
+                                    {
+                                      "attribution": {
+                                        "citations": [
+                                          "w:p1/s1"
+                                        ],
+                                        "inferred": false,
+                                        "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                      },
+                                      "kind": "steps",
+                                      "steps": [
+                                        {
+                                          "actor": "perception_agent",
+                                          "attribution": {
+                                            "citations": [
+                                              "w:p1/s1"
+                                            ],
+                                            "inferred": false,
+                                            "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                          },
+                                          "inputs": [],
+                                          "name": "开展补充观察",
+                                          "outputs": [
+                                            "开展补充观察记录"
+                                          ],
+                                          "responsibility": "核对收到的信息并形成记录。",
+                                          "role": "多模感知智能体"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "attribution": {
+                                    "citations": [
+                                      "w:p1/s1"
+                                    ],
+                                    "inferred": false,
+                                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                  },
+                                  "condition": "结果为否定",
+                                  "phases": []
+                                }
+                              ],
+                              "decision": {
+                                "actor": "human",
+                                "attribution": {
+                                  "citations": [
+                                    "w:p1/s1"
+                                  ],
+                                  "inferred": false,
+                                  "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                },
+                                "inputs": [],
+                                "name": "核对飞行条件",
+                                "outputs": [
+                                  "核对飞行条件记录"
+                                ],
+                                "responsibility": "核对收到的信息并形成记录。",
+                                "role": "资料核查人员"
+                              },
+                              "kind": "decision"
+                            }
+                          ]
+                        }
+                      ],
+                      "dispatch": {
+                        "actor": "business_agent",
+                        "attribution": {
+                          "citations": [
+                            "w:p1/s1"
+                          ],
+                          "inferred": false,
+                          "reason": "按该合成原片段核对；不证明业务语义质量。"
+                        },
+                        "inputs": [],
+                        "name": "组织通知与补核",
+                        "outputs": [
+                          "组织通知与补核记录"
+                        ],
+                        "responsibility": "核对收到的信息并形成记录。",
+                        "role": "业务驱动智能体"
+                      },
+                      "join_attribution": {
+                        "citations": [
+                          "w:p1/s1"
+                        ],
+                        "inferred": false,
+                        "reason": "按该合成原片段核对；不证明业务语义质量。"
+                      },
+                      "kind": "parallel",
+                      "wait_mode": "all"
+                    }
+                  ]
+                },
+                {
+                  "attribution": {
+                    "citations": [
+                      "w:p1/s1"
+                    ],
+                    "inferred": false,
+                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                  },
+                  "condition": "结果为否定",
+                  "phases": [
+                    {
+                      "attribution": {
+                        "citations": [
+                          "w:p1/s1"
+                        ],
+                        "inferred": false,
+                        "reason": "按该合成原片段核对；不证明业务语义质量。"
+                      },
+                      "kind": "steps",
+                      "steps": [
+                        {
+                          "actor": "human",
+                          "attribution": {
+                            "citations": [
+                              "w:p1/s1"
+                            ],
+                            "inferred": false,
+                            "reason": "按该合成原片段核对；不证明业务语义质量。"
+                          },
+                          "inputs": [],
+                          "name": "记录退回理由",
+                          "outputs": [
+                            "记录退回理由记录"
+                          ],
+                          "responsibility": "核对收到的信息并形成记录。",
+                          "role": "资料核查人员"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "decision": {
+                "actor": "human",
+                "attribution": {
+                  "citations": [
+                    "w:p1/s1"
+                  ],
+                  "inferred": false,
+                  "reason": "按该合成原片段核对；不证明业务语义质量。"
+                },
+                "inputs": [],
+                "name": "确认修复建议",
+                "outputs": [
+                  "确认修复建议记录"
+                ],
+                "responsibility": "核对收到的信息并形成记录。",
+                "role": "资料核查人员"
+              },
+              "kind": "decision"
+            }
+          ],
+          "trigger": {
+            "attribution": {
+              "citations": [
+                "w:p1/s1"
+              ],
+              "inferred": false,
+              "reason": "按该合成原片段核对；不证明业务语义质量。"
+            },
+            "description": "人工明确发起核对。",
+            "kind": "manual"
+          }
+        },
+        "source_plan_hash": "bea9ecd93d42436826873b062147f6520da93e003964612b83b55247b6e37436",
+        "source_value": {
+          "binding_hash": "6a26482b886f8f8b7e14e6176a07f1070c3494bdb919a58fd10362cb227a327f",
+          "business": {
+            "flows": [
+              {
+                "completion": {
+                  "actor": "human",
+                  "attribution": {
+                    "citations": [
+                      "w:p1/s1"
+                    ],
+                    "inferred": false,
+                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                  },
+                  "inputs": [
+                    "当前实际分支的处置结果"
+                  ],
+                  "name": "记录本次处理结果",
+                  "outputs": [
+                    "记录本次处理结果记录"
+                  ],
+                  "responsibility": "核对收到的信息并形成记录。",
+                  "role": "资料核查人员"
+                },
+                "name": "资料核验流程",
+                "phase_order": {
+                  "citations": [
+                    "w:p1/s1"
+                  ],
+                  "inferred": false,
+                  "reason": "按原阶段顺序衔接，仍待业务核对。"
+                },
+                "phases": [
+                  {
+                    "attribution": {
+                      "citations": [
+                        "w:p1/s1"
+                      ],
+                      "inferred": false,
+                      "reason": "按该合成原片段核对；不证明业务语义质量。"
+                    },
+                    "branches": [
+                      {
+                        "attribution": {
+                          "citations": [
+                            "w:p1/s1"
+                          ],
+                          "inferred": false,
+                          "reason": "按该合成原片段核对；不证明业务语义质量。"
+                        },
+                        "condition": "结果为肯定",
+                        "phases": [
+                          {
+                            "attribution": {
+                              "citations": [
+                                "w:p1/s1"
+                              ],
+                              "inferred": false,
+                              "reason": "按该合成原片段核对；不证明业务语义质量。"
+                            },
+                            "branches": [
+                              {
+                                "phases": [
+                                  {
+                                    "attribution": {
+                                      "citations": [
+                                        "w:p1/s1"
+                                      ],
+                                      "inferred": false,
+                                      "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                    },
+                                    "kind": "steps",
+                                    "steps": [
+                                      {
+                                        "actor": "business_agent",
+                                        "attribution": {
+                                          "citations": [
+                                            "w:p1/s1"
+                                          ],
+                                          "inferred": false,
+                                          "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                        },
+                                        "inputs": [],
+                                        "name": "通知责任人员",
+                                        "outputs": [
+                                          "通知责任人员记录"
+                                        ],
+                                        "responsibility": "核对收到的信息并形成记录。",
+                                        "role": "业务驱动智能体"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "phases": [
+                                  {
+                                    "attribution": {
+                                      "citations": [
+                                        "w:p1/s1"
+                                      ],
+                                      "inferred": false,
+                                      "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                    },
+                                    "branches": [
+                                      {
+                                        "attribution": {
+                                          "citations": [
+                                            "w:p1/s1"
+                                          ],
+                                          "inferred": false,
+                                          "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                        },
+                                        "condition": "结果为肯定",
+                                        "phases": [
+                                          {
+                                            "attribution": {
+                                              "citations": [
+                                                "w:p1/s1"
+                                              ],
+                                              "inferred": false,
+                                              "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                            },
+                                            "kind": "steps",
+                                            "steps": [
+                                              {
+                                                "actor": "perception_agent",
+                                                "attribution": {
+                                                  "citations": [
+                                                    "w:p1/s1"
+                                                  ],
+                                                  "inferred": false,
+                                                  "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                                },
+                                                "inputs": [],
+                                                "name": "开展补充观察",
+                                                "outputs": [
+                                                  "开展补充观察记录"
+                                                ],
+                                                "responsibility": "核对收到的信息并形成记录。",
+                                                "role": "多模感知智能体"
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "attribution": {
+                                          "citations": [
+                                            "w:p1/s1"
+                                          ],
+                                          "inferred": false,
+                                          "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                        },
+                                        "condition": "结果为否定",
+                                        "phases": []
+                                      }
+                                    ],
+                                    "decision": {
+                                      "actor": "human",
+                                      "attribution": {
+                                        "citations": [
+                                          "w:p1/s1"
+                                        ],
+                                        "inferred": false,
+                                        "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                      },
+                                      "inputs": [],
+                                      "name": "核对飞行条件",
+                                      "outputs": [
+                                        "核对飞行条件记录"
+                                      ],
+                                      "responsibility": "核对收到的信息并形成记录。",
+                                      "role": "资料核查人员"
+                                    },
+                                    "kind": "decision"
+                                  }
+                                ]
+                              }
+                            ],
+                            "dispatch": {
+                              "actor": "business_agent",
+                              "attribution": {
+                                "citations": [
+                                  "w:p1/s1"
+                                ],
+                                "inferred": false,
+                                "reason": "按该合成原片段核对；不证明业务语义质量。"
+                              },
+                              "inputs": [],
+                              "name": "组织通知与补核",
+                              "outputs": [
+                                "组织通知与补核记录"
+                              ],
+                              "responsibility": "核对收到的信息并形成记录。",
+                              "role": "业务驱动智能体"
+                            },
+                            "join_attribution": {
+                              "citations": [
+                                "w:p1/s1"
+                              ],
+                              "inferred": false,
+                              "reason": "按该合成原片段核对；不证明业务语义质量。"
+                            },
+                            "kind": "parallel",
+                            "wait_mode": "all"
+                          }
+                        ]
+                      },
+                      {
+                        "attribution": {
+                          "citations": [
+                            "w:p1/s1"
+                          ],
+                          "inferred": false,
+                          "reason": "按该合成原片段核对；不证明业务语义质量。"
+                        },
+                        "condition": "结果为否定",
+                        "phases": [
+                          {
+                            "attribution": {
+                              "citations": [
+                                "w:p1/s1"
+                              ],
+                              "inferred": false,
+                              "reason": "按该合成原片段核对；不证明业务语义质量。"
+                            },
+                            "kind": "steps",
+                            "steps": [
+                              {
+                                "actor": "human",
+                                "attribution": {
+                                  "citations": [
+                                    "w:p1/s1"
+                                  ],
+                                  "inferred": false,
+                                  "reason": "按该合成原片段核对；不证明业务语义质量。"
+                                },
+                                "inputs": [],
+                                "name": "记录退回理由",
+                                "outputs": [
+                                  "记录退回理由记录"
+                                ],
+                                "responsibility": "核对收到的信息并形成记录。",
+                                "role": "资料核查人员"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "decision": {
+                      "actor": "human",
+                      "attribution": {
+                        "citations": [
+                          "w:p1/s1"
+                        ],
+                        "inferred": false,
+                        "reason": "按该合成原片段核对；不证明业务语义质量。"
+                      },
+                      "inputs": [],
+                      "name": "确认修复建议",
+                      "outputs": [
+                        "确认修复建议记录"
+                      ],
+                      "responsibility": "核对收到的信息并形成记录。",
+                      "role": "资料核查人员"
+                    },
+                    "kind": "decision"
+                  }
+                ],
+                "trigger": {
+                  "attribution": {
+                    "citations": [
+                      "w:p1/s1"
+                    ],
+                    "inferred": false,
+                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                  },
+                  "description": "人工明确发起核对。",
+                  "kind": "manual"
+                }
+              }
+            ],
+            "name": "综合监测",
+            "questions": []
+          },
+          "schema": "report-business-flow-nested-plan-v192"
+        },
+        "value_schema": "report-business-flow-nested-plan-v192"
+      },
+      "ui_value": {
+        "buffers": {
+          "entries": [],
+          "ports": {
+            "/business/flows/0/completion/inputs/0": {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false,
+              "sources": [
+                "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0/outputs/0",
+                "/business/flows/0/phases/0/branches/1/phases/0/steps/0/outputs/0"
+              ]
+            },
+            "/business/flows/0/completion/outputs/0": {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false,
+              "sources": []
+            },
+            "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0/outputs/0": {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false,
+              "sources": []
+            },
+            "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0/steps/0/outputs/0": {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false,
+              "sources": []
+            },
+            "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/decision/outputs/0": {
+              "contract": {
+                "data_type": "boolean",
+                "unit": null
+              },
+              "kind": "boolean",
+              "nullable": false,
+              "sources": []
+            },
+            "/business/flows/0/phases/0/branches/0/phases/0/dispatch/outputs/0": {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false,
+              "sources": []
+            },
+            "/business/flows/0/phases/0/branches/1/phases/0/steps/0/outputs/0": {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false,
+              "sources": []
+            },
+            "/business/flows/0/phases/0/decision/outputs/0": {
+              "contract": {
+                "data_type": "boolean",
+                "unit": null
+              },
+              "kind": "boolean",
+              "nullable": false,
+              "sources": []
+            }
+          }
+        },
+        "causal_bindings": null,
+        "flows": [
+          {
+            "buffers": {
+              "controls": {
+                "/business/flows/0/phases/0": {
+                  "false_branch_index": "1",
+                  "max_iterations": "2",
+                  "op": "eq",
+                  "output_ordinal": "0",
+                  "raw": "true",
+                  "repeat_on": "false",
+                  "true_branch_index": "0"
+                },
+                "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0": {
+                  "false_branch_index": "1",
+                  "max_iterations": "2",
+                  "op": "eq",
+                  "output_ordinal": "0",
+                  "raw": "true",
+                  "repeat_on": "false",
+                  "true_branch_index": "0"
+                }
+              },
+              "guards": {},
+              "nodes": {
+                "/business/flows/0/completion": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_id": "",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": {
+                      "children": [],
+                      "item": null,
+                      "kind": "string",
+                      "nullable": false,
+                      "title": "记录本次处理结果记录",
+                      "unit": ""
+                    }
+                  },
+                  "review_required": false
+                },
+                "/business/flows/0/phases/0/branches/0/phases/0/branches/0/phases/0/steps/0": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "capability_id": "19600000-0000-4000-8000-000000000102",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": "result"
+                  },
+                  "release_version": "1.0.0",
+                  "review_required": false
+                },
+                "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/branches/0/phases/0/steps/0": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "capability_id": "19600000-0000-4000-8000-000000000104",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": "result"
+                  },
+                  "release_version": "1.0.0",
+                  "review_required": false
+                },
+                "/business/flows/0/phases/0/branches/0/phases/0/branches/1/phases/0/decision": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_id": "",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": {
+                      "children": [],
+                      "item": null,
+                      "kind": "boolean",
+                      "nullable": false,
+                      "title": "核对飞行条件记录",
+                      "unit": ""
+                    }
+                  },
+                  "review_required": false
+                },
+                "/business/flows/0/phases/0/branches/0/phases/0/dispatch": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "capability_id": "19600000-0000-4000-8000-000000000101",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": "result"
+                  },
+                  "release_version": "1.0.0",
+                  "review_required": false
+                },
+                "/business/flows/0/phases/0/branches/1/phases/0/steps/0": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_id": "",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": {
+                      "children": [],
+                      "item": null,
+                      "kind": "string",
+                      "nullable": false,
+                      "title": "记录退回理由记录",
+                      "unit": ""
+                    }
+                  },
+                  "review_required": false
+                },
+                "/business/flows/0/phases/0/decision": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_id": "",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": {
+                      "children": [],
+                      "item": null,
+                      "kind": "boolean",
+                      "nullable": false,
+                      "title": "确认修复建议记录",
+                      "unit": ""
+                    }
+                  },
+                  "review_required": false
+                }
+              }
+            },
+            "business_name": "资料核验流程",
+            "entry_mode": "engineering_manual",
+            "execution_bindings": null,
+            "external_node_ids": [],
+            "flow_index": 0,
+            "node_actions": {
+              "a_02": "observe",
+              "a_03": "observe",
+              "a_05": "observe"
+            },
+            "role_bindings": {
+              "业务驱动智能体": "19600000-0000-4000-8000-000000000001",
+              "多模感知智能体": "19600000-0000-4000-8000-000000000001",
+              "资料核查人员": "19600000-0000-4000-8000-000000000001"
+            }
+          }
+        ],
+        "recovery": [],
+        "selected_flow_index": 0
+      }
+    },
+    {
+      "expected": {
+        "causal_bindings": {
+          "entry_ports": [],
+          "input_bindings": [],
+          "output_contracts": [
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "path": "/business/flows/0/phases/0/steps/0/outputs/0"
+            },
+            {
+              "contract": {
+                "data_type": "boolean",
+                "unit": null
+              },
+              "path": "/business/flows/0/phases/0/check/outputs/0"
+            },
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "path": "/business/flows/0/completion/outputs/0"
+            }
+          ],
+          "schema": "business-flow-nested-causal-bindings-v192",
+          "scope_binding_hash": "6a26482b886f8f8b7e14e6176a07f1070c3494bdb919a58fd10362cb227a327f",
+          "source_plan_hash": "17a5ad5e726423fee7706317f421c6258a6cbd04d18cd83d8a67907d63e2eff0"
+        },
+        "execution_bindings": {
+          "conditions": [],
+          "contract_schemas": [
+            {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false
+            },
+            {
+              "contract": {
+                "data_type": "boolean",
+                "unit": null
+              },
+              "kind": "boolean",
+              "nullable": false
+            }
+          ],
+          "entries": {},
+          "guards": {
+            "exception": null,
+            "precondition": null,
+            "start": null,
+            "stop": null
+          },
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "loops": [
+            {
+              "max_iterations": 2,
+              "path": "/business/flows/0/phases/0",
+              "predicate_id": "condition_0",
+              "repeat_on": "true"
+            }
+          ],
+          "nodes": {
+            "/business/flows/0/completion": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [],
+              "kind": "human",
+              "output_ports": [
+                {
+                  "field": "output_1",
+                  "ordinal": 0
+                }
+              ],
+              "output_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "output_1": {
+                    "title": "记录本次处理结果记录",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "output_1"
+                ],
+                "type": "object"
+              },
+              "role": "资料核查人员"
+            },
+            "/business/flows/0/phases/0/check": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [],
+              "kind": "human",
+              "output_ports": [
+                {
+                  "field": "output_1",
+                  "ordinal": 0
+                }
+              ],
+              "output_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "output_1": {
+                    "title": "核对飞行条件记录",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "output_1"
+                ],
+                "type": "object"
+              },
+              "role": "资料核查人员"
+            },
+            "/business/flows/0/phases/0/steps/0": {
+              "actor_id": "19600000-0000-4000-8000-000000000001",
+              "guards": {
+                "exception": null,
+                "precondition": null,
+                "start": null,
+                "stop": null
+              },
+              "input_ports": [],
+              "kind": "human",
+              "output_ports": [
+                {
+                  "field": "output_1",
+                  "ordinal": 0
+                }
+              ],
+              "output_schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "output_1": {
+                    "title": "修订核查材料记录",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "output_1"
+                ],
+                "type": "object"
+              },
+              "role": "资料核查人员"
+            }
+          },
+          "predicates": {
+            "condition_0": {
+              "left": {
+                "key": "condition_result_0",
+                "op": "ref"
+              },
+              "op": "eq",
+              "right": {
+                "kind": "boolean",
+                "op": "value",
+                "value": true
+              }
+            }
+          },
+          "references": {
+            "condition_result_0": {
+              "field": "output_1",
+              "kind": "boolean",
+              "node_id": "/business/flows/0/phases/0/check",
+              "nullable": false,
+              "source": "output"
+            }
+          },
+          "schema": "business-flow-nested-execution-bindings-v195"
+        },
+        "external_node_ids": [],
+        "node_actions": {},
+        "role_bindings": {
+          "资料核查人员": "19600000-0000-4000-8000-000000000001"
+        }
+      },
+      "expected_graph_hash": "b9353b39ccefb4d68f623d974399b4ee7585f1ac48b2adcf180179fd2c1b00df",
+      "name": "repeat",
+      "source_binding": {
+        "allowed_span_refs_hash": "e96e3858aec5a5730c5a231c6b5cc555fe2ecd5abcdc0f38c1016abf99457e4f",
+        "catalog_hash": "b425ccb61629d240d8d16f37156e89fd12a62af64f0c1d7027e1ad2d8577bb47",
+        "context_hash": "3096dd14800a2c8cc4ee6ce1be719d00244decb2eef53aa5e6106f9308f05fdf",
+        "global_input_claims_hash": "020680f0ccc4536fb8354666dcdf44cf468737fbfdca5f5983803cce183a05a7",
+        "global_input_count": 2,
+        "global_input_order_hash": "4e33d3fda95b8e5e28d0bfa676cc246232fee3d66cd79adb9a1900f734e7f018",
+        "name": "综合监测",
+        "plan_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "schema": "report-business-flow-binding-v182",
+        "scope_id": "forest:monitoring",
+        "selected_claims_hash": "020680f0ccc4536fb8354666dcdf44cf468737fbfdca5f5983803cce183a05a7",
+        "selected_global_input_ids": [
+          "public-source:0",
+          "public-source:1"
+        ],
+        "selected_global_positions": [
+          0,
+          1
+        ],
+        "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_snapshot_hash": "d1c8302ec3b3d1b1f36beca23b5f947e1352bafcd57306ef337b46136b272b92",
+        "spans_hash": "32672e97b33ea6a0b587798dac3d53926bc2eb30c43d5080a3941ff93666c18a"
+      },
+      "ui_context": {
+        "action_ports": [
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "repeat",
+                "path": "/business/flows/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_01",
+            "input_ports": [],
+            "name": "修订核查材料",
+            "output_ports": [
+              {
+                "label": "修订核查材料记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/steps/0/outputs/0"
+              }
+            ],
+            "part": "repeat_step",
+            "path": "/business/flows/0/phases/0/steps/0",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "repeat",
+                "path": "/business/flows/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_02",
+            "input_ports": [],
+            "name": "核对飞行条件",
+            "output_ports": [
+              {
+                "label": "核对飞行条件记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/check/outputs/0"
+              }
+            ],
+            "part": "check",
+            "path": "/business/flows/0/phases/0/check",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_03",
+            "input_ports": [],
+            "name": "记录本次处理结果",
+            "output_ports": [
+              {
+                "label": "记录本次处理结果记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/completion/outputs/0"
+              }
+            ],
+            "part": "completion",
+            "path": "/business/flows/0/completion",
+            "phase_index": null,
+            "role": "资料核查人员"
+          }
+        ],
+        "adopted_flows": [],
+        "all_action_ports": [
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "repeat",
+                "path": "/business/flows/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_01",
+            "input_ports": [],
+            "name": "修订核查材料",
+            "output_ports": [
+              {
+                "label": "修订核查材料记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/steps/0/outputs/0"
+              }
+            ],
+            "part": "repeat_step",
+            "path": "/business/flows/0/phases/0/steps/0",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [
+              {
+                "branch_index": null,
+                "kind": "repeat",
+                "path": "/business/flows/0/phases/0"
+              }
+            ],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_02",
+            "input_ports": [],
+            "name": "核对飞行条件",
+            "output_ports": [
+              {
+                "label": "核对飞行条件记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/phases/0/check/outputs/0"
+              }
+            ],
+            "part": "check",
+            "path": "/business/flows/0/phases/0/check",
+            "phase_index": 0,
+            "role": "资料核查人员"
+          },
+          {
+            "actor": "human",
+            "control_ancestors": [],
+            "flow_index": 0,
+            "flow_path": "/business/flows/0",
+            "graph_node_id": "a_03",
+            "input_ports": [],
+            "name": "记录本次处理结果",
+            "output_ports": [
+              {
+                "label": "记录本次处理结果记录",
+                "ordinal": 0,
+                "path": "/business/flows/0/completion/outputs/0"
+              }
+            ],
+            "part": "completion",
+            "path": "/business/flows/0/completion",
+            "phase_index": null,
+            "role": "资料核查人员"
+          }
+        ],
+        "allowed_entry_modes": [
+          "engineering_manual"
+        ],
+        "can_apply": false,
+        "can_execute": false,
+        "capabilities": [],
+        "configuration_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "configuration_revision": 1,
+        "controls": [
+          {
+            "branches": [],
+            "finish_if": "核查结果不要求再次修订",
+            "kind": "repeat",
+            "path": "/business/flows/0/phases/0",
+            "repeat_if": "核查结果要求再次修订",
+            "wait_mode": null
+          }
+        ],
+        "current_source_checked": false,
+        "flow_index": 0,
+        "issues": [],
+        "members": [
+          {
+            "membership_role": "operator",
+            "user_id": "19600000-0000-4000-8000-000000000001",
+            "username": "公开纯编译操作者"
+          }
+        ],
+        "name": "资料核验流程",
+        "qualification_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "qualification_id": "19600000-0000-4000-8000-000000000002",
+        "review_mode": "engineering_simulation",
+        "roles": [
+          "资料核查人员"
+        ],
+        "schema": "business-flow-nested-execution-context-v195",
+        "scope_binding": {
+          "allowed_span_refs_hash": "e96e3858aec5a5730c5a231c6b5cc555fe2ecd5abcdc0f38c1016abf99457e4f",
+          "catalog_hash": "b425ccb61629d240d8d16f37156e89fd12a62af64f0c1d7027e1ad2d8577bb47",
+          "context_hash": "3096dd14800a2c8cc4ee6ce1be719d00244decb2eef53aa5e6106f9308f05fdf",
+          "global_input_claims_hash": "020680f0ccc4536fb8354666dcdf44cf468737fbfdca5f5983803cce183a05a7",
+          "global_input_count": 2,
+          "global_input_order_hash": "4e33d3fda95b8e5e28d0bfa676cc246232fee3d66cd79adb9a1900f734e7f018",
+          "name": "综合监测",
+          "plan_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "schema": "report-business-flow-binding-v182",
+          "scope_id": "forest:monitoring",
+          "selected_claims_hash": "020680f0ccc4536fb8354666dcdf44cf468737fbfdca5f5983803cce183a05a7",
+          "selected_global_input_ids": [
+            "public-source:0",
+            "public-source:1"
+          ],
+          "selected_global_positions": [
+            0,
+            1
+          ],
+          "source_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_snapshot_hash": "d1c8302ec3b3d1b1f36beca23b5f947e1352bafcd57306ef337b46136b272b92",
+          "spans_hash": "32672e97b33ea6a0b587798dac3d53926bc2eb30c43d5080a3941ff93666c18a"
+        },
+        "scope_binding_hash": "6a26482b886f8f8b7e14e6176a07f1070c3494bdb919a58fd10362cb227a327f",
+        "semantic_quality_verified": false,
+        "simulation_only": true,
+        "source_flow": {
+          "completion": {
+            "actor": "human",
+            "attribution": {
+              "citations": [
+                "w:p1/s1"
+              ],
+              "inferred": false,
+              "reason": "按该合成原片段核对；不证明业务语义质量。"
+            },
+            "inputs": [],
+            "name": "记录本次处理结果",
+            "outputs": [
+              "记录本次处理结果记录"
+            ],
+            "responsibility": "核对收到的信息并形成记录。",
+            "role": "资料核查人员"
+          },
+          "name": "资料核验流程",
+          "phase_order": {
+            "citations": [
+              "w:p1/s1"
+            ],
+            "inferred": false,
+            "reason": "按原阶段顺序衔接，仍待业务核对。"
+          },
+          "phases": [
+            {
+              "attribution": {
+                "citations": [
+                  "w:p1/s1"
+                ],
+                "inferred": false,
+                "reason": "按该合成原片段核对；不证明业务语义质量。"
+              },
+              "check": {
+                "actor": "human",
+                "attribution": {
+                  "citations": [
+                    "w:p1/s1"
+                  ],
+                  "inferred": false,
+                  "reason": "按该合成原片段核对；不证明业务语义质量。"
+                },
+                "inputs": [],
+                "name": "核对飞行条件",
+                "outputs": [
+                  "核对飞行条件记录"
+                ],
+                "responsibility": "核对收到的信息并形成记录。",
+                "role": "资料核查人员"
+              },
+              "finish_if": "核查结果不要求再次修订",
+              "kind": "repeat",
+              "repeat_if": "核查结果要求再次修订",
+              "steps": [
+                {
+                  "actor": "human",
+                  "attribution": {
+                    "citations": [
+                      "w:p1/s1"
+                    ],
+                    "inferred": false,
+                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                  },
+                  "inputs": [],
+                  "name": "修订核查材料",
+                  "outputs": [
+                    "修订核查材料记录"
+                  ],
+                  "responsibility": "核对收到的信息并形成记录。",
+                  "role": "资料核查人员"
+                }
+              ]
+            }
+          ],
+          "trigger": {
+            "attribution": {
+              "citations": [
+                "w:p1/s1"
+              ],
+              "inferred": false,
+              "reason": "按该合成原片段核对；不证明业务语义质量。"
+            },
+            "description": "人工明确发起核对。",
+            "kind": "manual"
+          }
+        },
+        "source_plan_hash": "17a5ad5e726423fee7706317f421c6258a6cbd04d18cd83d8a67907d63e2eff0",
+        "source_value": {
+          "binding_hash": "6a26482b886f8f8b7e14e6176a07f1070c3494bdb919a58fd10362cb227a327f",
+          "business": {
+            "flows": [
+              {
+                "completion": {
+                  "actor": "human",
+                  "attribution": {
+                    "citations": [
+                      "w:p1/s1"
+                    ],
+                    "inferred": false,
+                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                  },
+                  "inputs": [],
+                  "name": "记录本次处理结果",
+                  "outputs": [
+                    "记录本次处理结果记录"
+                  ],
+                  "responsibility": "核对收到的信息并形成记录。",
+                  "role": "资料核查人员"
+                },
+                "name": "资料核验流程",
+                "phase_order": {
+                  "citations": [
+                    "w:p1/s1"
+                  ],
+                  "inferred": false,
+                  "reason": "按原阶段顺序衔接，仍待业务核对。"
+                },
+                "phases": [
+                  {
+                    "attribution": {
+                      "citations": [
+                        "w:p1/s1"
+                      ],
+                      "inferred": false,
+                      "reason": "按该合成原片段核对；不证明业务语义质量。"
+                    },
+                    "check": {
+                      "actor": "human",
+                      "attribution": {
+                        "citations": [
+                          "w:p1/s1"
+                        ],
+                        "inferred": false,
+                        "reason": "按该合成原片段核对；不证明业务语义质量。"
+                      },
+                      "inputs": [],
+                      "name": "核对飞行条件",
+                      "outputs": [
+                        "核对飞行条件记录"
+                      ],
+                      "responsibility": "核对收到的信息并形成记录。",
+                      "role": "资料核查人员"
+                    },
+                    "finish_if": "核查结果不要求再次修订",
+                    "kind": "repeat",
+                    "repeat_if": "核查结果要求再次修订",
+                    "steps": [
+                      {
+                        "actor": "human",
+                        "attribution": {
+                          "citations": [
+                            "w:p1/s1"
+                          ],
+                          "inferred": false,
+                          "reason": "按该合成原片段核对；不证明业务语义质量。"
+                        },
+                        "inputs": [],
+                        "name": "修订核查材料",
+                        "outputs": [
+                          "修订核查材料记录"
+                        ],
+                        "responsibility": "核对收到的信息并形成记录。",
+                        "role": "资料核查人员"
+                      }
+                    ]
+                  }
+                ],
+                "trigger": {
+                  "attribution": {
+                    "citations": [
+                      "w:p1/s1"
+                    ],
+                    "inferred": false,
+                    "reason": "按该合成原片段核对；不证明业务语义质量。"
+                  },
+                  "description": "人工明确发起核对。",
+                  "kind": "manual"
+                }
+              }
+            ],
+            "name": "综合监测",
+            "questions": []
+          },
+          "schema": "report-business-flow-nested-plan-v192"
+        },
+        "value_schema": "report-business-flow-nested-plan-v192"
+      },
+      "ui_value": {
+        "buffers": {
+          "entries": [],
+          "ports": {
+            "/business/flows/0/completion/outputs/0": {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false,
+              "sources": []
+            },
+            "/business/flows/0/phases/0/check/outputs/0": {
+              "contract": {
+                "data_type": "boolean",
+                "unit": null
+              },
+              "kind": "boolean",
+              "nullable": false,
+              "sources": []
+            },
+            "/business/flows/0/phases/0/steps/0/outputs/0": {
+              "contract": {
+                "data_type": "string",
+                "unit": null
+              },
+              "kind": "string",
+              "nullable": false,
+              "sources": []
+            }
+          }
+        },
+        "causal_bindings": null,
+        "flows": [
+          {
+            "buffers": {
+              "controls": {
+                "/business/flows/0/phases/0": {
+                  "false_branch_index": "1",
+                  "max_iterations": "2",
+                  "op": "eq",
+                  "output_ordinal": "0",
+                  "raw": "true",
+                  "repeat_on": "true",
+                  "true_branch_index": "0"
+                }
+              },
+              "guards": {},
+              "nodes": {
+                "/business/flows/0/completion": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_id": "",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": {
+                      "children": [],
+                      "item": null,
+                      "kind": "string",
+                      "nullable": false,
+                      "title": "记录本次处理结果记录",
+                      "unit": ""
+                    }
+                  },
+                  "review_required": false
+                },
+                "/business/flows/0/phases/0/check": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_id": "",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": {
+                      "children": [],
+                      "item": null,
+                      "kind": "boolean",
+                      "nullable": false,
+                      "title": "核对飞行条件记录",
+                      "unit": ""
+                    }
+                  },
+                  "review_required": false
+                },
+                "/business/flows/0/phases/0/steps/0": {
+                  "actor_id": "19600000-0000-4000-8000-000000000001",
+                  "capability_id": "",
+                  "guards": {},
+                  "inputs": {},
+                  "outputs": {
+                    "0": {
+                      "children": [],
+                      "item": null,
+                      "kind": "string",
+                      "nullable": false,
+                      "title": "修订核查材料记录",
+                      "unit": ""
+                    }
+                  },
+                  "review_required": false
+                }
+              }
+            },
+            "business_name": "资料核验流程",
+            "entry_mode": "engineering_manual",
+            "execution_bindings": null,
+            "external_node_ids": [],
+            "flow_index": 0,
+            "node_actions": {},
+            "role_bindings": {
+              "资料核查人员": "19600000-0000-4000-8000-000000000001"
+            }
+          }
+        ],
+        "recovery": [],
+        "selected_flow_index": 0
+      }
+    }
+  ],
+  "not_iam_registry_or_pg_proof": true,
+  "schema": "public-nested-editor-real-compiler-fixture-v196",
+  "synthetic": true
+}

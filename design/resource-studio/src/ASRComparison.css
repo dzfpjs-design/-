@@ -1,0 +1,20 @@
+.asr-comparison-heading {display:flex;align-items:center;justify-content:space-between;gap:20px}
+.asr-comparison-heading h2 {margin-bottom:8px}
+.asr-comparison-heading p {max-width:760px}
+.asr-scope {padding:12px 16px;background:#fff4df;border-radius:8px;color:#684616}
+.asr-table-wrap {overflow-x:auto}
+.asr-comparison table {width:100%;border-collapse:collapse;text-align:left}
+.asr-comparison caption {text-align:left;margin:12px 0;color:#526075}
+.asr-comparison th,.asr-comparison td {padding:14px;border-bottom:1px solid #dce4ee;vertical-align:top}
+.asr-comparison small {display:block;color:#596779;margin-top:5px}
+.asr-case-controls {display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin:20px 0}
+.asr-case-controls label {display:flex;gap:10px;align-items:center}
+.asr-case-controls input[type=checkbox] {width:auto}
+.asr-case-controls select {max-width:340px}
+.asr-comparison audio {display:block;width:100%;max-width:680px;margin-top:14px}
+.asr-reference {background:#f3f6fa;border-radius:8px;padding:14px 18px;margin-top:18px}
+.asr-outputs {display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+.asr-outputs>div {border:1px solid #dce4ee;border-radius:8px;padding:14px 18px;min-width:0}
+.asr-comparison article p {overflow-wrap:anywhere;line-height:1.7}
+.asr-comparison details {margin:18px 0}
+@media(max-width:780px) {.asr-comparison-heading{align-items:flex-start;flex-direction:column}.asr-outputs{grid-template-columns:1fr}.asr-case-controls{align-items:flex-start;flex-direction:column}.asr-comparison th,.asr-comparison td{padding:10px}}

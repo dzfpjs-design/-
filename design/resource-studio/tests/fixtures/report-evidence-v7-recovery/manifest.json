@@ -1,0 +1,120 @@
+{
+  "files": [
+    {
+      "bytes": 1503,
+      "file": "all-maps-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/4aa2d92d-68e0-4d96-b67b-d5a9abdd2f6f/captures/map-2",
+      "sha256": "6bad4166877d5b3edfc0378483b2cd6a60088031420917b49f4d21a755264a4a"
+    },
+    {
+      "bytes": 42993,
+      "file": "all-maps-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/4aa2d92d-68e0-4d96-b67b-d5a9abdd2f6f",
+      "sha256": "612525aedf20abdc1402393c1dc2ea340912bda21bc769700c152adc44fb1994"
+    },
+    {
+      "bytes": 50428,
+      "file": "all-maps-recovered.json",
+      "method": "POST",
+      "path": "/api/setup/report-evidence-readings/4aa2d92d-68e0-4d96-b67b-d5a9abdd2f6f/recover-saved",
+      "sha256": "c4fcee9416b039d4d6c21394d549de6b57a1b2a6b235e26841286566d51dac3a"
+    },
+    {
+      "bytes": 1287,
+      "file": "missing-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/4aa2d92d-68e0-4d96-b67b-d5a9abdd2f6f/captures/map-2",
+      "sha256": "f1c6803410868ca56f20937e9fefa09082d99f5c92c52ad20e2453c69614db32"
+    },
+    {
+      "bytes": 36815,
+      "file": "missing-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/4aa2d92d-68e0-4d96-b67b-d5a9abdd2f6f",
+      "sha256": "6147bd50740d6ffd41225ce4287a8aa201c934629406d478758d3cb3ea9c820c"
+    },
+    {
+      "bytes": 1505,
+      "file": "reduction-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/8753e08b-6a0a-4122-ab96-cbd6b8419382/captures/reduce",
+      "sha256": "acd2ee9e9402e2e317ed74092b6c574db6d16d1ef69f8cbc584cff63c6704aa6"
+    },
+    {
+      "bytes": 94343,
+      "file": "reduction-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/8753e08b-6a0a-4122-ab96-cbd6b8419382",
+      "sha256": "ebb4bbc8adaee907cb07843a801aa1644c8bbce68ce22c230614d2a7e70077d4"
+    },
+    {
+      "bytes": 1505,
+      "file": "reduction-half-journal-capture.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/1744a294-d94d-400b-a7c3-a6f366d17815/captures/reduce",
+      "sha256": "d65914999c7fe989d4c780f1cf46174be6ed0edc3cef01dd03cdef6dc5582502"
+    },
+    {
+      "bytes": 94343,
+      "file": "reduction-half-journal-draft.json",
+      "method": "GET",
+      "path": "/api/setup/report-evidence-readings/1744a294-d94d-400b-a7c3-a6f366d17815",
+      "sha256": "cad7448352ccc0bf69cf5ee3b33d32808a4e90761258176e06abba11f7213d23"
+    },
+    {
+      "bytes": 106073,
+      "file": "reduction-half-journal-recovered.json",
+      "method": "POST",
+      "path": "/api/setup/report-evidence-readings/1744a294-d94d-400b-a7c3-a6f366d17815/recover-saved",
+      "sha256": "af953559d7f19a9f0c0391ceda4f8b499f2a6ab8bc8c4ced24c0f51dfc830091"
+    },
+    {
+      "bytes": 106073,
+      "file": "reduction-recovered.json",
+      "method": "POST",
+      "path": "/api/setup/report-evidence-readings/8753e08b-6a0a-4122-ab96-cbd6b8419382/recover-saved",
+      "sha256": "4ea26429744f5ad5bb4e0a7d89055676a00ae7fb5722c0caab8a55381ad895e4"
+    }
+  ],
+  "provider": "Actual API serializer; MockTransport only; no private report or real model",
+  "scenarios": [
+    {
+      "capture": "missing-capture.json",
+      "draft": "missing-draft.json",
+      "name": "missing"
+    },
+    {
+      "capture": "all-maps-capture.json",
+      "draft": "all-maps-draft.json",
+      "name": "all-maps",
+      "recovery": "all-maps-recovered.json",
+      "request_json": {
+        "request_id": "cc46c6e2-dab1-4353-869a-e53442ce2f9f",
+        "revision": 8
+      }
+    },
+    {
+      "capture": "reduction-capture.json",
+      "draft": "reduction-draft.json",
+      "name": "reduction",
+      "recovery": "reduction-recovered.json",
+      "request_json": {
+        "request_id": "8335e8e3-c61e-45b6-99c6-e0b6a4f684b7",
+        "revision": 14
+      }
+    },
+    {
+      "capture": "reduction-half-journal-capture.json",
+      "draft": "reduction-half-journal-draft.json",
+      "name": "reduction-half-journal",
+      "recovery": "reduction-half-journal-recovered.json",
+      "request_json": {
+        "request_id": "995e76cd-acbd-4a36-9499-9f384fca84af",
+        "revision": 14
+      }
+    }
+  ],
+  "schema": "report-evidence-native-public-api-fixtures-v1"
+}

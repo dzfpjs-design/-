@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {learnedPairKey,emptyLearnedPair,readLearnedPair,learnedPairBody} from '../src/learned-pair-form.mjs';
+const catalog={model_recipe_hash:'f'.repeat(64),pipeline_hash:'e'.repeat(64)};
+const model={id:'installed-model',generation:3,status:'ready',recipe_hash:catalog.model_recipe_hash,pipeline_hash:catalog.pipeline_hash};
+const scenes=['a','b'].map(id=>({id,input_sha256:id,version:7,status:'ready',configuration:{map_image_confirmed:true,window:[10,20,200,200]},metadata:{width:300,height:300}}));
+const form=()=>({...emptyLearnedPair(),before:'a',after:'b',roi:['10','20','150','180'],confirmed:true});
+test('freeze actual installation and independent probability threshold',()=>{const r=learnedPairBody(form(),scenes,model,catalog,()=> 'saved-request-id');assert.equal(r.model_generation,3);assert.equal(r.probability_threshold,.5);assert.equal(r.model_recipe_hash,model.recipe_hash);assert.deepEqual(r.roi,[10,20,150,180]);assert.equal(r.before_version,7);assert.equal(r.threshold,undefined);});
+test('recovery round-trip preserves the exact request without replacing nonce',()=>{const value={...form(),pending:learnedPairBody(form(),scenes,model,catalog,()=> 'saved-request-id')};const storage={getItem:()=>JSON.stringify(value)};assert.deepEqual(readLearnedPair(storage,learnedPairKey('work','user')),value);assert.notEqual(learnedPairKey('work','user'),learnedPairKey('other','user'));});
+test('out-of-scope, stale model, unconfirmed and bad probabilities cannot submit',()=>{for(const update of [{roi:['0','20','150','180']},{roi:['10','20','30','40']},{after:'a'},{confirmed:false},{threshold:''},{threshold:'NaN'},{threshold:'1'}])assert.throws(()=>learnedPairBody({...form(),...update},scenes,model,catalog,()=> 'saved-request-id'));assert.throws(()=>learnedPairBody(form(),scenes,{...model,recipe_hash:'old'},catalog,()=> 'saved-request-id'));});
+test('corrupt or blocked draft storage is not silently reset',()=>{for(const storage of [{getItem:()=>'{bad'}, {getItem:()=>JSON.stringify({...form(),pending:{request_id:'broken'}})}, {getItem:()=>{throw Error('blocked')}}])assert.throws(()=>readLearnedPair(storage,'key'));});

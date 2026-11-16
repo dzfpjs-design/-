@@ -1,0 +1,22 @@
+{
+  "contract_version": "1.0",
+  "namespace": "inspection",
+  "name": "qwen",
+  "version": "1.0.0",
+  "owner": "平台操作者",
+  "description": "Qwen云端推理（需配置凭证）",
+  "kind": "foundation_model",
+  "execution": {
+    "provider": "qwen",
+    "model": "qwen-plus",
+    "secret_ref": "DASHSCOPE_API_KEY",
+    "max_tokens": 2048
+  },
+  "data_policy": {
+    "cloud_allowed": true,
+    "redact_fields": [
+      "contact",
+      "location"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {initialWorkspace} from '../src/catalog.js';
+import {defaults} from '../src/automation-schema.js';
+import {reviewConfiguration,makeConfigurationDraft,sourceSignature,readGenerationHistory,deriveDataPlan} from '../src/review-schema.js';
+function fixture(){const w=initialWorkspace();w.businesses=['自定义业务'];w.instanceProfile={name:'对象管理',domain:'业务领域'};return {w,a:defaults(w.businesses)};}
+test('检查使用共享业务与已选资源，未使用候选可后续完善',()=>{const {w,a}=fixture();a.policies['自定义业务'].rules.observe.resources=['docs-0'];const r=reviewConfiguration(w,a);assert.deepEqual(r.names,['自定义业务']);assert.equal(r.resources.length,1);assert.ok(r.optional.length);assert.ok(r.required.some(x=>x.details.some(s=>s.includes('尚未验证接入'))));assert.ok(r.required.some(x=>x.id==='workflow-自定义业务'));});
+test('生成允许带缺口的草案，不成为已启用实例，并保存所选规则',()=>{const {w,a}=fixture();a.policies['自定义业务'].time='11:15';const d=makeConfigurationDraft(w,a,[],'2026-10-07T01:00:00Z','draft-1');assert.equal(d.status,'draft');assert.equal(d.version,1);assert.ok(d.pending.length);assert.equal(d.source.automation.policies['自定义业务'].time,'11:15');assert.equal(readGenerationHistory([d])[0].id,'draft-1');assert.throws(()=>makeConfigurationDraft({...w,businesses:[]},a),/业务清单/);assert.throws(()=>makeConfigurationDraft({...w,instanceProfile:{}},a),/实例名称/);});
+test('配置修改标记版本过期，保存时间和页面选择不造成过期',()=>{const {w,a}=fixture();const signature=sourceSignature(w,a);assert.equal(sourceSignature({...w,savedAt:'later',selection:{category:'models'}},{...a,savedAt:'later'}),signature);a.policies['自定义业务'].time='12:30';assert.notEqual(sourceSignature(w,a),signature);});
+test('快照过滤凭证、版本连续、异常存储不静默变空覆盖',()=>{const {w,a}=fixture();w.instanceProfile.goal='password=abcdefghijk';const d=makeConfigurationDraft(w,a,[{version:3}],'now','id');assert.equal(d.version,4);assert.ok(!JSON.stringify(d).includes('abcdefghijk'));assert.throws(()=>readGenerationHistory({bad:true}),/无法读取/);});
+
+test('专业识别模型不能替代云端语言模型，历史版本不自动截断',()=>{const {w,a}=fixture();const model=w.resources.find(r=>r.name.includes('病虫害'));model.status='added';model.caps=['对象识别'];model.checks={'对象识别':'passed'};w.connections.find(c=>c.id===model.connection).status='verified';assert.ok(reviewConfiguration(w,a).required.some(x=>x.id==='models'));const versions=Array.from({length:6},(_,i)=>makeConfigurationDraft(w,a,[],String(i),String(i)));assert.equal(readGenerationHistory(versions).length,6);assert.throws(()=>readGenerationHistory([{}]),/格式不完整/);});
+
+test('数据管理建议由实际来源派生，控制接口不冒充视频来源',()=>{const rows=deriveDataPlan(['A'],[{category:'docs'},{category:'control'}]);assert.ok(rows.some(r=>r.name==='文档及提取的信息'));assert.ok(rows.some(r=>r.name==='设备任务与执行结果'));assert.ok(!rows.some(r=>r.name==='视频片段与关键画面'));assert.deepEqual(deriveDataPlan([],[]),[]);});

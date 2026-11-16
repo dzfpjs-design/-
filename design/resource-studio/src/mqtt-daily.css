@@ -1,0 +1,18 @@
+.mqtt-daily{border:1px solid #dce7f4;background:#fff;padding:16px;border-radius:12px;margin:16px 0;min-width:0}
+.mqtt-daily-toolbar{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:12px 0}
+.mqtt-daily-toolbar label{flex:1 1 220px;display:grid;gap:6px;min-width:0}
+.mqtt-daily-toolbar select,.mqtt-daily-toolbar input{width:100%;min-width:0}
+.mqtt-daily-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:12px 0}
+.mqtt-daily-counts button{display:grid;text-align:left;gap:4px;border:1px solid #cddff5;border-radius:8px;padding:10px;background:#f7faff;color:#173154;cursor:pointer}
+.mqtt-daily-counts strong{font-size:22px;color:#1756ba}
+.mqtt-daily-counts button:disabled{cursor:default;opacity:.7}
+.mqtt-daily-list{display:grid;gap:10px}
+.mqtt-daily-record{border:1px solid #dbe5f3;border-radius:8px;padding:12px;overflow-wrap:anywhere;min-width:0}
+.mqtt-daily-record p,.mqtt-daily .info p{margin:7px 0}
+.mqtt-daily-export{padding:12px;background:#f7faff;border:1px solid #dce7f4;border-radius:8px;margin-top:16px;overflow-wrap:anywhere}
+.mqtt-daily .actions{display:flex;flex-wrap:wrap;gap:8px}
+.mqtt-daily .mqtt-hash{overflow-wrap:anywhere}
+.mqtt-daily-confirm{margin-top:12px;padding:12px;border:1px solid #d6a844;border-radius:8px;background:#fffaf0;overflow-wrap:anywhere}
+.mqtt-daily-file-link,.mqtt-daily-link-wait{margin-top:12px;padding:12px;border:1px solid #cddff5;border-radius:8px;background:#f2f7ff;overflow-wrap:anywhere}
+.mqtt-daily-file-link a{display:inline-flex;white-space:normal;max-width:100%;box-sizing:border-box;text-decoration:none}
+@media(max-width:650px){.mqtt-daily{padding:12px}.mqtt-daily-counts{grid-template-columns:repeat(2,minmax(0,1fr))}.mqtt-daily-toolbar label{flex-basis:100%}.mqtt-daily .actions .btn{flex:1 1 140px}}

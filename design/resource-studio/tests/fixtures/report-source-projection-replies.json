@@ -1,0 +1,926 @@
+{
+  "synthetic_only": true,
+  "real_ocr_or_runtime_proof": false,
+  "adapter_scope": "in-memory material byte/full-confirmation adapters; real checked_provenance and production DTO helpers",
+  "handoff": {
+    "schema": "report-configuration-handoff-v1",
+    "id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+    "actor_id": "951f63f5-b59a-43c5-a0b3-6b858b234278",
+    "workspace_id": "73468f3d-a5ff-4d03-aaf9-b86310291fe6",
+    "report_id": "5b31db6f-34d2-43e1-989f-e3bae3e56510",
+    "configuration_id": "987a32b4-bf72-4db4-8db0-770d13226bfe",
+    "request_id": "643e3698-54ae-4f3f-9519-0839db1b3baa",
+    "command_hash": "30eee1c3d05e2de26763fdfc44efc3d4da518a6614ca77ae2c2fb25ff1e9605c",
+    "preview_hash": "4b95424ccd9646ddee53f427eca1514f93e7deeaa4c9a649f625b1837effa046",
+    "raw_hash": "fd860254a258dd2c6de9d7f833dfe8cc7014a02dbe417199f253b1b5486a4c99",
+    "source_hash": "8a6cd24df031a34d532666aa6ae942ee2099f286bfc425b3052a2fd474be77a1",
+    "candidate_hash": "3a831d8e55e9cec59f29effd391f11defc31ab5ba5fa68c91b82266d3a88b9b7",
+    "review_value_hash": "843ee1cbe79eaf33fdc60094fd15adfb108023ca79555e29948c2c79926556ea",
+    "selection": [
+      {
+        "candidate_index": 0,
+        "business": {
+          "operation": "upsert",
+          "original_name": "",
+          "name": "正文核对",
+          "trigger": "收到正文",
+          "output": "核对记录",
+          "citations": [
+            {
+              "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+              "block_id": "p1",
+              "quote": "中文正文"
+            }
+          ],
+          "inference_reason": "",
+          "steps": [
+            {
+              "key": "review",
+              "name": "核对正文",
+              "purpose": "核对文字内容",
+              "agent": "人工确认",
+              "role": "核对人员",
+              "output": "核对结论",
+              "next_key": "end",
+              "condition": "",
+              "else_key": "end",
+              "citations": [
+                {
+                  "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                  "block_id": "p1",
+                  "quote": "中文正文"
+                }
+              ],
+              "inference_reason": ""
+            }
+          ]
+        },
+        "original_business": {
+          "operation": "upsert",
+          "original_name": "",
+          "name": "正文核对",
+          "trigger": "收到正文",
+          "output": "核对记录",
+          "citations": [
+            {
+              "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+              "block_id": "p1",
+              "quote": "中文正文"
+            }
+          ],
+          "inference_reason": "",
+          "steps": [
+            {
+              "key": "review",
+              "name": "核对正文",
+              "purpose": "核对文字内容",
+              "agent": "人工确认",
+              "role": "核对人员",
+              "output": "核对结论",
+              "next_key": "end",
+              "condition": "",
+              "else_key": "end",
+              "citations": [
+                {
+                  "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                  "block_id": "p1",
+                  "quote": "中文正文"
+                }
+              ],
+              "inference_reason": ""
+            }
+          ]
+        },
+        "modified_paths": [],
+        "source_refs": [
+          {
+            "scope": "current",
+            "path": "/business/citations/0",
+            "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+            "version": 3,
+            "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+            "reading_hash": "11b5599a5c3b71aebee9c52b612da0f19f7136d0954bb2f9ad1d040fe2391140",
+            "block_id": "p1",
+            "location": {
+              "view": "accepted_final_v1",
+              "body_index": 1,
+              "paragraph_index": 1
+            },
+            "quote": "中文正文"
+          },
+          {
+            "scope": "current",
+            "path": "/steps/0/citations/0",
+            "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+            "version": 3,
+            "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+            "reading_hash": "11b5599a5c3b71aebee9c52b612da0f19f7136d0954bb2f9ad1d040fe2391140",
+            "block_id": "p1",
+            "location": {
+              "view": "accepted_final_v1",
+              "body_index": 1,
+              "paragraph_index": 1
+            },
+            "quote": "中文正文"
+          },
+          {
+            "scope": "original",
+            "path": "/business/citations/0",
+            "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+            "version": 3,
+            "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+            "reading_hash": "11b5599a5c3b71aebee9c52b612da0f19f7136d0954bb2f9ad1d040fe2391140",
+            "block_id": "p1",
+            "location": {
+              "view": "accepted_final_v1",
+              "body_index": 1,
+              "paragraph_index": 1
+            },
+            "quote": "中文正文"
+          },
+          {
+            "scope": "original",
+            "path": "/steps/0/citations/0",
+            "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+            "version": 3,
+            "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+            "reading_hash": "11b5599a5c3b71aebee9c52b612da0f19f7136d0954bb2f9ad1d040fe2391140",
+            "block_id": "p1",
+            "location": {
+              "view": "accepted_final_v1",
+              "body_index": 1,
+              "paragraph_index": 1
+            },
+            "quote": "中文正文"
+          }
+        ],
+        "control_flow_unverified": true,
+        "flow": {
+          "trigger": "收到正文",
+          "output": "核对记录",
+          "steps": [
+            {
+              "id": "87dc4c73-6413-5b6e-b712-2d5f52eb64f2",
+              "name": "核对正文",
+              "purpose": "核对文字内容",
+              "agent": "人工确认",
+              "role": "核对人员",
+              "output": "核对结论",
+              "condition": "",
+              "nextId": "end",
+              "elseId": "end",
+              "sourceId": "e301055f-8994-4300-838b-c28c55d7651c",
+              "citation": "p1：中文正文",
+              "citations": [
+                {
+                  "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                  "block_id": "p1",
+                  "quote": "中文正文"
+                }
+              ],
+              "inferenceReason": ""
+            }
+          ],
+          "citations": [
+            {
+              "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+              "block_id": "p1",
+              "quote": "中文正文"
+            }
+          ],
+          "inferenceReason": "",
+          "confirmedAt": null,
+          "confirmedSignature": null,
+          "reportSource": {
+            "handoff_id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+            "candidate_index": 0
+          }
+        }
+      }
+    ],
+    "materials": [
+      {
+        "id": "e301055f-8994-4300-838b-c28c55d7651c",
+        "name": "原件.docx",
+        "version": 3,
+        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6"
+      }
+    ],
+    "accepted_revision": 3,
+    "configuration_hash": "011d534cd000e043af7a6271d7493beb05d09c49db1ee1343f6a4de9741b0834",
+    "record_hash": "fd13829e2093645b98d2b87231af796925395918ff3e497d5327828064d69875"
+  },
+  "configuration_before": {
+    "version": 1,
+    "resources": [],
+    "connections": [],
+    "businesses": [
+      "正文核对"
+    ],
+    "flows": {
+      "正文核对": {
+        "trigger": "收到正文",
+        "output": "核对记录",
+        "steps": [
+          {
+            "id": "87dc4c73-6413-5b6e-b712-2d5f52eb64f2",
+            "name": "核对正文",
+            "purpose": "核对文字内容",
+            "agent": "人工确认",
+            "role": "核对人员",
+            "output": "核对结论",
+            "condition": "",
+            "nextId": "end",
+            "elseId": "end",
+            "sourceId": "e301055f-8994-4300-838b-c28c55d7651c",
+            "citation": "p1：中文正文",
+            "citations": [
+              {
+                "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                "block_id": "p1",
+                "quote": "中文正文"
+              }
+            ],
+            "inferenceReason": ""
+          }
+        ],
+        "citations": [
+          {
+            "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+            "block_id": "p1",
+            "quote": "中文正文"
+          }
+        ],
+        "inferenceReason": "",
+        "confirmedAt": null,
+        "confirmedSignature": null,
+        "reportSource": {
+          "handoff_id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+          "candidate_index": 0
+        }
+      }
+    },
+    "instanceProfile": {},
+    "materials": [
+      {
+        "id": "e301055f-8994-4300-838b-c28c55d7651c",
+        "name": "原件.docx",
+        "version": 3,
+        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+        "archived": false
+      }
+    ]
+  },
+  "options_ready": {
+    "schema": "report-source-projection-options-v1",
+    "workspace_id": "73468f3d-a5ff-4d03-aaf9-b86310291fe6",
+    "handoff_id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+    "candidate_index": 0,
+    "options": [
+      {
+        "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+        "source_ref": {
+          "id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "version": 3,
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "source_name": "原件.docx",
+        "copy_ref": {
+          "id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "version": 7,
+          "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "copy_name": "最终修订.pdf",
+        "provenance_hash": "5f7e777ba3e8f669370dc43df2026a0ee79a2beb3c055e343e17ca49693e998a",
+        "ready": true,
+        "reason_code": null,
+        "reason": null,
+        "page_count": 1,
+        "confirmed_pages": 1
+      }
+    ],
+    "options_hash": "6830418a7d8a892a0eb8cd69f074fd4e94ecc2280954dd483cdc08994d174185"
+  },
+  "options_pending": {
+    "schema": "report-source-projection-options-v1",
+    "workspace_id": "73468f3d-a5ff-4d03-aaf9-b86310291fe6",
+    "handoff_id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+    "candidate_index": 0,
+    "options": [
+      {
+        "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+        "source_ref": {
+          "id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "version": 3,
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "source_name": "原件.docx",
+        "copy_ref": {
+          "id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "version": 7,
+          "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "copy_name": "最终修订.pdf",
+        "provenance_hash": "5f7e777ba3e8f669370dc43df2026a0ee79a2beb3c055e343e17ca49693e998a",
+        "ready": false,
+        "reason_code": "projection_coverage_pending",
+        "reason": "副本尚未完成全部页面核对和整篇确认，请先保存并确认每个必要页面",
+        "page_count": 1,
+        "confirmed_pages": 0
+      }
+    ],
+    "options_hash": "429b6d2c7671c98cc30394a57221da6fe070e9302067e63dc04af69134dc7fc0"
+  },
+  "projected_command": {
+    "request_id": "dbf411a5-1f31-43c0-b808-7a6cdb0dd805",
+    "configuration_revision": 3,
+    "configuration_hash": "011d534cd000e043af7a6271d7493beb05d09c49db1ee1343f6a4de9741b0834",
+    "candidate_index": 0,
+    "fact_hash": "2d5707bcddcf909168a4a57ef55ecb8a3538696c72ce5e67d605cd3547f41526",
+    "material_refs": [
+      {
+        "id": "e301055f-8994-4300-838b-c28c55d7651c",
+        "version": 3,
+        "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "consent": true,
+    "review_mode": "confirmed_final_view_v1",
+    "projection_refs": [
+      {
+        "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+        "copy_ref": {
+          "id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "version": 7,
+          "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "provenance_hash": "5f7e777ba3e8f669370dc43df2026a0ee79a2beb3c055e343e17ca49693e998a"
+      }
+    ],
+    "final_view_confirmed": true
+  },
+  "projected_reply": {
+    "receipt": {
+      "schema": "report-configuration-receipt-v1",
+      "kind": "source_review",
+      "actor_id": "951f63f5-b59a-43c5-a0b3-6b858b234278",
+      "workspace_id": "73468f3d-a5ff-4d03-aaf9-b86310291fe6",
+      "report_id": "5b31db6f-34d2-43e1-989f-e3bae3e56510",
+      "handoff_id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+      "request_id": "dbf411a5-1f31-43c0-b808-7a6cdb0dd805",
+      "command_hash": "60bed6b0c6f63915678a9c6490d21bbf94c003ee9297b84b93038a79f8e1176e",
+      "preview_hash": null,
+      "accepted_revision": 4,
+      "configuration_hash": "e2c95f19ac9fd21c4876210fb963b4c3a7eb5892d593b0c2c1b2f7d24e7a247a",
+      "record_hash": "f417e51968102bef0ca687f3cb6947d31bf83194f4ab9d5aa255090717642f4f",
+      "source_review_id": "0dcd332d-ea26-4595-869e-854652a2fe38",
+      "receipt_hash": "a6fe7492d027690c654f911dcfb28d2e2f0f39131cd94844e0e22bf8f7f8d777"
+    },
+    "configuration": {
+      "id": "987a32b4-bf72-4db4-8db0-770d13226bfe",
+      "revision": 4,
+      "configuration": {
+        "version": 1,
+        "resources": [],
+        "connections": [],
+        "businesses": [
+          "正文核对"
+        ],
+        "flows": {
+          "正文核对": {
+            "trigger": "收到正文",
+            "output": "核对记录",
+            "steps": [
+              {
+                "id": "87dc4c73-6413-5b6e-b712-2d5f52eb64f2",
+                "name": "核对正文",
+                "purpose": "核对文字内容",
+                "agent": "人工确认",
+                "role": "核对人员",
+                "output": "核对结论",
+                "condition": "",
+                "nextId": "end",
+                "elseId": "end",
+                "sourceId": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+                "citation": "ocr-confirmed-1：中文正文",
+                "citations": [
+                  {
+                    "material_id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+                    "block_id": "ocr-confirmed-1",
+                    "quote": "中文正文"
+                  }
+                ],
+                "inferenceReason": ""
+              }
+            ],
+            "citations": [
+              {
+                "material_id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+                "block_id": "ocr-confirmed-1",
+                "quote": "中文正文"
+              }
+            ],
+            "inferenceReason": "",
+            "confirmedAt": null,
+            "confirmedSignature": null,
+            "reportSource": {
+              "handoff_id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+              "candidate_index": 0,
+              "source_review_id": "0dcd332d-ea26-4595-869e-854652a2fe38"
+            }
+          }
+        },
+        "instanceProfile": {},
+        "materials": [
+          {
+            "id": "e301055f-8994-4300-838b-c28c55d7651c",
+            "name": "原件.docx",
+            "version": 3,
+            "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+            "archived": false
+          },
+          {
+            "id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+            "name": "最终修订.pdf",
+            "version": 7,
+            "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "evidence_id": "1c2b85cd-7706-4925-991a-b1a371a27c2a",
+            "archived": false,
+            "status": "parsed"
+          }
+        ]
+      },
+      "understanding": {
+        "status": "available",
+        "reason": "选择已发布云模型并核对发送内容后生成待确认建议"
+      },
+      "automation_review": {
+        "version": 1,
+        "businesses": [
+          {
+            "business_id": "business_d92d8424896e712c",
+            "business_name": "正文核对",
+            "flow_hash": "8f748400598bf21ef8c6f688173a49d380a5acc8ae4a0017d1a90cd0826f46a2",
+            "policy_hash": null,
+            "status": "missing",
+            "reason": "尚未保存此业务的自动化范围，请回第4步配置。"
+          }
+        ]
+      }
+    },
+    "current_matches": true,
+    "source_review": {
+      "schema": "report-configuration-source-review-v1",
+      "id": "0dcd332d-ea26-4595-869e-854652a2fe38",
+      "actor_id": "951f63f5-b59a-43c5-a0b3-6b858b234278",
+      "workspace_id": "73468f3d-a5ff-4d03-aaf9-b86310291fe6",
+      "report_id": "5b31db6f-34d2-43e1-989f-e3bae3e56510",
+      "configuration_id": "987a32b4-bf72-4db4-8db0-770d13226bfe",
+      "handoff_id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+      "source_hash": "8a6cd24df031a34d532666aa6ae942ee2099f286bfc425b3052a2fd474be77a1",
+      "candidate_index": 0,
+      "request_id": "dbf411a5-1f31-43c0-b808-7a6cdb0dd805",
+      "command_hash": "60bed6b0c6f63915678a9c6490d21bbf94c003ee9297b84b93038a79f8e1176e",
+      "fact_hash": "2d5707bcddcf909168a4a57ef55ecb8a3538696c72ce5e67d605cd3547f41526",
+      "basis_hash": "1fb5ca927959077f89e56c848e431489c86e69c9cfc6a8cf0dfedefd845b7e1e",
+      "material_refs": [
+        {
+          "id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "version": 3,
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "materials": [
+        {
+          "role": "origin",
+          "id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "name": "原件.docx",
+          "version": 3,
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6"
+        },
+        {
+          "id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "version": 7,
+          "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "evidence_id": "1c2b85cd-7706-4925-991a-b1a371a27c2a",
+          "blocks_hash": "a0f07602123e9cb191d3e05f4aac71cf4a26b751808e1d0df0e2e62352f90c63",
+          "coverage_hash": "4f3c8933a2930c220b6126cf624d88dacb9cf43a27e086533473afd76a4fbfc8",
+          "confirmation_id": "6120e488-5920-4cb3-b603-b9deee5475f0",
+          "name": "最终修订.pdf",
+          "role": "confirmed_view",
+          "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "provenance_hash": "5f7e777ba3e8f669370dc43df2026a0ee79a2beb3c055e343e17ca49693e998a",
+          "conversion_receipt_hash": "d9ef4d210f59a5aad8743e093714c10f31ce11fc1316dc847ef246b269b5f6d4",
+          "engine_manifest_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "confirmation_hash": "bc51ddd0f4b65b0366f3353e23b9c45d34716e803283e963a7ac44cbf084d967",
+          "page_count": 1,
+          "confirmed_pages": 1
+        }
+      ],
+      "projection": {
+        "schema": "report-source-projection-v1",
+        "review_mode": "confirmed_final_view_v1",
+        "final_view_confirmed": true,
+        "projection_refs": [
+          {
+            "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+            "copy_ref": {
+              "id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+              "version": 7,
+              "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "provenance_hash": "5f7e777ba3e8f669370dc43df2026a0ee79a2beb3c055e343e17ca49693e998a"
+          }
+        ]
+      },
+      "mapping_basis": {
+        "business": {
+          "sourceId": null,
+          "citation": null,
+          "citations": [
+            {
+              "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+              "block_id": "p1",
+              "quote": "中文正文"
+            }
+          ],
+          "inferenceReason": ""
+        },
+        "steps": [
+          {
+            "id": "87dc4c73-6413-5b6e-b712-2d5f52eb64f2",
+            "sourceId": "e301055f-8994-4300-838b-c28c55d7651c",
+            "citation": "p1：中文正文",
+            "citations": [
+              {
+                "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                "block_id": "p1",
+                "quote": "中文正文"
+              }
+            ],
+            "inferenceReason": ""
+          }
+        ]
+      },
+      "mappings": [
+        {
+          "scope": "current",
+          "path": "/business/citations/0",
+          "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "target_block_id": "ocr-confirmed-1",
+          "target_location": {
+            "page": 1,
+            "ocr": {
+              "confirmation_id": "6120e488-5920-4cb3-b603-b9deee5475f0"
+            }
+          },
+          "quote": "中文正文"
+        },
+        {
+          "scope": "current",
+          "path": "/steps/0/citations/0",
+          "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "target_block_id": "ocr-confirmed-1",
+          "target_location": {
+            "page": 1,
+            "ocr": {
+              "confirmation_id": "6120e488-5920-4cb3-b603-b9deee5475f0"
+            }
+          },
+          "quote": "中文正文"
+        },
+        {
+          "scope": "original",
+          "path": "/business/citations/0",
+          "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "target_block_id": "ocr-confirmed-1",
+          "target_location": {
+            "page": 1,
+            "ocr": {
+              "confirmation_id": "6120e488-5920-4cb3-b603-b9deee5475f0"
+            }
+          },
+          "quote": "中文正文"
+        },
+        {
+          "scope": "original",
+          "path": "/steps/0/citations/0",
+          "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "target_block_id": "ocr-confirmed-1",
+          "target_location": {
+            "page": 1,
+            "ocr": {
+              "confirmation_id": "6120e488-5920-4cb3-b603-b9deee5475f0"
+            }
+          },
+          "quote": "中文正文"
+        },
+        {
+          "scope": "current_flow",
+          "path": "/business/citations/0",
+          "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "target_block_id": "ocr-confirmed-1",
+          "target_location": {
+            "page": 1,
+            "ocr": {
+              "confirmation_id": "6120e488-5920-4cb3-b603-b9deee5475f0"
+            }
+          },
+          "quote": "中文正文"
+        },
+        {
+          "scope": "current_flow",
+          "path": "/steps/0/citations/0",
+          "source_material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "source_block_id": "p1",
+          "source_location": {
+            "view": "accepted_final_v1",
+            "body_index": 1,
+            "paragraph_index": 1
+          },
+          "formal_material_id": "05ec4ba3-988d-45f1-8d3a-a15f5cc2c0ce",
+          "target_block_id": "ocr-confirmed-1",
+          "target_location": {
+            "page": 1,
+            "ocr": {
+              "confirmation_id": "6120e488-5920-4cb3-b603-b9deee5475f0"
+            }
+          },
+          "quote": "中文正文"
+        }
+      ],
+      "accepted_revision": 4,
+      "configuration_hash": "e2c95f19ac9fd21c4876210fb963b4c3a7eb5892d593b0c2c1b2f7d24e7a247a",
+      "record_hash": "f417e51968102bef0ca687f3cb6947d31bf83194f4ab9d5aa255090717642f4f"
+    }
+  },
+  "shared_verified": {
+    "handoff": {
+      "schema": "report-configuration-handoff-v1",
+      "id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+      "actor_id": "951f63f5-b59a-43c5-a0b3-6b858b234278",
+      "workspace_id": "73468f3d-a5ff-4d03-aaf9-b86310291fe6",
+      "report_id": "5b31db6f-34d2-43e1-989f-e3bae3e56510",
+      "configuration_id": "987a32b4-bf72-4db4-8db0-770d13226bfe",
+      "request_id": "643e3698-54ae-4f3f-9519-0839db1b3baa",
+      "command_hash": "30eee1c3d05e2de26763fdfc44efc3d4da518a6614ca77ae2c2fb25ff1e9605c",
+      "preview_hash": "4b95424ccd9646ddee53f427eca1514f93e7deeaa4c9a649f625b1837effa046",
+      "raw_hash": "fd860254a258dd2c6de9d7f833dfe8cc7014a02dbe417199f253b1b5486a4c99",
+      "source_hash": "8a6cd24df031a34d532666aa6ae942ee2099f286bfc425b3052a2fd474be77a1",
+      "candidate_hash": "3a831d8e55e9cec59f29effd391f11defc31ab5ba5fa68c91b82266d3a88b9b7",
+      "review_value_hash": "843ee1cbe79eaf33fdc60094fd15adfb108023ca79555e29948c2c79926556ea",
+      "selection": [
+        {
+          "candidate_index": 0,
+          "business": {
+            "operation": "upsert",
+            "original_name": "",
+            "name": "正文核对",
+            "trigger": "收到正文",
+            "output": "核对记录",
+            "citations": [
+              {
+                "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                "block_id": "p1",
+                "quote": "中文正文"
+              }
+            ],
+            "inference_reason": "",
+            "steps": [
+              {
+                "key": "review",
+                "name": "核对正文",
+                "purpose": "核对文字内容",
+                "agent": "人工确认",
+                "role": "核对人员",
+                "output": "核对结论",
+                "next_key": "end",
+                "condition": "",
+                "else_key": "end",
+                "citations": [
+                  {
+                    "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                    "block_id": "p1",
+                    "quote": "中文正文"
+                  }
+                ],
+                "inference_reason": ""
+              }
+            ]
+          },
+          "original_business": {
+            "operation": "upsert",
+            "original_name": "",
+            "name": "正文核对",
+            "trigger": "收到正文",
+            "output": "核对记录",
+            "citations": [
+              {
+                "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                "block_id": "p1",
+                "quote": "中文正文"
+              }
+            ],
+            "inference_reason": "",
+            "steps": [
+              {
+                "key": "review",
+                "name": "核对正文",
+                "purpose": "核对文字内容",
+                "agent": "人工确认",
+                "role": "核对人员",
+                "output": "核对结论",
+                "next_key": "end",
+                "condition": "",
+                "else_key": "end",
+                "citations": [
+                  {
+                    "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                    "block_id": "p1",
+                    "quote": "中文正文"
+                  }
+                ],
+                "inference_reason": ""
+              }
+            ]
+          },
+          "modified_paths": [],
+          "source_refs": [
+            {
+              "scope": "current",
+              "path": "/business/citations/0",
+              "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+              "version": 3,
+              "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+              "reading_hash": "11b5599a5c3b71aebee9c52b612da0f19f7136d0954bb2f9ad1d040fe2391140",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "中文正文"
+            },
+            {
+              "scope": "current",
+              "path": "/steps/0/citations/0",
+              "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+              "version": 3,
+              "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+              "reading_hash": "11b5599a5c3b71aebee9c52b612da0f19f7136d0954bb2f9ad1d040fe2391140",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "中文正文"
+            },
+            {
+              "scope": "original",
+              "path": "/business/citations/0",
+              "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+              "version": 3,
+              "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+              "reading_hash": "11b5599a5c3b71aebee9c52b612da0f19f7136d0954bb2f9ad1d040fe2391140",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "中文正文"
+            },
+            {
+              "scope": "original",
+              "path": "/steps/0/citations/0",
+              "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+              "version": 3,
+              "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6",
+              "reading_hash": "11b5599a5c3b71aebee9c52b612da0f19f7136d0954bb2f9ad1d040fe2391140",
+              "block_id": "p1",
+              "location": {
+                "view": "accepted_final_v1",
+                "body_index": 1,
+                "paragraph_index": 1
+              },
+              "quote": "中文正文"
+            }
+          ],
+          "control_flow_unverified": true,
+          "flow": {
+            "trigger": "收到正文",
+            "output": "核对记录",
+            "steps": [
+              {
+                "id": "87dc4c73-6413-5b6e-b712-2d5f52eb64f2",
+                "name": "核对正文",
+                "purpose": "核对文字内容",
+                "agent": "人工确认",
+                "role": "核对人员",
+                "output": "核对结论",
+                "condition": "",
+                "nextId": "end",
+                "elseId": "end",
+                "sourceId": "e301055f-8994-4300-838b-c28c55d7651c",
+                "citation": "p1：中文正文",
+                "citations": [
+                  {
+                    "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                    "block_id": "p1",
+                    "quote": "中文正文"
+                  }
+                ],
+                "inferenceReason": ""
+              }
+            ],
+            "citations": [
+              {
+                "material_id": "e301055f-8994-4300-838b-c28c55d7651c",
+                "block_id": "p1",
+                "quote": "中文正文"
+              }
+            ],
+            "inferenceReason": "",
+            "confirmedAt": null,
+            "confirmedSignature": null,
+            "reportSource": {
+              "handoff_id": "46381143-0961-48ed-97a6-1c01c6761aa5",
+              "candidate_index": 0
+            }
+          }
+        }
+      ],
+      "materials": [
+        {
+          "id": "e301055f-8994-4300-838b-c28c55d7651c",
+          "name": "原件.docx",
+          "version": 3,
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidence_id": "1b8a6dc7-2386-4ec6-bb7f-5e6ae7d483c6"
+        }
+      ],
+      "accepted_revision": 3,
+      "configuration_hash": "011d534cd000e043af7a6271d7493beb05d09c49db1ee1343f6a4de9741b0834",
+      "record_hash": "fd13829e2093645b98d2b87231af796925395918ff3e497d5327828064d69875"
+    },
+    "receipt_hash": "5f46882f6c6e7e4c1f9bfdac627be5076fb2a0f6b51b9fbd251276ef0adf7b42",
+    "source_states": [
+      {
+        "candidate_index": 0,
+        "flow_name": "正文核对",
+        "fact_hash": "2d5707bcddcf909168a4a57ef55ecb8a3538696c72ce5e67d605cd3547f41526",
+        "source_review_id": "0dcd332d-ea26-4595-869e-854652a2fe38",
+        "verified": true,
+        "issues": []
+      }
+    ]
+  }
+}

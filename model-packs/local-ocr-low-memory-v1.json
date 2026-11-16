@@ -1,0 +1,21 @@
+{
+  "pack_id": "local-ocr-low-memory-v1",
+  "version": "1.0.0",
+  "title": "RapidOCR 本地低内存逐条识别",
+  "engine_id": "rapidocr-3.10.0-ppocrv6-small-cpu-m49-low-memory-v1",
+  "install_manifest_sha256": "3a11f677a07ca36d3a767379b00546aa41c1c47f2dc659b80344872e7c10d13f",
+  "install_manifest_path": ".runtime/ocr-m49-low-memory-v1/manifest.json",
+  "shared_private_venv": "venvs/ocr-m49",
+  "parameters": {"Rec.rec_batch_num": 1, "Cls.cls_batch_num": 1},
+  "default_deployment": "local",
+  "default_backend": "cpu",
+  "cloud_fallback": false,
+  "remote_code": false,
+  "data_policy": {"deployment": "local", "cloud_allowed": false, "external_allowed": false},
+  "network_isolation": "macOS sandbox-exec deny network*; new base and shared private venv read-only; unavailable isolation blocks execution",
+  "limits": {"source_bytes": 52428800, "image_pixels": 24000000, "pdf_pages": 500, "pdf_dpi": 200, "timeout_seconds": 90, "cpu_seconds": 60, "resident_memory_bytes": 1073741824, "result_bytes": 2097152},
+  "registration_boundary": "Source-owned fixed profile; no arbitrary runtime, manifest, model or interpreter registration and no automatic profile replacement of existing OCR authorizations.",
+  "compatibility": "Default m49 remains unchanged. Profile selection is per operation by a known frozen manifest; legacy rendering and new recognition can coexist.",
+  "qualification": "Single original page9 probe on the same stored PNG stayed below the unchanged observed 1GiB boundary; this is neither an accuracy result nor a whole-report/product-integration guarantee.",
+  "license": "Same pinned model/code/notices as the private m49 runtime; no model or interpreter bytes changed by this profile."
+}

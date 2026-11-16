@@ -1,0 +1,14 @@
+.mqtt-associations .association-toolbar,.mqtt-associations .association-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.mqtt-associations .association-toolbar select{min-width:240px;max-width:100%}
+.mqtt-association-list{display:grid;gap:12px;margin:12px 0}
+.mqtt-association-card{border:1px solid #dbe5f3;border-radius:10px;padding:14px;background:#fff;min-width:0}
+.mqtt-association-card.active{border-color:#2563eb;background:#f8fbff}
+.mqtt-association-card p{overflow-wrap:anywhere;margin:8px 0}
+.mqtt-association-card .actions{display:flex;flex-wrap:wrap;gap:8px}
+.mqtt-association-editor{padding:16px;border:1px solid #c9dcf6;border-radius:10px;background:#f8fbff;margin-top:16px}
+.mqtt-association-editor .check-row{display:flex;align-items:flex-start;gap:8px;margin:16px 0;line-height:1.6}
+.mqtt-association-editor .check-row input{width:auto;flex:none;margin-top:6px}
+.mqtt-association-history{margin-top:12px;display:grid;gap:10px}
+.mqtt-association-deliveries{display:grid;gap:10px;margin:16px 0}
+.mqtt-association-deliveries article{padding:12px;border-left:3px solid #bfdbfe;background:#f8fbff;overflow-wrap:anywhere}
+@media(max-width:650px){.mqtt-associations .association-toolbar>*{width:100%}.mqtt-associations .association-toolbar select{min-width:0}.mqtt-association-card,.mqtt-association-editor{padding:12px}.mqtt-association-card .actions .btn{flex:1 1 120px}}

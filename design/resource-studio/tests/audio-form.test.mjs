@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {audioRequestValue,confirmAudio,audioKey} from '../src/audio-form.mjs';
+test('canonical audio request binds original bytes, channel and language',()=>{const sha='a'.repeat(64);assert.equal(audioRequestValue(sha,{language:'zh',channel:'mono'}),JSON.stringify({configuration:{channel:'mono',language:'zh'},input_sha256:sha}));assert.throws(()=>audioRequestValue(sha,{channel:'9',language:'zh'}));});
+test('saved record cannot clear another original request journal',()=>{const pending={request_id:'request',input_sha256:'a'.repeat(64),request_hash:'b'.repeat(64),size:40,configuration:{channel:'mono',language:'zh'}};const row={...pending,size_bytes:40};assert.equal(confirmAudio(row,pending),row);assert.throws(()=>confirmAudio({...row,request_id:'other'},pending));assert.throws(()=>confirmAudio({...row,configuration:{channel:'mix',language:'zh'}},pending));});
+test('draft identity isolates workspaces and users',()=>{assert.notEqual(audioKey('a','user'),audioKey('b','user'));assert.notEqual(audioKey('a','user'),audioKey('a','other'));});

@@ -1,0 +1,1088 @@
+{
+  "source": "native_public_view",
+  "adoption_authority_verified": false,
+  "cases": [
+    {
+      "availability": "ready",
+      "detail": {
+        "id": "public_nested_task_ready",
+        "version": 2,
+        "status": "workflow_waiting",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "graph_runtime": {
+          "schema": "full-semantic-graph-state-v1",
+          "graph_hash": "abd94fad6636451ac8862cf6bb1b348ba4d5beed50a84ee3fec6fdd8b8d15d0f",
+          "input_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "inputs": {},
+          "status": "running",
+          "version": 4,
+          "cancel_epoch": 0,
+          "clock": 10,
+          "next_activation": 5,
+          "next_scope": 1,
+          "activations": {
+            "a1": {
+              "id": "a1",
+              "node_id": "choose",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {
+                "ok": true
+              },
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {}
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a2": {
+              "id": "a2",
+              "node_id": "decision",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {
+                "truth": "true"
+              },
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {}
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a3": {
+              "id": "a3",
+              "node_id": "left",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {
+                "ok": null
+              },
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {}
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a4": {
+              "id": "a4",
+              "node_id": "consume",
+              "status": "ready",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": null,
+              "output": null,
+              "draft": {
+                "ok": true
+              },
+              "context": {
+                "loops": {},
+                "forks": {}
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            }
+          },
+          "fork_scopes": {},
+          "events": [],
+          "commands": [
+            {
+              "request_id": "complete_a1",
+              "op": "complete",
+              "actor_id": "operator_choose",
+              "body_hash": "f54a907ae7893617681996e65e4d7061bdecab93fac2fb3ff874938867eca303"
+            },
+            {
+              "request_id": "complete_a3",
+              "op": "complete",
+              "actor_id": "operator_left",
+              "body_hash": "539d2aa72e6d0126e74f4fbcaa396e2283762da93b653d1841bc97261ad8c9c6"
+            },
+            {
+              "request_id": "draft_saved_01",
+              "op": "draft",
+              "actor_id": "operator_consume",
+              "body_hash": "522b141a4c084983edec316ef81cbcbc3479237bb7374e43b8ea147b2ef556d9"
+            }
+          ],
+          "goal_receipts": [],
+          "predicate_receipts": [
+            {
+              "activation_id": "a2",
+              "phase": "decision",
+              "predicate_id": "which",
+              "result": {
+                "schema": "full-semantic-predicate-result-v1",
+                "ast_hash": "027523628b68f63d38558c1b99f20bf0fa8d2b6a535129afc1d1c2df5e3d7e28",
+                "reference_schema_hash": "8dae8dba69c2fae2c1c9710cf720bd16c0ecd2df640462e73f3937449996f350",
+                "context_hash": "7c41de00dcd995db781166183a91ab47d77ecef46cc84b57ad3f9b48a0547798",
+                "truth": "true",
+                "referenced_keys": [
+                  "which"
+                ],
+                "missing_keys": [],
+                "result_hash": "f4d2af2cfeec3beeed120b82a6f85cf58396eca93d5fdd6d45f601cfc6d8f642"
+              }
+            }
+          ],
+          "eligible_ability_ids": [],
+          "ready_human_ids": [
+            "a4"
+          ],
+          "error": null,
+          "state_hash": "2117e393ecbbcd4a0d2c3db7f53ce18b56a00117e6cbdc433e1e5a2babea0ea6"
+        },
+        "graph_jobs": {},
+        "workflow_runtime": {
+          "receipts": []
+        },
+        "title": null,
+        "business": {
+          "name": "分支结果核对",
+          "flow": {
+            "steps": [
+              {
+                "id": "source_choose",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              },
+              {
+                "id": "source_left",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              },
+              {
+                "id": "source_right",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              },
+              {
+                "id": "source_consume",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              }
+            ]
+          }
+        },
+        "graph_node_labels": {
+          "a1": {
+            "name": "人工核对分支结果",
+            "source_step_id": "source_choose",
+            "kind": "human",
+            "actor_id": "operator_choose",
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "can_retry": false
+          },
+          "a2": {
+            "name": "判断下一步",
+            "source_step_id": null,
+            "kind": "decision",
+            "actor_id": null,
+            "output_schema": null,
+            "can_retry": false
+          },
+          "a3": {
+            "name": "人工核对分支结果",
+            "source_step_id": "source_left",
+            "kind": "human",
+            "actor_id": "operator_left",
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "can_retry": false
+          },
+          "a4": {
+            "name": "人工核对分支结果",
+            "source_step_id": "source_consume",
+            "kind": "human",
+            "actor_id": "operator_consume",
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "can_retry": false
+          }
+        },
+        "roles": {},
+        "workflow_review_mode": "engineering_simulation",
+        "workflow_simulation_only": true,
+        "profile": {},
+        "graph_pending_humans": [
+          {
+            "activation_id": "a4",
+            "node_id": "consume",
+            "role": "核对_consume",
+            "source_step_id": "source_consume",
+            "name": "人工核对分支结果",
+            "purpose": "保留依据并等待输入可用",
+            "actor_id": "operator_consume",
+            "version": 1,
+            "can_edit": true,
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "draft": {
+              "ok": true
+            },
+            "activation_status": "ready",
+            "can_complete": true,
+            "required_inputs": [
+              {
+                "label": "分支依据",
+                "ordinal": 0,
+                "available": true,
+                "value": null,
+                "source": "exclusive_output",
+                "source_name": "来源 left",
+                "availability_code": "ready",
+                "producer_activation_id": "a3",
+                "schema": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            ],
+            "inputs_available": true
+          }
+        ],
+        "graph_waits": [],
+        "completed": false,
+        "permissions": {
+          "can_cancel_task": true,
+          "can_complete_step": false,
+          "can_save_note": false,
+          "can_run_ability": false
+        }
+      }
+    },
+    {
+      "availability": "missing",
+      "detail": {
+        "id": "public_nested_task_missing",
+        "version": 2,
+        "status": "workflow_waiting",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "graph_runtime": {
+          "schema": "full-semantic-graph-state-v1",
+          "graph_hash": "25b7944a96a1cd2de43dd227b5e95fbf517f2f007d4a5a871cfa42dad76ec6e6",
+          "input_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "inputs": {},
+          "status": "waiting",
+          "version": 3,
+          "cancel_epoch": 0,
+          "clock": 10,
+          "next_activation": 5,
+          "next_scope": 1,
+          "activations": {
+            "a1": {
+              "id": "a1",
+              "node_id": "choose",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {
+                "ok": false
+              },
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {}
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a2": {
+              "id": "a2",
+              "node_id": "decision",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {
+                "truth": "false"
+              },
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {}
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a3": {
+              "id": "a3",
+              "node_id": "skip",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {
+                "truth": "false"
+              },
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {}
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a4": {
+              "id": "a4",
+              "node_id": "consume",
+              "status": "waiting_guard",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": null,
+              "output": null,
+              "draft": {
+                "ok": true
+              },
+              "context": {
+                "loops": {},
+                "forks": {}
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": "exclusive_reference_missing:choice",
+              "inputs_snapshot": null
+            }
+          },
+          "fork_scopes": {},
+          "events": [],
+          "commands": [
+            {
+              "request_id": "complete_a1",
+              "op": "complete",
+              "actor_id": "operator_choose",
+              "body_hash": "e3f9789473ec25bd384a8d271f32c747b2d3fdc99800a7dd1addba379d8bff22"
+            },
+            {
+              "request_id": "draft_saved_01",
+              "op": "draft",
+              "actor_id": "operator_consume",
+              "body_hash": "522b141a4c084983edec316ef81cbcbc3479237bb7374e43b8ea147b2ef556d9"
+            }
+          ],
+          "goal_receipts": [],
+          "predicate_receipts": [
+            {
+              "activation_id": "a2",
+              "phase": "decision",
+              "predicate_id": "which",
+              "result": {
+                "schema": "full-semantic-predicate-result-v1",
+                "ast_hash": "027523628b68f63d38558c1b99f20bf0fa8d2b6a535129afc1d1c2df5e3d7e28",
+                "reference_schema_hash": "8dae8dba69c2fae2c1c9710cf720bd16c0ecd2df640462e73f3937449996f350",
+                "context_hash": "ebc08ee6855e5bbdf83dd231b3bd3ecc3b3056b4a9c70912f4bdcfdee4989bec",
+                "truth": "false",
+                "referenced_keys": [
+                  "which"
+                ],
+                "missing_keys": [],
+                "result_hash": "c295363fc6098a30e0df386a45bc66c08f0435c7eb498a03afcb615de7f3e630"
+              }
+            },
+            {
+              "activation_id": "a3",
+              "phase": "decision",
+              "predicate_id": "which",
+              "result": {
+                "schema": "full-semantic-predicate-result-v1",
+                "ast_hash": "027523628b68f63d38558c1b99f20bf0fa8d2b6a535129afc1d1c2df5e3d7e28",
+                "reference_schema_hash": "8dae8dba69c2fae2c1c9710cf720bd16c0ecd2df640462e73f3937449996f350",
+                "context_hash": "ebc08ee6855e5bbdf83dd231b3bd3ecc3b3056b4a9c70912f4bdcfdee4989bec",
+                "truth": "false",
+                "referenced_keys": [
+                  "which"
+                ],
+                "missing_keys": [],
+                "result_hash": "c295363fc6098a30e0df386a45bc66c08f0435c7eb498a03afcb615de7f3e630"
+              }
+            }
+          ],
+          "eligible_ability_ids": [],
+          "ready_human_ids": [],
+          "error": "exclusive_reference_missing:choice",
+          "state_hash": "1da7b82dfdf028fe3f821a439de760d5796f7c71ba5b29b98422e47ea65db8ec"
+        },
+        "graph_jobs": {},
+        "workflow_runtime": {
+          "receipts": []
+        },
+        "title": null,
+        "business": {
+          "name": "分支结果核对",
+          "flow": {
+            "steps": [
+              {
+                "id": "source_choose",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              },
+              {
+                "id": "source_left",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              },
+              {
+                "id": "source_right",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              },
+              {
+                "id": "source_consume",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              }
+            ]
+          }
+        },
+        "graph_node_labels": {
+          "a1": {
+            "name": "人工核对分支结果",
+            "source_step_id": "source_choose",
+            "kind": "human",
+            "actor_id": "operator_choose",
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "can_retry": false
+          },
+          "a2": {
+            "name": "判断下一步",
+            "source_step_id": null,
+            "kind": "decision",
+            "actor_id": null,
+            "output_schema": null,
+            "can_retry": false
+          },
+          "a3": {
+            "name": "判断下一步",
+            "source_step_id": null,
+            "kind": "decision",
+            "actor_id": null,
+            "output_schema": null,
+            "can_retry": false
+          },
+          "a4": {
+            "name": "人工核对分支结果",
+            "source_step_id": "source_consume",
+            "kind": "human",
+            "actor_id": "operator_consume",
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "can_retry": false
+          }
+        },
+        "roles": {},
+        "workflow_review_mode": "engineering_simulation",
+        "workflow_simulation_only": true,
+        "profile": {},
+        "graph_pending_humans": [
+          {
+            "activation_id": "a4",
+            "node_id": "consume",
+            "role": "核对_consume",
+            "source_step_id": "source_consume",
+            "name": "人工核对分支结果",
+            "purpose": "保留依据并等待输入可用",
+            "actor_id": "operator_consume",
+            "version": 1,
+            "can_edit": true,
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "draft": {
+              "ok": true
+            },
+            "activation_status": "waiting_guard",
+            "can_complete": false,
+            "required_inputs": [
+              {
+                "label": "分支依据",
+                "ordinal": 0,
+                "available": false,
+                "value": null,
+                "source": "exclusive_output",
+                "source_name": "等待唯一的分支结果",
+                "availability_code": "missing",
+                "producer_activation_id": null,
+                "schema": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            ],
+            "inputs_available": false
+          }
+        ],
+        "graph_waits": [
+          {
+            "id": "a4",
+            "node_id": "consume",
+            "status": "waiting_guard",
+            "version": 1,
+            "epoch": 0,
+            "created_at": 10,
+            "completed_at": null,
+            "output": null,
+            "draft": {
+              "ok": true
+            },
+            "context": {
+              "loops": {},
+              "forks": {}
+            },
+            "scope_id": null,
+            "branch_id": null,
+            "deadline": null,
+            "wait_started_at": null,
+            "correlation_hash": null,
+            "error": "exclusive_reference_missing:choice",
+            "inputs_snapshot": null
+          }
+        ],
+        "completed": false,
+        "permissions": {
+          "can_cancel_task": true,
+          "can_complete_step": false,
+          "can_save_note": false,
+          "can_run_ability": false
+        }
+      }
+    },
+    {
+      "availability": "ambiguous",
+      "detail": {
+        "id": "public_nested_task_ambiguous",
+        "version": 2,
+        "status": "workflow_waiting",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "graph_runtime": {
+          "schema": "full-semantic-graph-state-v1",
+          "graph_hash": "97a6e7a560cbb80f5498edbeb1eef9cd00f04b0067c0f62d3abecf03e8dddbad",
+          "input_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "inputs": {},
+          "status": "blocked",
+          "version": 4,
+          "cancel_epoch": 0,
+          "clock": 10,
+          "next_activation": 6,
+          "next_scope": 2,
+          "activations": {
+            "a1": {
+              "id": "a1",
+              "node_id": "f",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {},
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {}
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a2": {
+              "id": "a2",
+              "node_id": "a",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {
+                "ok": true
+              },
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {
+                  "f": "s1"
+                }
+              },
+              "scope_id": "s1",
+              "branch_id": "A",
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a3": {
+              "id": "a3",
+              "node_id": "b",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {
+                "ok": true
+              },
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {
+                  "f": "s1"
+                }
+              },
+              "scope_id": "s1",
+              "branch_id": "B",
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a4": {
+              "id": "a4",
+              "node_id": "j",
+              "status": "completed",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": 10,
+              "output": {},
+              "draft": null,
+              "context": {
+                "loops": {},
+                "forks": {
+                  "f": "s1"
+                }
+              },
+              "scope_id": "s1",
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": null,
+              "inputs_snapshot": null
+            },
+            "a5": {
+              "id": "a5",
+              "node_id": "consume",
+              "status": "waiting_guard",
+              "version": 1,
+              "epoch": 0,
+              "created_at": 10,
+              "completed_at": null,
+              "output": null,
+              "draft": {
+                "ok": true
+              },
+              "context": {
+                "loops": {},
+                "forks": {
+                  "f": "s1"
+                }
+              },
+              "scope_id": null,
+              "branch_id": null,
+              "deadline": null,
+              "wait_started_at": null,
+              "correlation_hash": null,
+              "error": "exclusive_reference_ambiguous:choice",
+              "inputs_snapshot": null
+            }
+          },
+          "fork_scopes": {
+            "s1": {
+              "id": "s1",
+              "fork_id": "f",
+              "join_id": "j",
+              "parent_scope_id": null,
+              "parent_branch_id": null,
+              "expected": [
+                "A",
+                "B"
+              ],
+              "arrived": {
+                "A": {
+                  "activation_id": "a2",
+                  "context": {
+                    "loops": {},
+                    "forks": {
+                      "f": "s1"
+                    }
+                  }
+                },
+                "B": {
+                  "activation_id": "a3",
+                  "context": {
+                    "loops": {},
+                    "forks": {
+                      "f": "s1"
+                    }
+                  }
+                }
+              },
+              "join_activation_id": "a4",
+              "closed": true,
+              "context": {
+                "loops": {},
+                "forks": {
+                  "f": "s1"
+                }
+              }
+            }
+          },
+          "events": [],
+          "commands": [
+            {
+              "request_id": "complete_a2",
+              "op": "complete",
+              "actor_id": "operator_a",
+              "body_hash": "87993b96c06dc7b376c1afac0365fd749ea114fd2d0c888febb47b6a06c956ae"
+            },
+            {
+              "request_id": "complete_a3",
+              "op": "complete",
+              "actor_id": "operator_b",
+              "body_hash": "3ca1a0d1214ba49daeb7aff3486476c5ce6a6500a4f842260d13d48166fc00ec"
+            },
+            {
+              "request_id": "draft_saved_01",
+              "op": "draft",
+              "actor_id": "operator_consume",
+              "body_hash": "37cf91eb228a7306537e08b13788a5c8f614c4eddc66ae8d4e7c20afb4184858"
+            }
+          ],
+          "goal_receipts": [],
+          "predicate_receipts": [],
+          "eligible_ability_ids": [],
+          "ready_human_ids": [],
+          "error": "exclusive_reference_ambiguous:choice",
+          "state_hash": "9263980359dd807eba2a63dfbfaaa8eaf1a2de780a39622bcba1b2f4edfaa05f"
+        },
+        "graph_jobs": {},
+        "workflow_runtime": {
+          "receipts": []
+        },
+        "title": null,
+        "business": {
+          "name": "分支结果核对",
+          "flow": {
+            "steps": [
+              {
+                "id": "source_a",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              },
+              {
+                "id": "source_b",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              },
+              {
+                "id": "source_consume",
+                "name": "人工核对分支结果",
+                "purpose": "保留依据并等待输入可用"
+              }
+            ]
+          }
+        },
+        "graph_node_labels": {
+          "a1": {
+            "name": "同时处理",
+            "source_step_id": null,
+            "kind": "fork",
+            "actor_id": null,
+            "output_schema": null,
+            "can_retry": false
+          },
+          "a2": {
+            "name": "人工核对分支结果",
+            "source_step_id": "source_a",
+            "kind": "human",
+            "actor_id": "operator_a",
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "can_retry": false
+          },
+          "a3": {
+            "name": "人工核对分支结果",
+            "source_step_id": "source_b",
+            "kind": "human",
+            "actor_id": "operator_b",
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "can_retry": false
+          },
+          "a4": {
+            "name": "等待各项处理完成",
+            "source_step_id": null,
+            "kind": "join",
+            "actor_id": null,
+            "output_schema": null,
+            "can_retry": false
+          },
+          "a5": {
+            "name": "人工核对分支结果",
+            "source_step_id": "source_consume",
+            "kind": "human",
+            "actor_id": "operator_consume",
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "can_retry": false
+          }
+        },
+        "roles": {},
+        "workflow_review_mode": "engineering_simulation",
+        "workflow_simulation_only": true,
+        "profile": {},
+        "graph_pending_humans": [
+          {
+            "activation_id": "a5",
+            "node_id": "consume",
+            "role": "核对_consume",
+            "source_step_id": "source_consume",
+            "name": "人工核对分支结果",
+            "purpose": "保留依据并等待输入可用",
+            "actor_id": "operator_consume",
+            "version": 1,
+            "can_edit": true,
+            "output_schema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "ok"
+              ],
+              "additionalProperties": false
+            },
+            "draft": {
+              "ok": true
+            },
+            "activation_status": "waiting_guard",
+            "can_complete": false,
+            "required_inputs": [
+              {
+                "label": "分支依据",
+                "ordinal": 0,
+                "available": false,
+                "value": null,
+                "source": "exclusive_output",
+                "source_name": "分支返回了多个结果，需要核查",
+                "availability_code": "ambiguous",
+                "producer_activation_id": null,
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            ],
+            "inputs_available": false
+          }
+        ],
+        "graph_waits": [
+          {
+            "id": "a5",
+            "node_id": "consume",
+            "status": "waiting_guard",
+            "version": 1,
+            "epoch": 0,
+            "created_at": 10,
+            "completed_at": null,
+            "output": null,
+            "draft": {
+              "ok": true
+            },
+            "context": {
+              "loops": {},
+              "forks": {
+                "f": "s1"
+              }
+            },
+            "scope_id": null,
+            "branch_id": null,
+            "deadline": null,
+            "wait_started_at": null,
+            "correlation_hash": null,
+            "error": "exclusive_reference_ambiguous:choice",
+            "inputs_snapshot": null
+          }
+        ],
+        "completed": false,
+        "permissions": {
+          "can_cancel_task": true,
+          "can_complete_step": false,
+          "can_save_note": false,
+          "can_run_ability": false
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "contract_version": "1.0",
+  "namespace": "inspection",
+  "name": "numeric_rules",
+  "version": "1.0.0",
+  "owner": "平台操作者",
+  "description": "已注册温度异常规则",
+  "kind": "specialist_model",
+  "allowed_agent_roles": [
+    "perception"
+  ],
+  "execution": {
+    "adapter": "builtin",
+    "handler": "numeric_rules"
+  },
+  "specification": {
+    "rules": [
+      {
+        "id": "high_temperature",
+        "field": "temperature",
+        "operator": "gt",
+        "threshold": 50,
+        "severity": "warning"
+      }
+    ]
+  }
+}

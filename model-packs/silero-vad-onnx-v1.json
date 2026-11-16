@@ -1,0 +1,54 @@
+{
+  "pack_id": "silero-vad-onnx-v1",
+  "version": "1.0.0",
+  "title": "Silero VAD 本地语音区间检测",
+  "upstream_version": "6.2.3",
+  "source": "pypi_official",
+  "wheel": {
+    "name": "silero_vad-6.2.3-py3-none-any.whl",
+    "bytes": 11317527,
+    "sha256": "7b7f5436cfcb02fae583a05b512ea96467fd449fe54cb49a5e4f06c51a1e43b8",
+    "url": "https://files.pythonhosted.org/packages/84/ef/9099037ed6f180ea33220178df4107112c0ce2bf5fb4d6f6ab19db2844ed/silero_vad-6.2.3-py3-none-any.whl"
+  },
+  "files": [
+    {
+      "name": "silero_vad_16k_op15.onnx",
+      "archive_name": "silero_vad/data/silero_vad_16k_op15.onnx",
+      "bytes": 1289603,
+      "sha256": "7ed98ddbad84ccac4cd0aeb3099049280713df825c610a8ed34543318f1b2c49"
+    },
+    {
+      "name": "LICENSE",
+      "archive_name": "silero_vad-6.2.3.dist-info/licenses/LICENSE",
+      "bytes": 1075,
+      "sha256": "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b"
+    }
+  ],
+  "environment": {
+    "onnxruntime": "1.31.0",
+    "numpy": "2.3.3",
+    "av": "16.1.0"
+  },
+  "default_deployment": "local",
+  "default_backend": "cpu",
+  "cloud_fallback": false,
+  "remote_code": false,
+  "license": "MIT (official pinned distribution); platform production license review pending",
+  "license_evidence": "https://pypi.org/project/silero-vad/6.2.3/",
+  "limitations": "候选语音区间，32ms分析步长；不是词级时间戳、说话人身份、环境声音分类或风险概率，领域准确率待评测。",
+  "parameters": {
+    "sampling_rate": 16000,
+    "window_samples": 512,
+    "context_samples": 64,
+    "min_speech_ms": 250,
+    "min_silence_ms": 100,
+    "speech_pad_ms": 30,
+    "threshold_default": 0.5,
+    "negative_threshold_offset": 0.15
+  },
+  "decoder_sha256": "bda14fe267232abacef7b7d374c377c362085c3904ac39dce6425fafe658146f",
+  "runner_sha256": "3984ba355181cff163aa60315016286370c9d8a3ae0a1a57dae03244635913da",
+  "reference_sha256": "f3c27ec6e344e1b08a9d4e46b75c11ef772f7b9fd2bcf95962738658f0a19cec",
+  "network_isolation": "macos_sandbox_exec_network_deny_required; Linux deployment pending verification",
+  "aggregation_sha256": "31034b92879f0e85db0290a270d127328407617c2102a1f311c006efe8281957"
+}

@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+const source=await readFile(new URL('../../../src/generic_agents/web/quality.js',import.meta.url),'utf8');
+const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function render(issue){const context={me:{role:'admin'},qualityOverview:{policies:[]},caps:[],overview:{issues:[issue]},relationsOverview:{items:[]},relationName:()=> '原对象',esc:escape,badge:x=>`<span>${escape(x)}</span>`,empty:x=>escape(x),date:x=>String(x)};return vm.runInNewContext(source+'\nrenderQualityPage()',context);}
+test('单位异常只显示原文登记值、声明单位和禁用原因，不能伪造结案',()=>{const html=render({id:'issue-a',kind:'mqtt_unit_conflict_v357',status:'open',data:{diagnosis:{problem:'单位不符'},proof:{original_number_lexeme:'100000000000000.01',original_number_lexeme_complete:true,reported_unit:'F',expected_unit:'C',receipt_id:'11111111-1111-4111-8111-111111111111'}}});assert.ok(html.includes('100000000000000.01'));assert.ok(html.includes('报文声明单位：F'));assert.ok(html.includes('来源约定单位：C'));assert.ok(html.includes('尚不能执行单位换算或结案'));assert.ok(html.includes('/api/mqtt/receipts/11111111-1111-4111-8111-111111111111/original'));assert.ok(!html.includes('data-quality-verify'));});
+test('超长原文不显示近似浮点，恶意单位不会变成 HTML',()=>{const html=render({id:'issue-b',kind:'mqtt_unit_conflict_v357',status:'open',data:{proof:{original_value:100000000000000.02,original_number_lexeme:null,original_number_lexeme_complete:false,reported_unit:'<script>',expected_unit:'C',receipt_id:'not-a-uuid'}}});assert.ok(html.includes('原文待核对'));assert.ok(!html.includes('100000000000000.02'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(!html.includes('<script>'));assert.ok(!html.includes('/api/mqtt/receipts/'));});
+test('原有支持的质量问题仍提供原验证入口',()=>{const html=render({id:'issue-c',kind:'invalid_schema',status:'open',data:{diagnosis:{problem:'格式不符'}}});assert.ok(html.includes('data-quality-verify'));});

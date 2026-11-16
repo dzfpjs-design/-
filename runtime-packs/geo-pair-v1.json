@@ -1,0 +1,15 @@
+{
+  "id": "geo-pair-v1",
+  "default_deployment": "local",
+  "network": false,
+  "cloud_fallback": false,
+  "algorithm": "rgb_max_channel_absolute_difference",
+  "learned_model": false,
+  "max_comparison_pixels": 16000000,
+  "max_source_window_pixels": 16000000,
+  "timeout_seconds": 90,
+  "base_recipe_hash": "85f28b1a8beb66ba2fe47e80882185a8fc36aedd4ea3f60dfabb0ddff43512a5",
+  "base_runner_sha256": "300cf46ccddf6b472e242d9e58f07223ae87164cdcd4e6dd25c7936b0b6e7268",
+  "runner_sha256": "30d6bb2f400483b6896c00daaf48db5f45a7484305697dcb459a032fb0aa2cfa",
+  "domain_quality": "not_verified"
+}

@@ -1,0 +1,445 @@
+{
+  "contract_version": "1.0",
+  "kind": "tool",
+  "namespace": "platform_pixel_questions",
+  "name": "pixel_machine_query",
+  "version": "1.0.0",
+  "owner": "platform",
+  "description": "本机只读影像候选成果问答，按登记日和接收记录核对，不判断现场事实",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "query_id": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+      },
+      "plan_hash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "required": [
+      "query_id",
+      "plan_hash"
+    ],
+    "additionalProperties": false
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "schema": {
+        "const": "pixel-question-answer-v252"
+      },
+      "query_id": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+      },
+      "request_hash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "plan_hash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "source_snapshot_hash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "operation": {
+        "enum": [
+          "read",
+          "count",
+          "sum",
+          "mean",
+          "min",
+          "max"
+        ]
+      },
+      "metric": {
+        "enum": [
+          null,
+          "candidate_pixels",
+          "common_valid_pixels",
+          "unknown_pixels"
+        ]
+      },
+      "group_by": {
+        "enum": [
+          "none",
+          "registration_day",
+          "task_id",
+          "entity_id",
+          "human_completion"
+        ]
+      },
+      "time": {
+        "type": "object",
+        "properties": {
+          "basis": {
+            "const": "machine_result_registered"
+          },
+          "registration_days": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "minItems": 1,
+            "maxItems": 31,
+            "uniqueItems": true
+          },
+          "timezone": {
+            "const": "Asia/Shanghai"
+          }
+        },
+        "required": [
+          "basis",
+          "registration_days",
+          "timezone"
+        ],
+        "additionalProperties": false
+      },
+      "filters": {
+        "type": "object",
+        "properties": {
+          "reception": {
+            "enum": [
+              "any",
+              "registered",
+              "received",
+              "waiting_data"
+            ]
+          },
+          "human_completion": {
+            "enum": [
+              "any",
+              "has_completed_receipt",
+              "no_completed_receipt"
+            ]
+          }
+        },
+        "required": [
+          "reception",
+          "human_completion"
+        ],
+        "additionalProperties": false
+      },
+      "coverage": {
+        "type": "object",
+        "properties": {
+          "complete": {
+            "const": true
+          },
+          "scanned_records": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "matched_records": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "unknown_registration_day_excluded": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "limit": {
+            "const": 1000
+          }
+        },
+        "required": [
+          "complete",
+          "scanned_records",
+          "matched_records",
+          "unknown_registration_day_excluded",
+          "limit"
+        ],
+        "additionalProperties": false
+      },
+      "state_counts": {
+        "type": "object",
+        "properties": {
+          "processing_records": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "registered_results": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "received_results": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "registered_waiting": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "unregistered_waiting": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "producer_failed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "processing_records",
+          "registered_results",
+          "received_results",
+          "registered_waiting",
+          "unregistered_waiting",
+          "producer_failed"
+        ],
+        "additionalProperties": false
+      },
+      "groups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 4000
+            },
+            "run_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+              },
+              "minItems": 0,
+              "maxItems": 1000
+            },
+            "matched_records": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "value_text": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 4000
+            },
+            "value_kind": {
+              "enum": [
+                "integer",
+                "rational",
+                "none"
+              ]
+            },
+            "numerator": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^-?(0|[1-9]\\d*)$"
+            },
+            "denominator": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1
+            }
+          },
+          "required": [
+            "key",
+            "run_ids",
+            "matched_records",
+            "value_text",
+            "value_kind",
+            "numerator",
+            "denominator"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 0,
+        "maxItems": 1000
+      },
+      "references": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+            },
+            "task_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+            },
+            "entity_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+            },
+            "producer_release_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+            },
+            "result_hash": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "receipt_hash": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "human_receipt_hashes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "minItems": 0,
+              "maxItems": 1000
+            },
+            "registered_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "run_id",
+            "task_id",
+            "entity_id",
+            "producer_release_id",
+            "result_hash",
+            "receipt_hash",
+            "human_receipt_hashes",
+            "registered_at"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 0,
+        "maxItems": 1000
+      },
+      "unit": {
+        "enum": [
+          "processing_records",
+          "registered_machine_results",
+          "received_machine_results",
+          "waiting_machine_results",
+          "model_result_pixels",
+          "none"
+        ]
+      },
+      "metrics_basis": {
+        "const": "independently_received_results_only"
+      },
+      "time_basis": {
+        "const": "machine_result_registered"
+      },
+      "human_basis": {
+        "const": "completed_task_receipts_at_query_snapshot"
+      },
+      "candidate_only": {
+        "const": true
+      },
+      "not_authoritative": {
+        "const": true
+      },
+      "field_truth_verified": {
+        "const": false
+      },
+      "source_time_verified": {
+        "const": false
+      },
+      "limitations": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 2000,
+          "minLength": 1
+        },
+        "minItems": 0,
+        "maxItems": 32
+      },
+      "answer_hash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "required": [
+      "schema",
+      "query_id",
+      "request_hash",
+      "plan_hash",
+      "source_snapshot_hash",
+      "operation",
+      "metric",
+      "group_by",
+      "time",
+      "filters",
+      "coverage",
+      "state_counts",
+      "groups",
+      "references",
+      "unit",
+      "metrics_basis",
+      "time_basis",
+      "human_basis",
+      "candidate_only",
+      "not_authoritative",
+      "field_truth_verified",
+      "source_time_verified",
+      "limitations",
+      "answer_hash"
+    ],
+    "additionalProperties": false
+  },
+  "allowed_agent_roles": [
+    "data"
+  ],
+  "execution": {
+    "adapter": "builtin",
+    "handler": "pixel_machine_query_v252",
+    "side_effect": false,
+    "query_tool": true,
+    "input_bindings": {
+      "query_id": "request_key"
+    }
+  },
+  "data_policy": {
+    "cloud_allowed": false
+  },
+  "budget": {
+    "max_attempts": 1,
+    "max_concurrency": 4
+  },
+  "dependencies": [],
+  "specification": {
+    "schema": "pixel-question-source-facet-tool-v252",
+    "method": "pixel_machine_query",
+    "source_facet": "received_pixel_machine_results_v250",
+    "source_family": "workflow_pixel_change_candidate_v250",
+    "max_source_records": 1000
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "contract_version": "1.0",
+  "namespace": "maintenance",
+  "name": "machines",
+  "version": "1.0.0",
+  "owner": "平台操作者",
+  "description": "设备维护业务包（通用示例）",
+  "kind": "domain_package",
+  "specification": {
+    "entity_schemas": {
+      "machine": {
+        "type": "object",
+        "required": [
+          "serial",
+          "hours"
+        ],
+        "properties": {
+          "serial": {
+            "type": "string",
+            "title": "设备序列号"
+          },
+          "hours": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "运行小时"
+          }
+        }
+      }
+    }
+  }
+}

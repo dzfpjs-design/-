@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {webcrypto} from 'node:crypto';
+import {BusinessScopePlanControllerV181,SCOPE_PLAN_BASE,scopeCopy,scopeSHA} from '../src/business-scope-plan-v181.mjs';
+export const id=n=>'96100000-0000-4000-8000-'+String(n).padStart(12,'0'),copy=scopeCopy,H='a'.repeat(64),I='b'.repeat(64),C='c'.repeat(64);
+export function memory(){const rows=new Map();return {get length(){return rows.size;},key:i=>[...rows.keys()][i]??null,getItem:k=>rows.get(k)??null,setItem:(k,v)=>rows.set(k,String(v)),removeItem:k=>rows.delete(k),entries:()=>[...rows.entries()]};}
+export function scopeLocks(){const tails=new Map(),state={active:0,maximum:0};return {state,request(key,options,fn){assert.equal(options.mode,'exclusive');const previous=tails.get(key)||Promise.resolve(),run=previous.then(async()=>{state.active++;state.maximum=Math.max(state.maximum,state.active);try{return await fn();}finally{state.active--;}});const tail=run.catch(()=>{});tails.set(key,tail);tail.then(()=>{if(tails.get(key)===tail)tails.delete(key);});return run;}};}
+export function scopeFixture({storage=memory(),session=memory(),role='operator'}={}){
+ const account={user_id:id(1),workspace_id:id(2),role},producerId=id(3),scope={actor_id:account.user_id,workspace_id:account.workspace_id,producer_id:producerId},summary={input_count:6,input_claims_hash:C,indexed_inputs_hash:I};
+ for(const[k,v]of Object.entries({'ga-setup-csrf-user':account.user_id,'ga-setup-csrf-workspace':account.workspace_id,'ga-setup-csrf':'synthetic-csrf'}))session.setItem(k,v);
+ const ledger={schema:'report-scoped-design-scope-ledger-v180',source_snapshot_hash:H,indexed_inputs_hash:I,input_claims_hash:C,input_count:6,scopes:[],shared:[],background:[]};
+ const proposal={schema:'report-scoped-design-proposal-view-v181',producer_id:producerId,revision:9,source_snapshot_hash:H,source_summary:summary,proposal:{schema:'report-scoped-design-proposal-v181',ledger:copy(ledger)},requires_current_source_check:true,can_apply:false,can_publish:false};
+ const rows=Array.from({length:6},(_,p)=>({global_position:p,input_id:'private-original-map-'+p,claim:{kind:'业务',statement:(p===4?'无人机':'巡护')+'原报告要求'+p,status:'explicit',span_refs:['span-'+p],explanation:''},spans:[{span_ref:'span-'+p,text:'不得落本机的原文证据-'+p}],anchor_status:'resolved_saved_text'}));
+ const db={identity:copy(account),plans:new Map(),commands:new Map(),loseNext:false,proposalHash:H,listError:null,readGate:null,readResult:null,refusePost:false};const calls=[],confirmed=[];
+ const request=async(path,options={})=>{
+  assert.equal(options.headers?.['X-Workspace-ID'],account.workspace_id);assert.equal(options.headers?.['X-CSRF-Token'],'synthetic-csrf');const method=options.method||'GET';calls.push({path,method,raw:options.body});
+  if(path==='/me')return copy(db.identity);
+  if(path==='/setup/draft')return {revision:9};
+  if(path.startsWith(SCOPE_PLAN_BASE+'/proposal?'))return {...copy(proposal),source_snapshot_hash:db.proposalHash,proposal:{...copy(proposal.proposal),ledger:{...copy(ledger),source_snapshot_hash:db.proposalHash}}};
+  if(path.startsWith(SCOPE_PLAN_BASE+'/plans?')){if(db.listError)throw db.listError;return {schema:'report-scoped-design-plan-list-v181',producer_id:producerId,items:copy([...db.plans.values()])};}
+  if(path.startsWith(SCOPE_PLAN_BASE+'/requests/')){const requestId=path.split('/requests/')[1].split('?')[0],row=db.commands.get(requestId);return {schema:'report-scoped-design-plan-request-v181',request_id:requestId,wire_sha256:row?row.sha:path.split('expected_sha256=')[1],outcome:row?'saved':'unknown',result:row?copy(row.result):null};}
+  const match=path.match(/\/plans\/([^/?]+)(?:\/(inputs|save|confirm))?(?:\?(.*))?$/);
+  if(method==='GET'&&match){const target=db.plans.get(match[1]);assert.ok(target,'normal saved plan required');if(match[2]==='inputs'){const q=new URLSearchParams(match[3]),offset=Number(q.get('offset')),limit=Number(q.get('limit')),query=q.has('query')?q.get('query'):undefined,filtered=query===undefined?rows:rows.filter(r=>r.claim.statement.toLowerCase().includes(query.toLowerCase())),items=copy(filtered.slice(offset,offset+limit));return {schema:'report-scoped-design-inputs-v181',plan_id:target.id,source_snapshot_hash:target.source_snapshot_hash,indexed_inputs_hash:I,input_claims_hash:C,input_count:6,offset,limit,next_offset:offset+items.length<filtered.length?offset+items.length:null,items,historical_source:true,requires_current_source_check:true,can_apply:false,can_publish:false,...(query===undefined?{}:{query,matching_input_count:filtered.length})};}const value=copy(target),gate=typeof db.readGate==='function'?db.readGate(match[1]):db.readGate;if(gate)await gate;if(db.readResult)return copy(db.readResult);return value;}
+  if(method==='POST'){
+   if(db.refusePost)throw Object.assign(Error('拒绝本次写入'),{status:409});const body=JSON.parse(options.body),operation=path===SCOPE_PLAN_BASE+'/plans'?'create':match?.[2];assert.ok(['create','save','confirm'].includes(operation));
+   if(db.commands.has(body.request_id)){const old=db.commands.get(body.request_id);assert.equal(old.raw,options.body);return copy(old.result);}
+   let row;if(operation==='create'){row={schema:'report-scoped-design-plan-view-v181',id:id(100+db.plans.size),version:1,status:'draft',workspace_id:account.workspace_id,actor_id:account.user_id,producer_id:producerId,revision:body.revision,source_snapshot_hash:body.source_snapshot_hash,source_summary:copy(summary),ledger:copy(body.ledger),confirmation:null,plan:null,plan_hash:null,history:[],can_save:true,can_confirm:true,requires_current_source_check:true,can_apply:false,can_publish:false};db.plans.set(row.id,row);}else{row=db.plans.get(match[1]);assert.equal(body.expected_version,row.version,'normal CAS');row.version++;if(operation==='save')row.ledger=copy(body.ledger);else{row.status='confirmed';row.plan_hash='d'.repeat(64);row.confirmation={status:'confirmed'};row.can_save=false;row.can_confirm=false;}}
+   const result={schema:'report-scoped-design-plan-result-v181',id:row.id,version:row.version,operation,status:row.status,plan_hash:row.plan_hash};row.history.push({version:row.version,operation,request_id:body.request_id,ledger:copy(row.ledger),confirmation:copy(row.confirmation),plan_hash:row.plan_hash,saved_at:'2026-10-27T00:00:00+00:00'});db.commands.set(body.request_id,{sha:await scopeSHA(options.body,webcrypto),raw:options.body,result:copy(result)});if(db.loseNext){db.loseNext=false;throw Error('模拟服务器保存后丢回执');}return copy(result);
+  }
+  throw Error('unexpected normal API '+method+' '+path);
+ };
+ const locks=scopeLocks();
+ const make=()=>new BusinessScopePlanControllerV181({account,producerId,request,storage,session,locks,crypto:webcrypto,onConfirmed:p=>confirmed.push(copy(p))});
+ return {account,producerId,scope,storage,session,ledger,proposal,summary,rows,db,calls,request,locks,confirmed,make,posts:()=>calls.filter(c=>c.method==='POST')};
+}
+export async function created(f){const c=f.make();await c.open();c.edit({name:'无人机巡护'});await c.create();return c;}

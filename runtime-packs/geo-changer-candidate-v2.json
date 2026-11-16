@@ -1,0 +1,48 @@
+{
+  "id": "geo-changer-candidate-v2",
+  "default_deployment": "local",
+  "network": false,
+  "cloud_fallback": false,
+  "learned_model": true,
+  "enabled_for_business": false,
+  "algorithm": "changerex_r18_levir_binary_change",
+  "backend": "cpu",
+  "environment": {
+    "torch": "2.8.0",
+    "numpy": "2.5.3",
+    "Pillow": "11.3.0",
+    "safetensors": "0.6.2"
+  },
+  "weights": {
+    "name": "changer-r18.safetensors",
+    "bytes": 45624736,
+    "sha256": "507932767138639cc64079bcfd5df2861aeeef9c26e924b799e2d4de92bce2a6"
+  },
+  "original": {
+    "repository": "likyoo/Open-CD_Model_Zoo",
+    "revision": "6b88e874f8dea7430a2ab1ed84b356c6a67128a0",
+    "file": "LEVIR-CD/ChangerEx_r18-512x512_40k_levircd.pth",
+    "sha256": "da3f569306dadd1fac5b64abc2a3d484571cd0ecf6410e1f152275cfe49a3618",
+    "bytes": 136880383
+  },
+  "reviewed_upstream_code_revision": "790a1972b538baaaffd4c3022a4d9afaa3f861e5",
+  "upstream_numerical_equivalence_verified": false,
+  "license_release_review": "weight_and_training_material_rights_pending",
+  "domain_quality": "not_verified",
+  "pretraining_task_scope": "building_binary_change_LEVIR-CD",
+  "max_comparison_pixels": 16000000,
+  "tile_pixels": 512,
+  "stride_pixels": 448,
+  "max_tiles": 128,
+  "timeout_seconds": 180,
+  "alignment_recipe_hash": "f9a5bdc4e53cf32a02499f7060791f905ce726d3972e8b27cb61eebfc1804ed9",
+  "files": {
+    "local_changer_model.py": "1cbcc80a70015112f42dc4da66b4995dda5e788f015ce7b06ad79047a37a846b",
+    "local_changer_pair_runner.py": "728cc2c0c930234ae8411d4c2a28eae311ec0e99c34fdc846f49afbfe03f85ca",
+    "local_changer_geo_exporter.py": "a3e78bac1819b2ed8a42aa09b81e1ee495f3620096946ccee42e104900606762",
+    "changer_pair_codec.py": "2904f957df4ddd84e2937843b25d5a0c1ddc327f1e3902fc43f7462e4306b718"
+  },
+  "nodata_policy": "mask output as unknown; neighboring quality unverified",
+  "output": "float32 probability with NaN unknown; threshold candidate; affine GeoTIFF; no object-state writes",
+  "registered_weight_path_support": true
+}

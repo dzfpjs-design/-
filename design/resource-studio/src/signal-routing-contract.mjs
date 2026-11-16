@@ -1,0 +1,73 @@
+import {stableStringify} from './content-signature.js';
+
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/, SHA=/^[0-9a-f]{64}$/;
+const BUSINESS=/^business_[a-f0-9]{16}$/;
+const NUMBER_TEXT=/^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+const object=v=>v&&typeof v==='object'&&!Array.isArray(v), same=(a,b)=>stableStringify(a)===stableStringify(b);
+const integer=(v,min=1)=>Number.isSafeInteger(v)&&v>=min;
+const fail=message=>{throw Error(message);};
+const keys=(v,expected)=>object(v)&&Object.keys(v).sort().join(',')===expected.split(',').sort().join(',');
+export async function routingDigest(value){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(stableStringify(value)));return Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,'0')).join('');}
+export function routingScope(account,instanceID){if(!UUID.test(account?.user_id||'')||!UUID.test(account?.workspace_id||'')||!UUID.test(instanceID||''))return null;return {actor_id:account.user_id,workspace_id:account.workspace_id,instance_id:instanceID};}
+export const routingBase=scope=>'/workspace/instances/'+scope.instance_id+'/signal-routing';
+export const routingPrefix=scope=>'ga-signal-routing:'+scope.workspace_id+':'+scope.actor_id+':'+scope.instance_id+':';
+export function exactRoutingWrite(storage,key,value){const raw=JSON.stringify(value);storage.setItem(key,raw);if(storage.getItem(key)!==raw)fail('本机保存读回不一致，未发送。请保留当前页面并重试。');return value;}
+export function routingError(error){if(typeof error?.detail?.message==='string')return error.detail.message;const message=error?.message||'操作尚未完成';try{const detail=JSON.parse(message);return typeof detail?.message==='string'?detail.message:message;}catch{return message;}}
+function checkRules(value){if(!Array.isArray(value)||!value.length||new Set(value.map(x=>x?.id)).size!==value.length||value.some(x=>!keys(x,'id,field,operator,threshold')||typeof x.id!=='string'||!x.id.trim()||typeof x.field!=='string'||!x.field.trim()||!['gt','lt'].includes(x.operator)||typeof x.threshold!=='string'||!NUMBER_TEXT.test(x.threshold)||!Number.isFinite(Number(x.threshold))))fail('本地规则条件无法核对，未授权。');return value;}
+export function routingRuleText(rule){checkRules([rule]);return rule.field+' '+(rule.operator==='gt'?'大于':'小于')+' '+rule.threshold;}
+export function emptyRoutingForm(){return {source_id:'',extractor_id:'',entity_ids:[],business_id:'',max_tasks:'10',reason:'',confirmed:false,pause_reason:''};}
+export function checkRoutingForm(value){if(!keys(value,'source_id,extractor_id,entity_ids,business_id,max_tasks,reason,confirmed,pause_reason')||!['source_id','extractor_id','business_id','max_tasks','reason','pause_reason'].every(k=>typeof value[k]==='string')||!Array.isArray(value.entity_ids)||value.entity_ids.length>50||new Set(value.entity_ids).size!==value.entity_ids.length||value.entity_ids.some(id=>!UUID.test(id))||typeof value.confirmed!=='boolean')fail('本机路由表单无法核对，原记录保留。');return value;}
+export function saveRoutingForm(storage,scope,owner,form,optionsHash=''){checkRoutingForm(form);return exactRoutingWrite(storage,routingPrefix(scope)+'form:'+owner,{schema:'signal-routing-form-v1',scope,owner,form:structuredClone(form),options_hash:optionsHash});}
+export function listRoutingForms(storage,scope){const result=[],prefix=routingPrefix(scope)+'form:';for(let i=0;i<storage.length;i++){const key=storage.key(i);if(!key?.startsWith(prefix))continue;const row=JSON.parse(storage.getItem(key));if(row?.schema!=='signal-routing-form-v1'||!same(row.scope,scope)||!UUID.test(row.owner))fail('本机保留表单无法核对，未覆盖原记录。');checkRoutingForm(row.form);result.push(row);}return result;}
+export async function verifyRoutingOptions(value,scope){
+ if(value?.schema!=='signal-routing-options-v1'||value.instance_id!==scope.instance_id||!integer(value.instance_version)||!UUID.test(value.release_id)||value.ttl_seconds!==86400||value.max_tasks_default!==10||value.max_tasks_limit!==100||typeof value.can_enable!=='boolean'||value.blocking_reason!==null&&typeof value.blocking_reason!=='string'||!SHA.test(value.options_hash||''))fail('路由可选范围与当前实例无法核对。');
+ for(const name of ['sources','extractors','entities','businesses']){if(!Array.isArray(value[name])||new Set(value[name].map(x=>x.id)).size!==value[name].length)fail('路由可选范围重复或缺失。');for(const item of value[name])if(!(name==='businesses'?BUSINESS:UUID).test(item.id)||typeof item.name!=='string'||['sources','extractors'].includes(name)&&(!integer(item.version)||!SHA.test(item.content_hash))||name==='entities'&&(!integer(item.version)||!SHA.test(item.definition_hash)))fail('来源、对象或业务版本无法核对。');}
+ value.extractors.forEach(item=>checkRules(item.rules));const {options_hash,...body}=value;if(await routingDigest(body)!==options_hash)fail('路由可选范围摘要不匹配，未改变原表单。');return value;
+}
+export function routingEnableBody(form,options,requestID){
+ checkRoutingForm(form);if(!options?.can_enable)fail(options?.blocking_reason||'当前不能启用自动交接。');
+ for(const [field,list] of [['source_id','sources'],['extractor_id','extractors'],['business_id','businesses']])if(!options[list].some(x=>x.id===form[field]))fail('原选择已不可用，请重新读取并明确核对来源、规则和业务。');
+ if(!form.entity_ids.length||form.entity_ids.some(id=>!options.entities.some(x=>x.id===id)))fail('请选择当前可用对象，原选择仍保留。');
+ const body={request_id:requestID,expected_version:options.instance_version,release_id:options.release_id,options_hash:options.options_hash,source_id:form.source_id,extractor_id:form.extractor_id,entity_ids:[...form.entity_ids],business_id:form.business_id,max_tasks:Number(form.max_tasks),reason:form.reason,confirm_human_review_only:form.confirmed};checkRoutingBody('enable',body);return body;
+}
+export function checkRoutingBody(action,body){
+ const common=object(body)&&UUID.test(body.request_id||'')&&integer(body.expected_version)&&typeof body.reason==='string'&&body.reason.trim().length>0&&Array.from(body.reason).length<=2000&&!/[\u0000\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(body.reason);
+ if(!common)fail('请填写授权或暂停理由（最多2000字），原输入保留。');
+ if(action==='pause'){if(!keys(body,'request_id,expected_version,reason'))fail('原暂停请求字段不匹配。');}
+ else if(action==='enable'){if(!keys(body,'request_id,expected_version,release_id,options_hash,source_id,extractor_id,entity_ids,business_id,max_tasks,reason,confirm_human_review_only')||!['release_id','source_id','extractor_id'].every(k=>UUID.test(body[k]||''))||!BUSINESS.test(body.business_id||'')||!SHA.test(body.options_hash||'')||!Array.isArray(body.entity_ids)||body.entity_ids.length<1||body.entity_ids.length>50||body.entity_ids.some(id=>!UUID.test(id))||new Set(body.entity_ids).size!==body.entity_ids.length||!integer(body.max_tasks)||body.max_tasks>100||body.confirm_human_review_only!==true)fail('请完整核对新异常的人工交接范围并明确确认。');}
+ else fail('原路由操作类型无法核对。');return body;
+}
+export async function routingRequestHash(scope,action,routeID,body){checkRoutingBody(action,body);if(action==='pause'&&!UUID.test(routeID||'')||action==='enable'&&routeID!==null)fail('原路由操作路径不匹配。');return routingDigest({schema:'signal-routing-request-v1',...scope,action,route_id:routeID,body});}
+export async function stageRoutingCommand(storage,scope,action,routeID,body,check=()=>{},options=null){
+ const copy=structuredClone(body),request_hash=await routingRequestHash(scope,action,routeID,copy);check();const key=routingPrefix(scope)+'request:'+copy.request_id,old=storage.getItem(key);
+ if(action==='enable'){await verifyRoutingOptions(options,scope);check();if(options.options_hash!==copy.options_hash)fail('授权与已看到的可选范围不匹配。');}
+ const row={schema:'signal-routing-outbox-v1',scope:structuredClone(scope),action,route_id:routeID,body:copy,exact_body:JSON.stringify(copy),request_hash,state:'pending',receipt:null,options:action==='enable'?structuredClone(options):null};
+ if(old!==null){const prior=JSON.parse(old);await verifyRoutingCommand(prior,scope);check();if(prior.request_hash!==request_hash||prior.exact_body!==row.exact_body)fail('此原请求编号已用于不同内容，未覆盖旧请求。');return prior;}
+ check();return exactRoutingWrite(storage,key,row);
+}
+export async function verifyRoutingCommand(row,scope){if(row?.schema!=='signal-routing-outbox-v1'||!same(row.scope,scope)||!['pending','saved','rejected'].includes(row.state)||row.exact_body!==JSON.stringify(row.body)||row.request_hash!==await routingRequestHash(scope,row.action,row.route_id,row.body))fail('原路由请求内容或范围无法核对，未发送。');if(row.action==='enable'){await verifyRoutingOptions(row.options,scope);if(row.options.options_hash!==row.body.options_hash)fail('原授权范围摘要无法核对。');}return row;}
+export function listRoutingCommands(storage,scope){const rows=[],prefix=routingPrefix(scope)+'request:';for(let i=0;i<storage.length;i++){const key=storage.key(i);if(!key?.startsWith(prefix))continue;const row=JSON.parse(storage.getItem(key));if(row?.schema!=='signal-routing-outbox-v1'||!same(row.scope,scope)||key!==prefix+row.body?.request_id||!['pending','saved','rejected'].includes(row.state)||!SHA.test(row.request_hash||'')||row.exact_body!==JSON.stringify(row.body))fail('本机原路由请求无法读取，未覆盖。');checkRoutingBody(row.action,row.body);rows.push(row);}return rows;}
+function checkRoute(route,scope){if(!object(route)||!UUID.test(route.id||'')||route.instance_id!==scope.instance_id||!UUID.test(route.release_id||'')||!UUID.test(route.actor_id||'')||!['active','paused','expired','exhausted'].includes(route.status)||!SHA.test(route.grant_hash||'')||!integer(route.max_tasks)||route.max_tasks>100||!integer(route.used_tasks,0)||route.used_tasks>route.max_tasks||typeof route.reason!=='string'||Date.parse(route.expires_at)-Date.parse(route.enabled_at)!==86400000||!Array.isArray(route.entities)||!BUSINESS.test(route.business?.id||''))fail('服务器授权范围无法核对，原请求保留。');for(const ref of [route.source,route.extractor])if(!UUID.test(ref?.id||'')||!integer(ref.version)||!SHA.test(ref.content_hash||''))fail('服务器来源或规则版本无法核对。');checkRules(route.extractor.rules);for(const ref of route.entities)if(!UUID.test(ref.id||'')||!integer(ref.version)||!SHA.test(ref.definition_hash||''))fail('服务器对象版本无法核对。');return route;}
+export function verifyRoutingList(value,scope){if(value?.schema!=='signal-routing-response-v1'||value.instance_id!==scope.instance_id||!integer(value.instance_version)||!Array.isArray(value.routes)||value.human_review_only!==true||value.device_actions!==false||value.cloud_calls!==0||new Set(value.routes.map(x=>x.id)).size!==value.routes.length)fail('服务器路由记录范围无法核对。');value.routes.forEach(row=>checkRoute(row,scope));return value;}
+export async function verifyRoutingReply(value,row,scope){
+ await verifyRoutingCommand(row,scope);verifyRoutingList(value,scope);const r=value.receipt,b=row.body;
+ if(!keys(r,'request_id,action,actor_id,workspace_id,instance_id,route_id,request_hash,accepted_version,accepted_at,accepted_route_status,receipt_hash')||r.request_id!==b.request_id||r.action!==row.action||!['actor_id','workspace_id','instance_id'].every(k=>r[k]===scope[k])||r.request_hash!==row.request_hash||r.accepted_version!==b.expected_version+1||r.accepted_version>value.instance_version||!Number.isFinite(Date.parse(r.accepted_at))||r.accepted_route_status!==(row.action==='enable'?'active':'paused')||row.action==='pause'&&r.route_id!==row.route_id)fail('原路由回执与原请求不匹配，请保留原编号核对。');
+ const {receipt_hash,...rest}=r;if(receipt_hash!==await routingDigest(rest))fail('原路由回执摘要不匹配。');const route=value.routes.find(x=>x.id===r.route_id);if(!route)fail('原路由回执对应授权未找到。');
+ if(row.action==='enable'&&(route.actor_id!==scope.actor_id||route.release_id!==b.release_id||route.source.id!==b.source_id||route.extractor.id!==b.extractor_id||route.business.id!==b.business_id||!same(route.entities.map(x=>x.id),b.entity_ids)||route.max_tasks!==b.max_tasks||route.reason!==b.reason))fail('已保存授权与本次核对范围不一致。');
+ if(row.action==='enable'){for(const [name,id] of [['source',b.source_id],['extractor',b.extractor_id]]){const seen=row.options[name==='source'?'sources':'extractors'].find(x=>x.id===id);if(!seen||!same(route[name],seen))fail('已保存来源或规则并非核对过的版本。');}for(const entity of route.entities){if(!same(entity,row.options.entities.find(x=>x.id===entity.id)))fail('已保存对象并非核对过的版本。');}if(!same(route.business,row.options.businesses.find(x=>x.id===b.business_id)))fail('已保存人工业务并非核对过的业务。');}
+ if(typeof value.current_matches!=='boolean'||value.current_matches!==(r.accepted_version===value.instance_version&&route.status===r.accepted_route_status))fail('当前路由状态与原回执不匹配。');return value;
+}
+// Reopening and probing are GET-only. An explicit retry may POST the exact original body once.
+export async function runRoutingCommand({storage,scope,row,request,allowPost=false,check=()=>{},beforeSend=async()=>{}}){
+ if(row.state!=='pending')allowPost=false;
+ await verifyRoutingCommand(row,scope);check();const key=routingPrefix(scope)+'request:'+row.body.request_id;
+ const exact=()=>{check();const current=storage.getItem(key);if(current===null)fail('本机原请求尚未保存，未发送。');const value=JSON.parse(current);if(value.request_hash!==row.request_hash||value.exact_body!==row.exact_body||!same(value.scope,scope))fail('本机原请求已变化，未发送。');return value;};
+ exact();const receiptPath=routingBase(scope)+'/requests/'+row.body.request_id;let reply;
+ try{reply=await request(receiptPath);check();}catch(error){check();if(error.status!==404)throw error;if(!allowPost){const missing=Error('服务器尚未找到原回执；可明确按原编号重试，未自动发送。');missing.status=404;throw missing;}
+  await beforeSend(row);check();exact();const path=row.action==='enable'?routingBase(scope)+'/enable':routingBase(scope)+'/'+row.route_id+'/pause';
+  try{reply=await request(path,{method:'POST',body:row.exact_body});check();}catch(postError){check();try{reply=await request(receiptPath);check();}catch(probeError){check();if(probeError.status===404&&[400,401,403,404,409,422].includes(postError.status)){exact();exactRoutingWrite(storage,key,{...row,state:'rejected',rejection:{status:postError.status,message:routingError(postError)}});postError.routingRejected=true;}throw postError;}}
+ }
+ await verifyRoutingReply(reply,row,scope);check();exact();exactRoutingWrite(storage,key,{...row,state:'saved',receipt:structuredClone(reply.receipt)});check();return reply;
+}
+export function routingDeliveryText(receipt){if(!receipt)return '';const labels={created:'已按明确授权建立人工核查任务',skipped_existing_task:'已有人工核查任务，未重复建立',duplicate:'同一线索已处理，未重复交接',blocked:'自动交接被阻止，异常仍保留在收件区',failed:'自动交接未完成，异常与原依据仍保留'};return labels[receipt.status]||'交接状态待核对';}
+export async function withRoutingLock(scope,fn,locks=globalThis.navigator?.locks){if(!locks?.request)fail('当前浏览器不能协调多页面授权，未发送；请使用支持页面锁的浏览器。');return locks.request(routingPrefix(scope)+'command',fn);}

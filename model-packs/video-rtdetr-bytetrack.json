@@ -1,0 +1,15 @@
+{
+  "pipeline_id": "video-rtdetr-bytetrack",
+  "version": "1.0.0",
+  "decoder": "PyAV / FFmpeg, MP4 file only",
+  "environment": {"av": "16.1.0", "supervision": "0.26.1", "opencv-python-headless": "4.11.0.86"},
+  "tracker": "Supervision ByteTrack",
+  "tracker_license": "MIT",
+  "license_evidence": "https://github.com/roboflow/supervision/blob/0.26.1/LICENSE.md",
+  "tracker_source": "https://github.com/roboflow/supervision/blob/0.26.1/supervision/tracker/byte_tracker/core.py",
+  "postprocess": "class-aware NMS IoU 0.6; detection floor 0.1; ByteTrack two-stage association",
+  "limits": {"bytes": 20971520, "seconds": 60, "sample_hz": [1, 2], "samples": 120, "decoded_frames": 3600, "pixels": 16000000},
+  "deployment": "local",
+  "cloud_fallback": false,
+  "domain_evaluation": "pending"
+}

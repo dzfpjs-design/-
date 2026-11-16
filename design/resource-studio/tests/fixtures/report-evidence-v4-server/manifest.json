@@ -1,0 +1,16 @@
+{
+  "account_note": "Actor/workspace binding is inside API DTOs; no account credential/session exported.",
+  "actual_provider": false,
+  "dto_pins": {
+    "accepted.json": "eee7572f72836564e28e499c161f48da07f6cba136a17fe858c409853520310e",
+    "command.json": "e6102d705336550ec39a272ffd7cba2519668c9c0aef53b205e484d2ce2e1e5b",
+    "mapped.json": "e49589252a1759d4fb029b002120d03ef5d3cfd9d846fd2422514298611f3aea",
+    "preview.json": "1f7f9c256a0e1c68e7de91b0f7df4e0617d73ad67221cfb3b95c63e02a2cc11f"
+  },
+  "generation": "report-evidence-map-generation-v4",
+  "owned_pg_port": 63428,
+  "real_credentials": false,
+  "schema": "public-v4-server-dto-bridge-v1",
+  "synthetic_only": true,
+  "tests_passed": 69
+}

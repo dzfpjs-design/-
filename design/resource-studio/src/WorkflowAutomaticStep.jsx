@@ -1,0 +1,39 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {json} from './runtime-api';
+import WorkflowWorkerProgress from './WorkflowWorkerProgress';
+import {abilityScope,readAbility,writeAbility,checkedAbilityReceipt,sameAbilityVisit} from './workflow-ability-contract.mjs';
+export default function WorkflowAutomaticStep({task,step,account,Btn,onRefresh,onCancel,accessBlocked=false,onPermissionIssue,executionBlockedReason=''}){
+ const scope=abilityScope(account,task,step),scopeKey=JSON.stringify(scope),base='/workspace/tasks/'+encodeURIComponent(task.id);
+ const [journal,setJournal]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[cacheError,setCacheError]=useState(''),[probe,setProbe]=useState(null),[notice,setNotice]=useState(''),[denied,setDenied]=useState(false);
+ const life=useRef(0),current=useRef(null),writing=useRef(false),renderScope=useRef(scopeKey),executionGate=useRef(executionBlockedReason);renderScope.current=scopeKey;executionGate.current=executionBlockedReason;
+ function requireExecution(){if(executionGate.current)throw Error(executionGate.current);}
+ const active=epoch=>life.current===epoch&&renderScope.current===scopeKey;
+ useEffect(()=>{life.current++;current.current=null;writing.current=false;setJournal(null);setBusy(false);setError('');setCacheError('');setProbe(null);setNotice('');setDenied(false);try{const saved=readAbility(localStorage,scope);current.current=saved;setJournal(saved);if(localStorage.getItem('ga-workflow-ability:'+scope.workspace_id+':'+scope.task_id+':'+scope.step_id+':'+scope.visit)!==null)throw Error('旧能力请求未保存账号归属，原记录保留；请核对服务器原步骤，不能直接建立新请求');}catch(e){setCacheError(e.message);}return()=>{life.current++;};},[scopeKey]);
+ useEffect(()=>{setDenied(false);},[task.permissions]);
+ function persist(next){try{const saved=writeAbility(localStorage,scope,next,current.current);current.current=saved;setJournal(saved);return saved;}catch(e){setCacheError(e.message);throw e;}}
+ const retrying=task.permissions?.can_retry_ability===true,running=['workflow_queued','workflow_running'].includes(task.status),blocked=accessBlocked||denied;
+ const last=journal?.history.at(-1),freshReady=!last||task.version>=last.minimum_version&&task.version>last.body.version;
+ const canRun=!blocked&&task.permissions?.can_run_ability===true,canRetry=!blocked&&task.permissions?.can_retry_ability===true,canProbe=!blocked&&task.permissions?.can_probe_ability===true;
+ async function operate(action,readOnly=false){if(writing.current||busy||!readOnly&&(cacheError||!current.current))return;const epoch=life.current;writing.current=true;setBusy(true);setError('');try{await action(epoch);}catch(e){if(active(epoch)){if([401,403].includes(e.status)){setDenied(true);onPermissionIssue?.(e);}setError(e.message+' 原请求编号、内容和步骤记录保留，结果未核实。');}}finally{if(active(epoch)){writing.current=false;setBusy(false);}}}
+ async function saved(receipt,pending,epoch){await checkedAbilityReceipt(receipt,pending,scope);if(!active(epoch))return;if(!receipt.saved)throw Error('尚未查到本账号原请求，不能认定发送成功');if(current.current?.pending?.body.request_id!==pending.body.request_id)throw Error('本页原请求已变化，旧回执保留待核');persist({...current.current,pending:null,history:[...current.current.history,{body:pending.body,status:'saved',request_hash:receipt.request_hash,minimum_version:receipt.task_version}]});setProbe(null);setNotice(receipt.step_id===null?'原编号保存已核实；旧记录未保存原步骤证明，请继续核对任务回执。':'本账号原能力请求已核实保存；执行结果以后台处理回执为准。');await onRefresh?.();}
+ async function send(resume=false){if(resume?!canProbe:!(retrying?canRetry:canRun))return;await operate(async epoch=>{
+  requireExecution();
+  let pending=current.current.pending;
+  if(pending){if(!resume||!probe||probe.saved||!sameAbilityVisit(probe,scope)||!['workflow_waiting','workflow_failed','workflow_blocked'].includes(probe.task_status))throw Error('请先核对原能力请求及当前步骤，原记录保留');}
+  else{if(resume||running)return;pending={body:{version:task.version,step_id:step.id,request_id:crypto.randomUUID(),retry:retrying}};if(!freshReady)throw Error('请先更新任务并核对原保存回执，再建立新尝试');persist({...current.current,pending});}
+  requireExecution();const value=await json(base+'/run-ability',{method:'POST',body:JSON.stringify(pending.body)});if(!active(epoch))return;await saved(value.ability_request,pending,epoch);
+ });}
+ async function recover(){if(!canProbe)return;await operate(async epoch=>{const pending=current.current.pending;if(!pending)return;const receipt=await json(base+'/ability-requests/'+pending.body.request_id);await checkedAbilityReceipt(receipt,pending,scope);if(!active(epoch))return;setProbe(receipt);if(receipt.saved)await saved(receipt,pending,epoch);else setNotice('未查到本账号原编号的保存记录，送达状态仍未知；任务的其他变化不会被当作本请求成功。');});}
+ async function reconfirm(){if(!canProbe||!probe||probe.saved||!sameAbilityVisit(probe,scope)||probe.task_version<=current.current.pending.body.version||!(retrying?canRetry:canRun))return;await operate(async epoch=>{
+  const pending=current.current.pending,receipt=await json(base+'/ability-requests/'+pending.body.request_id);await checkedAbilityReceipt(receipt,pending,scope);if(!active(epoch))return;if(receipt.saved){await saved(receipt,pending,epoch);return;}if(!sameAbilityVisit(receipt,scope)||receipt.task_version<=pending.body.version||!['workflow_waiting','workflow_failed','workflow_blocked'].includes(receipt.task_status))throw Error('当前任务尚不能建立新尝试，请保留原请求');
+  persist({...current.current,pending:null,history:[...current.current.history,{body:pending.body,status:'version_superseded',minimum_version:receipt.task_version}]});setProbe(null);setNotice('旧请求完整保留，其任务版本已失效。请核对更新后的步骤，再明确确认新尝试。');await onRefresh?.();
+ });}
+ const unknownHere=probe&&!probe.saved&&sameAbilityVisit(probe,scope)&&['workflow_waiting','workflow_failed','workflow_blocked'].includes(probe.task_status);
+ return <section><h3>当前步骤：{step.name}</h3><p>{step.purpose}</p><p>使用能力：{step.execution.capability_name} · {['builtin','local_specialist','local_pixel_change'].includes(step.execution.adapter)?'本地':'已批准的登记服务'}</p><WorkflowWorkerProgress worker={task.automatic_worker}/>{task.workflow_runtime.automatic?.error&&<p className="error" role="alert">{task.workflow_runtime.automatic.error}</p>}{error&&<p role="alert">{error}</p>}{cacheError&&<p role="alert">{cacheError}</p>}{notice&&<p role="status">{notice}</p>}{blocked&&<p role="alert">当前账号不能继续操作；原执行请求保留，可刷新当前权限。</p>}{!canRun&&!canRetry&&task.permissions?.reasons?.run_ability&&<p>{task.permissions.reasons.run_ability}</p>}
+ {!freshReady&&!journal?.pending&&<p role="status">原请求已核对，请先刷新任务版本和当前步骤后继续。</p>}
+ <p>任务固定原件、对象及能力版本；后台结果与人工确认分别保存，失败不会自动转云。</p>
+ {executionBlockedReason&&<p role="alert">{executionBlockedReason} 新执行暂不可用；原请求核对、历史和取消仍按原权限保留。</p>}
+ {journal?.pending?<><p role="status">原能力请求送达结果待核对，账号、步骤、版本及重试选择已固定。刷新或返回此步骤后可继续恢复。</p><Btn disabled={busy||!canProbe||!!cacheError} onClick={recover}>核对原能力请求是否已保存</Btn>{unknownHere&&<><Btn disabled={busy||!canProbe||!!cacheError||!!executionBlockedReason} onClick={()=>send(true)}>按原编号继续能力请求</Btn>{probe.task_version>journal.pending.body.version&&<Btn disabled={busy||!(retrying?canRetry:canRun)||!canProbe||!!cacheError} onClick={reconfirm}>保留旧请求，重新核对当前版本</Btn>}</>}</>:!running&&<Btn primary disabled={busy||!(retrying?canRetry:canRun)||!!cacheError||!journal||!freshReady||!!executionBlockedReason} onClick={()=>send()}>{retrying?'核对后发起新的能力尝试':'确认并执行此步骤'}</Btn>}
+ {journal?.history.length>0&&<details><summary>本账号此步骤请求历史（{journal.history.length}）</summary>{journal.history.map((item,index)=><p key={index}>{item.status==='saved'?'原请求已核实保存':'旧版本请求保留，未认定保存'} · 原任务版本 {item.body.version} · {item.body.retry?'失败后明确重试':'原步骤执行'}。</p>)}</details>}
+ <div className="actions"><Btn disabled={busy} onClick={()=>operate(async()=>onRefresh?.(),true)}>刷新处理进度和权限</Btn><Btn disabled={busy||blocked||task.permissions?.can_cancel!==true} onClick={onCancel}>取消任务</Btn></div></section>;
+}

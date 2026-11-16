@@ -1,0 +1,22 @@
+{
+  "id": "wms-rendered-raster-v1",
+  "runner_sha256": "c5b9cd1ef87e7ac63f05acc576aee2221e7fa0b07234d760c4579bd8be6e6fd2",
+  "environment": {
+    "numpy": "2.5.3",
+    "click": "8.5.0",
+    "rasterio": "1.4.4",
+    "pyproj": "3.7.2",
+    "certifi": "2026.7.22",
+    "cligj": "0.7.2",
+    "affine": "3.0.1",
+    "attrs": "26.1.0",
+    "pillow": "11.3.0",
+    "click-plugins": "1.1.1.2",
+    "pyparsing": "3.3.3"
+  },
+  "input": "local PNG from confirmed WMS request",
+  "max_pixels": 4194304,
+  "max_png_bytes": 16777216,
+  "raw_satellite_bands": false,
+  "network": false
+}

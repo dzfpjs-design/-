@@ -1,0 +1,32 @@
+{
+  "pipeline_id": "silero-sensevoice-segments-v1",
+  "title": "Local VAD to segmented ASR",
+  "default_deployment": "local",
+  "cloud_fallback": false,
+  "backend": "cpu",
+  "vad_recipe_hash": "3906da80faf00d102ffb8fd341fa758a1b6332c2c08d639847f1a81dd84c6d14",
+  "asr_recipe_hash": "2175d99dc258963920d7aaa4b5da5c6d0215a9b1d9de4bbbb1121c167b96f72e",
+  "context_samples": 3200,
+  "sample_rate": 16000,
+  "max_seconds": 60,
+  "max_segments": 250,
+  "environment": {
+    "torch": "2.8.0",
+    "torchaudio": "2.8.0",
+    "funasr": "1.4.16",
+    "soundfile": "0.13.1",
+    "av": "16.1.0",
+    "numpy": "2.5.3"
+  },
+  "source_files": {
+    "local_audio_runner.py": "bda14fe267232abacef7b7d374c377c362085c3904ac39dce6425fafe658146f",
+    "local_vad_runner.py": "3984ba355181cff163aa60315016286370c9d8a3ae0a1a57dae03244635913da",
+    "speech_activity.py": "31034b92879f0e85db0290a270d127328407617c2102a1f311c006efe8281957"
+  },
+  "runner_sha256": "d0fb0dd0e1f3bc2fa889d12bd2659a227d3610ec7fe6a6adcbdb4b92d9545b48",
+  "word_timestamps": false,
+  "speaker_identity": false,
+  "domain_quality": "not_verified",
+  "license_chain": "pending",
+  "os_network_isolation": "macos_sandbox_exec_required"
+}

@@ -1,0 +1,14 @@
+.external-registration{margin:16px 0;padding:16px;border:1px solid #dbe7f7;border-radius:10px;background:#f9fbff;color:#18355b}
+.external-registration h3{margin:0 0 8px;font-size:18px}
+.external-registration p{line-height:1.5;margin:7px 0;color:#516887}
+.external-registration>fieldset{border:0;padding:0;margin:14px 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.external-registration label{display:flex;flex-direction:column;gap:5px;min-width:0;color:#263f65;font-size:14px}
+.external-registration label:has(input[type=checkbox]){flex-direction:row;align-items:center;gap:8px;line-height:1.4}
+.external-registration input:not([type=checkbox]),.external-registration select{width:100%;min-width:0;padding:9px 10px;border:1px solid #c7d8ef;border-radius:6px;background:white;color:#18355b}
+.external-registration input[type=checkbox]{width:auto;flex:none}
+.external-registration fieldset fieldset{grid-column:1/-1;border:1px solid #dce7f8;border-radius:8px;padding:12px;min-width:0}
+.external-registration legend{font-weight:600;color:#18355b}
+.external-schema-row{display:grid;grid-template-columns:minmax(120px,2fr) minmax(100px,1fr) auto auto;gap:10px;align-items:end;margin:10px 0}
+.external-schema-row button,.external-schema-fields>button{padding:8px 10px;border:1px solid #bcd0ef;border-radius:6px;background:white;color:#0755e9;cursor:pointer}
+.external-registration>.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+@media(max-width:760px){.external-registration>fieldset{grid-template-columns:1fr}.external-schema-row{grid-template-columns:1fr 1fr}.external-registration{padding:12px}}

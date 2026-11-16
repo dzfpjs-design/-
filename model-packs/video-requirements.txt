@@ -1,0 +1,4 @@
+# Add to the isolated RT-DETR environment; do not install into API Python.
+av==16.1.0
+supervision==0.26.1
+opencv-python-headless==4.11.0.86

@@ -1,0 +1,4 @@
+export const blankLocalObservation=()=>({entity_id:'',extractor_id:'',selected:'',drafts:{}});
+export function localObservationReady(form,objects,models){return objects.some(o=>o.id===form.entity_id)&&models.some(m=>m.id===form.extractor_id&&m.deployment==='local'&&m.candidate_only===true);}
+export function localObservationBody(action){if(!action?.request_id||!action.entity_id||!action.extractor_id||!action.evidence_id)throw Error('原图片或提交条件尚未保存，请先核对原请求。');return {request_id:action.request_id,...(action.release_id?{release_id:action.release_id}:{}),entity_id:action.entity_id,extractor_id:action.extractor_id,evidence_id:action.evidence_id};}
+export function sameLocalObservation(row,action){return row.request_id===action.request_id&&row.entity_id===action.entity_id&&row.extractor_id===action.extractor_id&&row.source_sha256===action.sha256;}

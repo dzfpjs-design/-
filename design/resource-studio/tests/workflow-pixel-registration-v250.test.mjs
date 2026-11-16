@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {JSDOM} from 'jsdom';
+import {webcrypto} from 'node:crypto';
+import {initializePixelRegistration,registrationFixture} from './workflow-pixel-registration-v250-fixture.mjs';
+import {id,copy} from './pixel-change-v249-fixture.mjs';
+import {checkedPixelRegistrationOptions,makePixelRegistrationOriginal,checkedPixelRegistrationOriginal,checkedPixelRegistrationResult,checkedPixelRegistrationRecovery} from '../src/workflow-pixel-registration-v250-protocol.mjs';
+async function harness(run){const dom=new JSDOM('<!doctype html>',{url:'https://pixel-registration-unit.invalid'}),globals={window:dom.window,localStorage:dom.window.localStorage,sessionStorage:dom.window.sessionStorage,crypto:webcrypto},prior=new Map(Object.keys(globals).map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));for(const[key,value]of Object.entries(globals))Object.defineProperty(globalThis,key,{value,writable:true,configurable:true});try{await initializePixelRegistration();await run(await registrationFixture());}finally{dom.window.close();for(const[key,value]of prior){if(value)Object.defineProperty(globalThis,key,value);else delete globalThis[key];}}}
+test('V250 registration pins reference result, threshold and current model while keeping registration distinct from domain approval',()=>harness(async f=>{
+ const r=f.registration,c=r.make();await c.start();assert.equal(r.state.posts.length,0);const saved=await c.register();assert.equal(saved.capability.namespace,'local_pixel_change');assert.equal(saved.threshold_text,'0.5');assert.equal(c.pending,null);assert.equal(r.state.posts.length,1);assert.match(c.notice,/不代表领域效果通过/);assert.equal(f.state.posts.length,1,'Registration cannot create another model run');await assert.rejects(c.register(),/已有登记回执/);assert.equal(r.state.posts.length,1);c.dispose();
+}));
+test('V250 lost registration reply is recovered readonly after cold entry without creating another capability or model run',()=>harness(async f=>{
+ const r=f.registration,c=r.make();await c.start();r.state.mode='lost';await assert.rejects(c.register());const p=copy(c.pending);c.dispose();const next=r.make();await next.start();assert.equal(next.pending,null);assert.equal(next.result.capability.id,id(900));assert.equal(r.state.posts.length,1);assert.equal(f.state.posts.length,1);assert.equal(f.storage.getItem(r.prefix+'original:'+p.body.request_id),JSON.stringify(p));assert.equal(next.guard(),true);next.dispose();
+}));
+test('V250 unknown registration remains the same original across foundfalse and paused instances; resend is explicit',()=>harness(async f=>{
+ const r=f.registration,c=r.make();await c.start();r.state.mode='unknown';await assert.rejects(c.register());const p=copy(c.pending);c.dispose();f.state.status='paused';const next=r.make();await next.start();await next.recover();assert.equal(r.state.posts.length,1);assert.equal(next.pending.raw,p.raw);assert.equal(next.guard(),true);r.state.mode='normal';await next.resend();assert.equal(r.state.posts.length,2);assert.equal(r.state.posts[1].raw,p.raw);assert.equal(f.state.posts.length,1);next.dispose();
+}));
+for(const status of [404,409])test('V250 registration lookup '+status+' preserves raw and unknown state rather than creating a replacement',()=>harness(async f=>{
+ const r=f.registration,c=r.make();await c.start();r.state.mode='unknown';await assert.rejects(c.register());const p=copy(c.pending);c.dispose();r.state.lookupStatus=status;const next=r.make();await next.start();assert.equal(next.pending.raw,p.raw);assert.equal(r.state.posts.length,1);assert.equal(f.storage.getItem(r.prefix+'pending'),JSON.stringify(p));assert.equal(next.guard(),true);next.dispose();
+}));
+test('V250 registration decoder accepts literal Unicode request ids and rejects scope, hash, model and reference mismatches',()=>harness(async f=>{
+ const r=f.registration,body={schema:'workflow-pixel-register-v250',request_id:'登记/原请求?保留中文-250',version:r.options().reference_version},p=await makePixelRegistrationOriginal(r.scope,body,r.options()),saved=r.result(body);await checkedPixelRegistrationOriginal(p,r.scope);await checkedPixelRegistrationResult(saved,r.scope,p);for(const edit of [v=>{v.reference_run_id=id(999);},v=>{v.reference_result_hash='0'.repeat(64);},v=>{v.body_hash='1'.repeat(64);},v=>{v.model_trace.generation++;},v=>{v.threshold_text='0.50';},v=>{v.capability.namespace='local_learned_geo_pair';},v=>{v.extra=true;}]){const v=copy(saved);edit(v);await assert.rejects(checkedPixelRegistrationResult(v,r.scope,p));}const bad=copy(p);bad.scope.actor_id=id(888);await assert.rejects(checkedPixelRegistrationOriginal(bad,r.scope));
+}));
+test('V250 registration original pointer failure can be repaired on the same page without sending',()=>harness(async f=>{
+ const r=f.registration,c=r.make();await c.start();f.storage.failSet=key=>key===r.prefix+'pending';await assert.rejects(c.register());const p=copy(c.pending);assert.equal(c.guard(),false);assert.equal(r.state.posts.length,0);f.storage.failSet=null;await c.repair();assert.equal(c.guard(),true);assert.equal(f.storage.getItem(r.prefix+'pending'),JSON.stringify(p));assert.equal(r.state.posts.length,0);await c.resend();assert.equal(r.state.posts.length,1);assert.equal(r.state.posts[0].raw,p.raw);c.dispose();
+}));
+test('V250 saved result receipt failure retains original operation and lookup later settles the same server result',()=>harness(async f=>{
+ const r=f.registration,c=r.make();await c.start();f.storage.failSet=key=>key.startsWith(r.prefix+'saved:');await assert.rejects(c.register());const p=copy(c.pending);assert.equal(r.state.posts.length,1);assert.equal(c.result,null);assert.equal(c.guard(),true);f.storage.failSet=null;await c.recover();assert.equal(c.pending,null);assert.equal(c.result.request_id,p.body.request_id);assert.equal(r.state.posts.length,1);c.dispose();
+}));
+test('V250 late registration lookup after actor switch does not expose a capability or clear original work',()=>harness(async f=>{
+ const r=f.registration,c=r.make();await c.start();r.state.mode='lost';await assert.rejects(c.register());const p=copy(c.pending);c.dispose();let release;r.state.lookupGate=new Promise(resolve=>release=resolve);const next=r.make(),start=next.start();for(let turn=0;turn<100&&!r.state.calls.some(row=>row.path.includes('/registrations/requests?'));turn++)await new Promise(resolve=>setTimeout(resolve,0));f.session.setItem('ga-setup-csrf-user',id(999));release();await start;assert.equal(next.denied,true);assert.equal(next.result,null);assert.equal(f.storage.getItem(r.prefix+'pending'),JSON.stringify(p));assert.equal(r.state.posts.length,1);next.dispose();
+}));
+test('V250 current model drift blocks new registration without rewriting historical reference pins',()=>harness(async f=>{
+ const r=f.registration,c=r.make();await c.start();f.state.modelReady=false;await assert.rejects(c.register());assert.equal(r.state.posts.length,0);assert.equal(c.pending,null);assert.equal(c.options.model_trace.generation,1);c.dispose();
+}));
+test('V250 malformed registration options or contradictory unknown response is rejected by production decoders',()=>harness(async f=>{
+ const r=f.registration,o=r.options();o.reference_version=0;assert.throws(()=>checkedPixelRegistrationOptions(o,r.scope));const body={schema:'workflow-pixel-register-v250',request_id:id(99),version:r.options().reference_version},p=await makePixelRegistrationOriginal(r.scope,body,r.options());await assert.rejects(checkedPixelRegistrationRecovery({schema:'workflow-pixel-registration-recovery-v250',found:false,state:'found',request_id:body.request_id,expected_body_hash:p.body_hash,result:null},r.scope,p));
+}));

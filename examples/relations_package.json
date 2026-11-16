@@ -1,0 +1,32 @@
+{
+  "kind": "domain_package",
+  "namespace": "asset_inspection",
+  "name": "related_assets",
+  "version": "1.0.0",
+  "owner": "业务包维护者",
+  "description": "设施与设备关系示例（登记资料，不是实时传感接口）",
+  "specification": {
+    "timezone": "Asia/Shanghai",
+    "entity_schemas": {
+      "facility": {
+        "type": "object", "required": ["name"], "additionalProperties": false,
+        "properties": {"name": {"type": "string", "title": "设施名称"}}
+      },
+      "equipment": {
+        "type": "object", "required": ["name", "load"], "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "title": "设备名称"},
+          "load": {"type": "number", "title": "登记负载", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "relation_types": {
+      "installed": {
+        "title": "安装设备", "description": "设施与设备的登记安装关系，须提供来源并由责任人核查",
+        "source_types": ["facility"], "target_types": ["equipment"],
+        "attribute_schema": {"type": "object", "properties": {}, "additionalProperties": false},
+        "cardinality": "many", "allow_self": false
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "pack_id": "rtdetr-v2-r18",
+  "version": "1.0.0",
+  "title": "RT-DETRv2-S 通用目标检测",
+  "repository": "PekingU/rtdetr_v2_r18vd",
+  "revision": "5650961749fa93567c0d46fc7f43ea4f9e914107",
+  "license": "Apache-2.0",
+  "license_evidence": "https://huggingface.co/PekingU/rtdetr_v2_r18vd/tree/5650961749fa93567c0d46fc7f43ea4f9e914107",
+  "code_license_evidence": "https://github.com/huggingface/transformers/blob/v4.57.6/LICENSE",
+  "training_origin": "COCO train2017; generic 80-class detection; dataset rights and domain suitability require separate review",
+  "limitations": "只输出COCO通用类别候选框；不能直接识别林业烟火、病虫害、采伐或证明业务异常。尚未完成代表性领域评测。",
+  "files": [
+    {"name": "config.json", "bytes": 5437, "sha256": "ed051ec77cb41c5d9d5e3af21a979b1e890599dfd68434d7636ff82ded4c1527"},
+    {"name": "preprocessor_config.json", "bytes": 444, "sha256": "cd38cd59999e7a95d68e487fbe5132df3d4e5c32a0836add57e6126ba0c4eaf1"},
+    {"name": "model.safetensors", "bytes": 80904640, "sha256": "d18309d0d7ea57048138885c4c6ecfcb1e24506fc6153b94ad484f8ab62c7115"}
+  ],
+  "environment": {"torch": "2.8.0", "torchvision": "0.23.0", "transformers": "4.57.6", "safetensors": "0.6.2", "Pillow": "11.3.0", "scipy": "1.16.2"},
+  "default_deployment": "local",
+  "default_backend": "cpu",
+  "cloud_fallback": false
+}

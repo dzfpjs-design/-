@@ -1,0 +1,163 @@
+{
+  "kind": "tool",
+  "namespace": "generic_data",
+  "name": "fulltext_search",
+  "version": "1.0.0",
+  "owner": "通用数据工具维护者",
+  "description": "授权证据全文检索与排序",
+  "allowed_agent_roles": [
+    "data"
+  ],
+  "execution": {
+    "adapter": "builtin",
+    "handler": "data_fulltext_search",
+    "query_tool": true,
+    "side_effect": false,
+    "input_bindings": {
+      "records": "data_records"
+    }
+  },
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "records",
+      "field",
+      "text",
+      "top_k",
+      "min_score",
+      "match_mode"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "records": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 200,
+        "items": {
+          "type": "object",
+          "required": [
+            "values",
+            "entity_ids",
+            "evidence_refs"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "object"
+            },
+            "entity_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 30,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "evidence_refs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 200,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "field": {
+        "type": "string",
+        "title": "登记字段",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "text": {
+        "type": "string",
+        "title": "要检索的文字",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "top_k": {
+        "type": "integer",
+        "title": "最多返回几条证据",
+        "minimum": 1,
+        "maximum": 20
+      },
+      "min_score": {
+        "type": "number",
+        "title": "最低全文匹配分",
+        "minimum": 0,
+        "maximum": 50
+      },
+      "match_mode": {
+        "type": "string",
+        "title": "词项要求",
+        "enum": [
+          "all_terms",
+          "any_terms"
+        ]
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "records",
+      "summary"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "records": {
+        "type": "array",
+        "maxItems": 200,
+        "items": {
+          "type": "object",
+          "required": [
+            "values",
+            "entity_ids",
+            "evidence_refs"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "object"
+            },
+            "entity_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 30,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "evidence_refs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 200,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "summary": {
+        "type": "object"
+      }
+    }
+  },
+  "budget": {
+    "max_attempts": 2,
+    "max_concurrency": 1
+  },
+  "data_policy": {
+    "external_allowed": false
+  },
+  "specification": {
+    "sample_unit": "returned_evidence_records",
+    "tokenizer_version": "zh_character_bigram_en_word_v1"
+  }
+}

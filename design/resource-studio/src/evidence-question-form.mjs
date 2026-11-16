@@ -1,0 +1,8 @@
+export const blankQuestion=()=>({question:'',model_profile_id:''});
+export const blankCriteria=()=>({goal:'',required_modalities:[],lookback_hours:'',purpose:''});
+export const criteriaOf=row=>{const source=row?.draft||row?.approved||row?.proposal;return source?{goal:['current_state','available_evidence'].includes(source.goal)?source.goal:'',required_modalities:source.required_modalities||[],lookback_hours:source.lookback_hours??'',purpose:source.purpose||''}:blankCriteria()};
+export const criteriaReady=c=>!!c?.purpose?.trim()&&['current_state','available_evidence'].includes(c.goal)&&Array.isArray(c.required_modalities)&&c.required_modalities.length>0&&new Set(c.required_modalities).size===c.required_modalities.length&&c.required_modalities.every(m=>['imagery','audio','video'].includes(m))&&Number.isInteger(c.lookback_hours)&&c.lookback_hours>=1&&c.lookback_hours<=8760;
+export const canConfirm=(row,criteria,dirty,acks)=>!!row&&['needs_confirmation','needs_clarification','unsupported'].includes(row.status)&&!!row.draft&&!dirty&&criteriaReady(criteria)&&(!(row.proposal?.clarifications?.length)||acks.clarifications)&&(!(row.proposal?.unsupported_parts?.length||row.proposal?.goal==='unsupported')||acks.unsupported);
+export function requestMatches(action,instanceId){return !!action&&action.instance_id===instanceId&&action.authorize_cloud_text===true&&typeof action.request_id==='string'&&action.request_id.length>=12&&Array.isArray(action.entity_ids)&&action.entity_ids.length>0;}
+export const questionPending=row=>['queued','running'].includes(row?.status);
+export const inputStamp=(form,entityIds)=>JSON.stringify({form,entityIds:[...entityIds].sort()});

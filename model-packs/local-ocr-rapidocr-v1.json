@@ -1,0 +1,35 @@
+{
+  "pack_id": "local-ocr-rapidocr-v1",
+  "version": "1.0.0",
+  "title": "RapidOCR 中文扫描资料本地识别",
+  "engine_id": "rapidocr-3.10.0-ppocrv6-small-cpu-m45",
+  "install_manifest_sha256": "d242884f8972275fac53bc1e4dc1a8907e7bf252dea96081e7fa13dd2776942d",
+  "install_manifest_path": ".runtime/ocr-m45/manifest.json",
+  "source": "official_sha_verified_pypi_wheels_with_bundled_models",
+  "official_sources": [
+    "https://pypi.org/project/rapidocr/3.10.0/",
+    "https://pypi.org/project/onnxruntime/1.31.0/",
+    "https://pypi.org/project/pypdfium2/5.14.0/"
+  ],
+  "packages": {"rapidocr": "3.10.0", "onnxruntime": "1.31.0", "pypdfium2": "5.14.0"},
+  "models": [
+    {"name": "PP-OCRv6_det_small.onnx", "sha256": "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"},
+    {"name": "PP-OCRv6_rec_small.onnx", "sha256": "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"},
+    {"name": "ch_ppocr_mobile_v2.0_cls_mobile.onnx", "sha256": "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c"}
+  ],
+  "dictionary": "Fixed embedded ONNX character metadata; 18708 entries; exported SHA in install manifest",
+  "default_deployment": "local",
+  "default_backend": "cpu",
+  "cloud_fallback": false,
+  "remote_code": false,
+  "data_policy": {"deployment": "local", "cloud_allowed": false, "external_allowed": false},
+  "network_isolation": "macOS sandbox-exec deny network* required; unavailable or unverified isolation is blocked",
+  "license": "RapidOCR code Apache-2.0; model artifacts Apache-2.0 attributed to Baidu/PaddleOCR; ONNX Runtime MIT; pypdfium2 binding Apache-2.0/BSD-3-Clause; PDFium BSD-3-Clause plus bundled third-party terms",
+  "license_notice_directory": ".runtime/ocr-m45/third-party",
+  "license_review_boundary": "Official distribution notices retained; not a legal opinion or blanket redistribution clearance. OS sample font is not redistributed.",
+  "limits": {"source_bytes": 52428800, "image_pixels": 24000000, "pdf_pages": 500, "pdf_dpi": 200, "timeout_seconds": 90, "cpu_seconds": 60},
+  "capabilities": ["printed_text_detection", "text_recognition", "quadrilateral_location", "recognition_score", "pdf_page_rasterization"],
+  "limitations": "Synthetic printed Chinese samples qualified only; no best-model, domain accuracy, handwriting, semantic table reconstruction or production capacity claim. Recognition score is not an accuracy or business confidence estimate.",
+  "registration_boundary": "Auditable built-in model pack consumed by the fixed material OCR runtime. Arbitrary OCR plugin registration/installation and other OS targets are not implemented by this slice.",
+  "qualification": ".runtime/ocr-m45-qualification.json"
+}

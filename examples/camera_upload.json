@@ -1,0 +1,16 @@
+{
+  "contract_version": "1.0",
+  "namespace": "inspection",
+  "name": "camera_upload",
+  "version": "1.0.0",
+  "owner": "平台操作者",
+  "description": "摄像头观测接收（人工导入，不代表设备控制）",
+  "kind": "source",
+  "execution": {
+    "adapter": "upload"
+  },
+  "specification": {
+    "timezone": "UTC",
+    "source_type": "camera"
+  }
+}

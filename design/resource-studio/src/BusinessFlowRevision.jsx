@@ -1,0 +1,50 @@
+import React,{useEffect,useMemo,useRef,useState} from 'react';
+import {json} from './runtime-api.js';
+import {BusinessFlowRevisionController,flowRevisionModels,flowRevisionStatus} from './business-flow-revision.mjs';
+import {createRetainedControllerLifecycle} from './retained-controller-lifecycle.mjs';
+
+const Button=({children,...props})=><button type="button" {...props}>{children}</button>;
+const list=value=>Array.isArray(value)?value:[];
+const terminal=new Set(['review','needs_clarification','reviewed','failed']);
+const labels={business:'业务',name:'名称',description:'说明',flows:'工作流程',phases:'处理阶段',steps:'处理步骤',kind:'处理方式',mode:'汇合条件',branches:'分支',condition:'条件',when:'触发条件',trigger:'触发条件',then:'满足条件后',else:'其他情况',body:'处理内容',repeat:'重复处理',until:'结束条件',completion:'完成条件',role:'负责角色',actor:'负责角色',label:'显示名称',roles:'角色政策',rules:'规则',principles:'原则',authority:'权限',responsibilities:'职责',business_agent:'业务驱动智能体',perception_agent:'多模感知智能体',data_agent:'数据管理智能体',findings:'复核发现',severity:'问题级别',reason:'原因',explanation:'说明',question:'待核问题',questions:'待核问题',citations:'原文依据',repair:'修订建议',action:'处理建议',required:'必须满足',prohibited:'禁止事项',policy:'政策',constraints:'约束',purpose:'目的',output:'产出',outputs:'产出',evidence:'依据',source_refs:'原文依据',revision:'修订说明'};
+const words={business_agent:'业务驱动智能体',perception_agent:'多模感知智能体',data_agent:'数据管理智能体',steps:'依次处理',decision:'按条件选择',parallel:'并行处理',repeat:'重复处理',all:'全部分支完成',any:'任一分支完成',human:'人工岗位'};
+const technical=key=>['schema','binding','binding_hash','parent_hash','policy_hash','plan_hash','raw_plan_hash','source_snapshot_hash','attempt_id','plan_id','scope_id'].includes(key)||key.endsWith('_sha256');
+function ReadOnlyValue({value,label}){
+ if(value===null||value===undefined)return null;
+ if(typeof value!=='object')return <p style={{whiteSpace:'pre-wrap'}}>{label&&<strong>{label}： </strong>}{typeof value==='boolean'?(value?'是':'否'):Object.hasOwn(words,value)?words[value]:String(value)}</p>;
+ if(Array.isArray(value))return <section>{label&&<h5>{label} · {value.length}项</h5>}{value.map((item,i)=><div key={i}><ReadOnlyValue value={item} label={typeof item==='object'?'第'+(i+1)+'项':undefined}/></div>)}</section>;
+ return <section>{label&&<h5>{label}</h5>}{Object.entries(value).filter(([key])=>!technical(key)).map(([key,item])=><ReadOnlyValue key={key} value={item} label={Object.hasOwn(labels,key)?labels[key]:'说明'}/>)}</section>;
+}
+function SentSource({view}){const payload=view.sent_payload;return <details><summary>查看本次完整发送范围与原文</summary><p>本业务已选 {payload.input_claims.length} 条／原全部 {view.claim_count} 条；未发送其他范围，不代表整份报告覆盖。</p><details><summary>全部已选声明</summary>{payload.input_claims.map((entry,i)=>{const claim=entry.claim||entry;return <article key={i}><strong>声明 {i+1}{claim.kind?' · '+claim.kind:''}</strong><p>{claim.statement}</p>{claim.explanation&&<p>{claim.explanation}</p>}<small>{{explicit:'原文明示，仍待核对',inferred:'推断，仍待核对',unknown:'尚不明确'}[claim.status]||'状态待核对'}</small></article>;})}</details><details><summary>全部发送的原文 · {payload.spans.length}段</summary>{payload.spans.map((span,i)=><article key={i}><strong>原文片段 {i+1}</strong><p style={{whiteSpace:'pre-wrap'}}>{span[1]}</p></article>)}</details></details>;}
+
+export default function BusinessFlowRevision({account,producerId,parent,parentAttemptId=parent?.id,models=[],prepareDraft,currentAvailable=true,onGuardChange,onShowResult,onExit,onClose,request=json,storage=globalThis.localStorage,tabStorage=globalThis.sessionStorage,locks=globalThis.navigator?.locks,Btn=Button}){
+ const [,draw]=useState(0),latest=useRef(null),lifetime=useRef(null);latest.current={models,prepareDraft,currentAvailable,onShowResult,onExit:onExit||onClose};if(!lifetime.current)lifetime.current=createRetainedControllerLifecycle();
+ const reportId=producerId||parent?.producer_id,scope=[account?.user_id,account?.workspace_id,account?.role,reportId,parentAttemptId].join(':');
+ const c=useMemo(()=>new BusinessFlowRevisionController({account,producerId:reportId,parentAttemptId,request,storage,session:tabStorage,locks,models:()=>latest.current.models,currentAvailable:()=>latest.current.currentAvailable,prepareDraft:()=>latest.current.prepareDraft?.()}),[scope,request,storage,tabStorage,locks]);
+ useEffect(()=>{const lease=lifetime.current.setup(c,scope);if(!lease)return;let mounted=true;c.onChange=()=>{if(mounted&&c.active&&!c.suspended)draw(n=>n+1);};c.open().catch(()=>{});const unload=event=>{if(!c.safeToLeave()){event.preventDefault();event.returnValue='';}};const focus=()=>c.identity().then(()=>c.notify()).catch(error=>{c.error=error.message;c.notify();});globalThis.addEventListener?.('beforeunload',unload);globalThis.addEventListener?.('focus',focus);return()=>{mounted=false;globalThis.removeEventListener?.('beforeunload',unload);globalThis.removeEventListener?.('focus',focus);lifetime.current.cleanup(lease);};},[c,scope]);
+ useEffect(()=>{if(typeof onGuardChange!=='function')return;const guard=options=>c.safeToLeave(options);onGuardChange(guard);return()=>onGuardChange(null,guard);},[c,onGuardChange]);
+ useEffect(()=>{if(!c.visible||!c.items.some(row=>['queued','running'].includes(row.status)))return;const timer=setInterval(()=>{if(!c.busy)c.operation(()=>c.refresh()).catch(()=>{});},5000);return()=>clearInterval(timer);},[c,c.visible,c.items.map(row=>row.status).join(':')]);
+ const act=async run=>{try{await run();}catch(error){c.error=error.detail?.message||error.message;c.notify();}};
+ async function show(row){await act(async()=>{const saved=await c.selectAttempt(row.id);if(c.pending||!c.safeToLeave())throw Error('请先保护复核输入并核对原提交，未切换人工稿。');await latest.current.onShowResult?.(structuredClone(saved));});}
+ function leave(){act(async()=>{if(!c.safeToLeave())throw Error('本机复核输入或原请求尚未保护，请先保护再退出。');await latest.current.onExit?.();});}
+ const choices=flowRevisionModels(models),form=c.state.form,disabled=!c.canWrite||c.busy,quote=c.quote,selected=c.selected,projection=selected?.projection;
+ return <section className="saved-map-design-v178" aria-label="对照原文复核并修订业务流程">
+  <header><h3>对照原文复核并修订</h3><Btn disabled={c.busy} onClick={leave}>退出本次复核</Btn></header>
+  <p>本次基于服务器保存的原始 AI 计划，不包含其他编辑区尚未保存的人工修改。复核会另存新候选；原始计划、已有人工稿和原费用记录只读保留，不会自动确认、采用或执行。</p>
+  {!c.visible?<><p role="status">正在核对本人身份与原始流程。</p>{c.error&&<p role="alert">{c.denied?'账号或会话已变化，请以当前账号重新打开；原稿仍保留。':c.error}</p>}<Btn disabled={c.denied||c.busy} onClick={()=>act(()=>c.open())}>重新读取本人记录</Btn></>:<>
+   <h4>{c.businessName}</h4>{c.error&&<p role="alert">{c.error}</p>}{c.notice&&<p role="status">{c.notice}</p>}{c.busy&&<p role="status">正在核对或保存本次复核…</p>}
+   {!c.localSaved&&<p role="alert">当前输入尚未可靠保护，请保留本页；不会启动付费复核。<Btn disabled={c.busy} onClick={()=>c.persist()}>重试保护本机输入和原请求</Btn></p>}
+   {c.parent&&<details><summary>原始不可变 AI 计划 · 只读</summary><ReadOnlyValue value={c.parent.projection.raw_plan}/></details>}
+   {!c.plan&&<p role="alert">原流程所属范围与当前已确认配置版本不一致，暂不能开始复核。原流程仍保留。</p>}
+   {c.pending&&<section><h4>原复核提交待核对</h4><p>原编号、正文和摘要保留。查不到回执不表示未收到，不自动换号或重发。</p><Btn disabled={c.busy||!c.localSaved} onClick={()=>act(()=>c.recover())}>只核对原请求</Btn>{c.notFound&&<Btn disabled={disabled||!c.localSaved} onClick={()=>act(()=>c.recover(true))}>重试同一次提交</Btn>}</section>}
+   <label>本次使用的已批准复核模型<select aria-label="原文复核修订模型" value={form.model_id} disabled={disabled||!!c.pending} onChange={event=>c.edit({model_id:event.target.value})}><option value="">请选择</option>{choices.map(model=><option key={model.id} value={model.id}>{model.name||'已批准 Qwen 复核模型'} · {model.model||model.execution.model}</option>)}</select></label>
+   {!choices.length&&<p>此历史流程的独立复核协议尚未接通 DeepSeek。可保留原记录，到“业务与流程”页面使用“对照资料复核业务流程”检查当前已保存配置；两者的复核范围不同。</p>}
+   <label>本次复核重点<textarea aria-label="原文复核修订要求" value={form.note} maxLength={2000} readOnly={disabled||!!c.pending} onChange={event=>{if(!disabled&&!c.pending)c.edit({note:event.target.value});}}/></label><small>最多2000字。按本人账号、工作区、报告和原流程分别保护，刷新可恢复。</small>
+   <div><Btn disabled={disabled||!c.localSaved||!!c.pending||!c.plan||!choices.some(model=>model.id===form.model_id)} onClick={()=>act(()=>c.preview())}>预览原文、平台政策与独立费用</Btn><Btn disabled={c.busy} onClick={()=>act(()=>c.operation(()=>c.refresh()))}>刷新已保存复核</Btn></div>
+   {quote&&<section><h4>核对这一次独立复核</h4><p>本业务已选 {quote.view.sent_payload.input_claims.length} 条／原全部 {quote.view.claim_count} 条，不能据此认定整报告覆盖。</p><p>最多 1 次新模型调用，保守估算 US${quote.view.budget.conservative_cost_usd.toFixed(6)}；费用上限 US${quote.view.budget.maximum_cost_usd.toFixed(2)}。这是独立活动，不复用原生成费用许可；失败仍保留原回答与实际费用，不承诺语义质量。</p><details><summary>平台三智能体政策 · 与不可信报告分开</summary><ReadOnlyValue value={quote.view.sent_payload.platform_policy}/></details><SentSource view={quote.view}/><Btn primary disabled={disabled||!c.localSaved||!!c.pending} onClick={()=>act(()=>c.start())}>同意本次范围和独立费用，复核并另存新候选</Btn></section>}
+   <h4>本流程已保存的复核活动</h4>{!c.items.length?<p>尚无本流程的已存复核活动。</p>:c.items.map((row,i)=><article key={row.id}><strong>复核 {i+1} · {flowRevisionStatus(row.status)}</strong><p>{row.note||'按原文与平台政策复核'}</p><Btn disabled={c.busy||!c.localSaved} onClick={()=>act(()=>c.selectAttempt(row.id))}>查看已保存复核结果</Btn>{terminal.has(row.status)&&row.projection&&<Btn disabled={disabled||!!c.pending||!c.localSaved} onClick={()=>show(row)}>打开这份新候选</Btn>}</article>)}
+   {selected?.status==='failed'&&<p>原复核没有通过全部核对，记录与费用保留。可以读取回答中通过独立结构和原文核对的流程部分；若无法验证则保留失败，不猜补。<Btn disabled={c.busy||!c.localSaved} onClick={()=>show(selected)}>核对已存回答中的流程</Btn></p>}
+   {selected&&<section><h4>{flowRevisionStatus(selected.status)}</h4>{selected.error&&<p role="alert">{selected.error}</p>}{['queued','running'].includes(selected.status)&&<p role="status">后台处理这一次已存活动，本页只读取进度。</p>}{selected.status==='response_unknown'&&<p>原调用结果尚未确定，请核对原记录，不另起活动。</p>}{selected.status==='failed'&&<p>复核未通过校验，原回答、失败及费用继续保留。</p>}{projection&&<><p>复核发现 {list(projection.raw_review.findings).length} 项；发现数量或结构校验通过不等于业务语义已正确。</p><details open><summary>本次复核发现</summary><ReadOnlyValue value={projection.raw_review.findings}/></details><details><summary>新修订计划 · 只读</summary><ReadOnlyValue value={projection.raw_review.revised_plan}/></details><p>此候选尚未替换任何人工修订。打开编辑区仍须先保护当前人稿，再明确选择。</p></>}</section>}
+  </>}
+ </section>;
+}
