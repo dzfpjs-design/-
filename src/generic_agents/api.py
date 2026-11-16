@@ -103,6 +103,8 @@ from .wms_api import router as wms_router
 app.include_router(wms_router)
 from .geo_upload_limit import GeoUploadLimit
 app.add_middleware(GeoUploadLimit)
+from .dji_wayline_upload_limit import DjiWaylineUploadLimit
+app.add_middleware(DjiWaylineUploadLimit)
 from .video_api import router as video_router
 app.include_router(video_router)
 from .media_api import router as media_router
@@ -147,6 +149,12 @@ from .dji_dock_status_api import router as dji_dock_status_router
 app.include_router(dji_dock_status_router)
 from .dji_cloud_api import router as dji_cloud_router
 app.include_router(dji_cloud_router)
+from .dji_onboarding_api import router as dji_onboarding_router
+app.include_router(dji_onboarding_router)
+from .dji_wayline_api import router as dji_wayline_router
+app.include_router(dji_wayline_router)
+from .dji_video_bindings import router as dji_video_bindings_router
+app.include_router(dji_video_bindings_router)
 from .sensor_automation_api import router as sensor_automation_router
 app.include_router(sensor_automation_router)
 from .sensor_native_packet_api import router as sensor_native_packet_router

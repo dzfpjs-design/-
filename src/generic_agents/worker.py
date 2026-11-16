@@ -1561,6 +1561,7 @@ def run_setup(workspace_id):
     sensor_collector_thread = None
     sensor_analyzer_thread = None
     mqtt_receiver_thread = None
+    dji_onboarding_thread = None
 
     def request_stop(signum, frame):
         stop.set()
@@ -1630,6 +1631,11 @@ def run_setup(workspace_id):
             mqtt_receiver_thread = start_workspace_mqtt(workspace_id, stop)
         except Exception as error:
             print('MQTT 接收处理器未启动：错误类别 ' + type(error).__name__ + '；主处理器继续运行', flush=True)
+        try:
+            from .dji_onboarding_runtime import start_workspace_onboarding
+            dji_onboarding_thread = start_workspace_onboarding(workspace_id, stop)
+        except Exception as error:
+            print('大疆上云实验处理器未启动：错误类别 ' + type(error).__name__ + '；主处理器继续运行', flush=True)
         last_daily = None
         while not stop.is_set():
             try:
@@ -1664,6 +1670,10 @@ def run_setup(workspace_id):
             mqtt_receiver_thread.join(timeout=180)
             if mqtt_receiver_thread.is_alive():
                 print('MQTT 接收处理器尚未完全退出，请核对连接状态', flush=True)
+        if dji_onboarding_thread is not None:
+            dji_onboarding_thread.join(timeout=70)
+            if dji_onboarding_thread.is_alive():
+                print('大疆上云实验处理器尚未完全退出，请核对接收状态', flush=True)
         for signum, handler in previous_handlers.items():
             signal.signal(signum, handler)
         print('配置资料处理器已退出；持久任务保留，未继续领取', flush=True)
