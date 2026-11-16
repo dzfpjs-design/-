@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -80,6 +81,140 @@ class FakeDocker:
         if args[1] == 'ps':
             out = ('\n'.join(name for name,p in self.processes.items() if p.poll() is None)).encode()
         return subprocess.CompletedProcess(args, 0, out)
+
+
+def test_sdk_preflight_required_and_identity_must_remain_the_same(monkeypatch):
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker')
+    sandbox.guard = SimpleNamespace(poll=lambda: None)
+    sandbox.sdk = subprocess.Popen([sys.executable, '-u', '-c',
+        "import time; print('READY\\t1',flush=True); time.sleep(10)"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    try:
+        with pytest.raises(SandboxError): sandbox.read_sdk_ready(timeout=.2)
+        monkeypatch.setattr(sandbox, '_inspect_sdk_identity', lambda: 'a'*64)
+        sandbox.preflight_sdk(timeout=1)
+        sandbox.send_init(b'INIT\t1\tdGVzdA\n')
+        monkeypatch.setattr(sandbox, '_inspect_sdk_identity', lambda: 'b'*64)
+        with pytest.raises(SandboxError): sandbox.read_sdk_ready(timeout=1)
+        with pytest.raises(SandboxError): sandbox.verify_sdk_ready()
+    finally:
+        sandbox.sdk.terminate(); sandbox.sdk.wait(timeout=2)
+        sandbox.sdk.stdin.close(); sandbox.sdk.stdout.close()
+
+
+def test_preflight_cannot_be_satisfied_by_running_cli_alone(monkeypatch):
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker')
+    sandbox.sdk = SimpleNamespace(poll=lambda: None)
+    def rejected(): raise SandboxError('sdk_identity_unverified')
+    monkeypatch.setattr(sandbox, '_inspect_sdk_identity', rejected)
+    with pytest.raises(SandboxError): sandbox.preflight_sdk(timeout=.05)
+    assert sandbox._preflight_sdk_identity is None
+
+
+def test_concurrent_init_is_one_shot_and_bounded():
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker')
+    sandbox.guard = SimpleNamespace(poll=lambda: None)
+    sandbox.sdk = subprocess.Popen([sys.executable, '-u', '-c', 'import time; time.sleep(10)'],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    sandbox._preflight_sdk_identity = 'a'*64
+    errors = []
+    try:
+        fd = sandbox.sdk.stdin.fileno()
+        os.set_blocking(fd, False)
+        while True:
+            try: os.write(fd, b'x'*4096)
+            except BlockingIOError: break
+        def first():
+            try: sandbox.send_init(b'INIT\t1\tdGVzdA\n', timeout=.4)
+            except SandboxError as error: errors.append(error)
+        thread = threading.Thread(target=first); thread.start()
+        deadline=time.monotonic()+1
+        while not sandbox._init_attempted and time.monotonic()<deadline: time.sleep(.01)
+        assert sandbox._init_attempted
+        started=time.monotonic()
+        with pytest.raises(SandboxError): sandbox.send_init(b'INIT\t1\tdGVzdA\n')
+        assert time.monotonic()-started < .2
+        thread.join(timeout=1)
+        assert not thread.is_alive() and errors
+    finally:
+        sandbox.sdk.terminate(); sandbox.sdk.wait(timeout=2)
+        sandbox.sdk.stdin.close(); sandbox.sdk.stdout.close()
+
+
+def test_init_refuses_when_guard_already_died():
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker')
+    sandbox.guard = SimpleNamespace(poll=lambda: -9)
+    sandbox.sdk = SimpleNamespace(poll=lambda: None)
+    sandbox._preflight_sdk_identity = 'a'*64
+    with pytest.raises(SandboxError): sandbox.send_init(b'INIT\t1\tdGVzdA\n')
+    assert not sandbox._init_attempted
+
+
+def test_stop_reports_unverified_when_process_survives_terminate_and_kill(monkeypatch):
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker')
+    class Stuck:
+        stdin = stdout = None
+        def poll(self): return None
+        def wait(self, timeout): raise subprocess.TimeoutExpired('synthetic', timeout)
+        def terminate(self): pass
+        def kill(self): pass
+    sandbox.sdk = Stuck()
+    monkeypatch.setattr(sandbox, '_docker',
+        lambda args, timeout=3: subprocess.CompletedProcess(args,0,b''))
+    result = sandbox.stop()
+    assert not result.confirmed and not result.containers_stopped
+    assert result is sandbox._last_stop_result
+
+
+def test_sdk_inspection_rejects_untrusted_environment_volume_and_image(monkeypatch):
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker')
+    monkeypatch.setattr(sandbox, '_verify_guard_namespace', lambda: None)
+    monkeypatch.setattr(sandbox, '_same_network_namespace', lambda *_: True)
+    guard_id, sdk_id = 'd'*64, 'e'*64
+    guard = {'Id':guard_id, 'State':{'Pid':100}}
+    info = {'Id':sdk_id, 'Name':'/'+sandbox.sdk_name, 'Image':sandbox.spec.sdk_image,
+        'State':{'Running':True,'Pid':101}, 'Mounts':[],
+        'HostConfig':{'NetworkMode':'container:'+guard_id,'Privileged':False,'ReadonlyRootfs':True,
+                      'CapDrop':['ALL'],'CapAdd':None,'Binds':None,'LogConfig':{'Type':'none'}},
+        'Config':{'User':'65534:65534','Volumes':None,'Healthcheck':{'Test':['NONE']},
+                  'Labels':{'org.generic-agents.component':'dji-cloud2-sdk',
+                            'org.generic-agents.lease':sandbox.sdk_name.rsplit('-',1)[1]},
+                  'Env':['PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+                         'JAVA_HOME=/opt/java/openjdk','HTTPS_PROXY=','NO_PROXY=*']}}
+    def inspect(args, timeout=3):
+        value = guard if args[-1] == sandbox.guard_name else info
+        return subprocess.CompletedProcess(args, 0, json.dumps(value).encode())
+    monkeypatch.setattr(sandbox, '_docker', inspect)
+    assert sandbox._inspect_sdk_identity() == sdk_id
+    info['Config']['Env'].append('OPENSSL_CONF=/attacker/config')
+    with pytest.raises(SandboxError): sandbox._inspect_sdk_identity()
+    info['Config']['Env'].pop()
+    info['Config']['Volumes'] = {'/secrets':{}}
+    with pytest.raises(SandboxError): sandbox._inspect_sdk_identity()
+    info['Config']['Volumes'] = None
+    info['Image'] = 'sha256:'+'f'*64
+    with pytest.raises(SandboxError): sandbox._inspect_sdk_identity()
+
+
+def test_guard_accepts_docker_capability_normalization_but_no_extra_capabilities(monkeypatch):
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker')
+    sandbox.network_id = 'd'*64
+    monkeypatch.setattr(sandbox, '_verify_daemon_identity', lambda: None)
+    info = {'State':{'Running':True,'Pid':999},
+        'HostConfig':{'NetworkMode':sandbox.network_id,'Privileged':False,'CapAdd':['CAP_NET_ADMIN'],'CapDrop':['ALL']},
+        'NetworkSettings':{'Networks':{'test':{'NetworkID':sandbox.network_id}}}}
+    monkeypatch.setattr(sandbox, '_docker', lambda args: subprocess.CompletedProcess(args,0,json.dumps(info).encode()))
+    actual_stat = os.stat
+    def safe_stat(path, *args, **kwargs):
+        if path == '/proc/1/ns/net': return SimpleNamespace(st_dev=1,st_ino=1)
+        if path == '/proc/999/ns/net': return SimpleNamespace(st_dev=1,st_ino=2)
+        return actual_stat(path, *args, **kwargs)
+    monkeypatch.setattr(os, 'stat', safe_stat)
+    sandbox._verify_guard_namespace()
+    info['HostConfig']['CapAdd'] = ['NET_ADMIN']
+    sandbox._verify_guard_namespace()
+    info['HostConfig']['CapAdd'] = ['CAP_NET_ADMIN','CAP_SYS_ADMIN']
+    with pytest.raises(ValueError): sandbox._verify_guard_namespace()
 
 
 def test_spec_fails_closed_and_accepts_an_explicit_32_host_ceiling():

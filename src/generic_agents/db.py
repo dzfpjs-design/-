@@ -123,6 +123,10 @@ def migrate():
     ensure_mqtt_unit_index(engine())
     from .typed_payload_migration_v131 import migrate_typed_payloads
     migrate_typed_payloads(engine(), Base.metadata)
+    # Cloud API 2 stores independent authorization epochs; this is additive
+    # and intentionally does not alter other gateways' permission semantics.
+    from .dji_cloud2_auth_epoch import migrate as migrate_dji_cloud2_auth_epoch
+    migrate_dji_cloud2_auth_epoch(engine())
     # v0.6 unknown source clocks: keep NULL, not a manufactured reception timestamp.
     # Existing ingestion endpoints still require a real timestamp/business day.
     # Idempotent, lossless expansion; rollback requires resolving new unclocked rows.

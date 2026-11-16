@@ -46,7 +46,7 @@ test('地址未获授权时显示原因并能安全结束原请求，输入的�
 test('允许增删多条鉴权头，已失效授权不会显示为已连接',async()=>{
  const dom=setup(),Studio=await component(),root=require('react-dom/client').createRoot(document.getElementById('root'));
  const req=async()=>({connections:[{id:'cfg',version:1,name:'底座',host:'192.0.2.10',port:443,status:'authorization_lost',enabled:true,http_header_names:['user_id','X-User-Token'],ws_header_names:['user_id']}]});
- try{await act(async()=>{root.render(React.createElement(Studio,{account,Btn,request:req}));await wait();});assert.match(document.body.textContent,/授权已失效，连接已停用/);assert.match(document.body.textContent,/user_id、X-User-Token/);assert.doesNotMatch(document.body.textContent,/上次连接成功/);
+ try{await act(async()=>{root.render(React.createElement(Studio,{account,Btn,request:req}));await wait();});assert.match(document.body.textContent,/授权已失效，连接已停用/);assert.match(document.body.textContent,/先撤销旧连接，再由管理员重新新增授权/);assert.match(document.body.textContent,/user_id、X-User-Token/);assert.doesNotMatch(document.body.textContent,/上次连接成功/);
   await fill(dom,'HTTP 鉴权请求头名称','user_id');await fill(dom,'HTTP 鉴权请求头值','synthetic-first-secret');await act(async()=>{button('添加 HTTP鉴权头').click();await wait();});await fill(dom,'HTTP 鉴权请求头名称 2','X-User-Token');await fill(dom,'HTTP 鉴权请求头值 2','synthetic-second-secret');
   await act(async()=>{button('删除 HTTP鉴权头 1').click();await wait();});assert.equal(document.querySelector('input[type=password]').value,'synthetic-second-secret');assert.doesNotMatch(Object.values(localStorage).join(' '),/synthetic-(first|second)-secret/);
  }finally{await act(async()=>root.unmount());cleanup(dom);}
@@ -55,4 +55,23 @@ test('设备查询成功不代表消息通道已连接',async()=>{
  const dom=setup(),Studio=await component(),root=require('react-dom/client').createRoot(document.getElementById('root'));
  try{await act(async()=>{root.render(React.createElement(Studio,{account,Btn,request:async()=>({connections:[{id:'cfg',version:1,name:'底座',host:'192.0.2.10',port:443,status:'connected',enabled:true}]})}));await wait();});assert.match(document.body.textContent,/上次设备查询成功；消息连接未验证/);assert.match(document.body.textContent,/后台尚不能连接底座，设备查询和断线恢复尚不能使用/);}
  finally{await act(async()=>root.unmount());cleanup(dom);}
+});
+test('安全配置暂不可核验时保留记录并引导恢复',async()=>{
+ const dom=setup(),Studio=await component(),root=require('react-dom/client').createRoot(document.getElementById('root'));
+ const row={id:'cfg',version:1,name:'底座',host:'192.0.2.10',port:443,status:'authorization_unavailable',enabled:true};
+ try{await act(async()=>{root.render(React.createElement(Studio,{account,Btn,request:async()=>({connections:[row]})}));await wait();});
+  assert.match(document.body.textContent,/授权暂不可核验，连接已暂停/);assert.match(document.body.textContent,/原配置仍保留，恢复后可刷新核验/);
+  assert.doesNotMatch(document.body.textContent,/先撤销旧连接/);
+ }finally{await act(async()=>root.unmount());cleanup(dom);}
+});
+test('核对原创建回执时提示后来已撤销',async()=>{
+ const dom=setup(),Studio=await component(),root=require('react-dom/client').createRoot(document.getElementById('root')),rid=randomUUID();
+ localStorage.setItem('dji-cloud2:workspace:operator:pending',JSON.stringify({scope:'workspace:operator',kind:'create',request_id:rid,expected:{name:'底座'}}));
+ const row={id:'cfg',version:2,name:'底座',host:'192.0.2.10',port:443,status:'revoked',enabled:false};
+ const req=async(path)=>path==='/dji/cloud2/connections'?{connections:[row]}:{request_id:rid,state:'succeeded',connection:row};
+ try{await act(async()=>{root.render(React.createElement(Studio,{account,Btn,request:req}));await wait();});
+  await act(async()=>{button('核对原请求').click();await wait();});
+  assert.match(document.body.textContent,/原连接已撤销；如需使用，请新增连接/);
+  assert.doesNotMatch(document.body.textContent,/连接配置已保存，官方底座联调结果仍需核验/);
+ }finally{await act(async()=>root.unmount());cleanup(dom);}
 });

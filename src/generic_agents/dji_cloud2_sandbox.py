@@ -187,8 +187,13 @@ class DockerSandbox:
         self.guard = self.sdk = self.thread = self.monitor = None
         self._stop = threading.Event()
         self._io_lock = threading.Lock()
+        self._sdk_send_lock = threading.Lock()
         self._failed = threading.Event()
         self._started = False
+        self._preflight_sdk_identity = None
+        self._sdk_ready_identity = None
+        self._init_attempted = False
+        self._last_stop_result = None
 
     def _env(self):
         # Never inherit proxy settings, Docker remote contexts, or application secrets.
@@ -298,7 +303,7 @@ class DockerSandbox:
         if (not state.get('Running') or type(state.get('Pid')) is not int or state['Pid'] <= 1
                 or host_config.get('NetworkMode') not in (self.network_id, self.network_name)
                 or host_config.get('Privileged') is not False
-                or set(host_config.get('CapAdd') or []) != {'NET_ADMIN'}
+                or {str(value).removeprefix('CAP_') for value in (host_config.get('CapAdd') or [])} != {'NET_ADMIN'}
                 or set(host_config.get('CapDrop') or []) != {'ALL'}
                 or len(links) != 1 or next(iter(links.values())).get('NetworkID') != self.network_id):
             raise ValueError()
@@ -320,6 +325,166 @@ class DockerSandbox:
         namespaces = [os.stat(path) for path in ('/proc/1/ns/pid', '/proc/self/ns/pid', '/proc/%d/ns/pid' % pid)]
         if len({(item.st_dev, item.st_ino) for item in namespaces}) != 1:
             raise ValueError()
+
+    def _inspect_sdk_identity(self):
+        """Check the daemon's actual SDK container, not the docker CLI process."""
+        self._verify_guard_namespace()
+        guard = self._docker(['inspect', '--format', '{{json .}}', self.guard_name])
+        sdk = self._docker(['inspect', '--format', '{{json .}}', self.sdk_name])
+        if guard is None or sdk is None or guard.returncode or sdk.returncode:
+            raise SandboxError('sdk_identity_unverified')
+        try:
+            guard_info, info = json.loads(guard.stdout), json.loads(sdk.stdout)
+            guard_id, sdk_id = guard_info['Id'], info['Id']
+            state, host, config = info['State'], info['HostConfig'], info['Config']
+            labels = config.get('Labels') or {}
+            lease = self.sdk_name.rsplit('-', 1)[1]
+            env = config.get('Env') or []
+            if not isinstance(env, list):
+                raise ValueError()
+            allowed_names = {'PATH', 'JAVA_HOME', 'LANG', 'LANGUAGE', 'LC_ALL', 'JAVA_VERSION', 'TZ',
+                             'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy',
+                             'all_proxy', 'NO_PROXY', 'no_proxy'}
+            seen = set()
+            for item in env:
+                if not isinstance(item, str) or '=' not in item:
+                    raise ValueError()
+                name, value = item.split('=', 1)
+                if name not in allowed_names or name in seen:
+                    raise ValueError()
+                seen.add(name)
+                if name.lower() in ('http_proxy', 'https_proxy', 'all_proxy') and value:
+                    raise ValueError()
+                if name.lower() == 'no_proxy' and value != '*':
+                    raise ValueError()
+                if name == 'PATH' and value != '/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin':
+                    raise ValueError()
+                if name == 'JAVA_HOME' and value != '/opt/java/openjdk':
+                    raise ValueError()
+                if name in ('LANG', 'LANGUAGE', 'LC_ALL', 'JAVA_VERSION', 'TZ') and not re.fullmatch(r'[A-Za-z0-9._@:+/\-]{1,128}', value):
+                    raise ValueError()
+            if not {'PATH', 'JAVA_HOME'}.issubset(seen):
+                raise ValueError()
+            if (not _NETWORK.fullmatch(guard_id) or not _NETWORK.fullmatch(sdk_id)
+                    or info.get('Name') != '/'+self.sdk_name or info.get('Image') != self.spec.sdk_image
+                    or not state.get('Running') or type(state.get('Pid')) is not int or state['Pid'] <= 1
+                    or host.get('NetworkMode') not in ('container:'+guard_id, 'container:'+self.guard_name)
+                    or host.get('Privileged') is not False or host.get('ReadonlyRootfs') is not True
+                    or set(host.get('CapDrop') or []) != {'ALL'} or host.get('CapAdd')
+                    or host.get('Binds') or config.get('Volumes')
+                    or ((config.get('Healthcheck') or {}).get('Test') not in (None, ['NONE']))
+                    or any(mount.get('Type') != 'tmpfs' or mount.get('Destination') != '/tmp'
+                           for mount in (info.get('Mounts') or []))
+                    or (host.get('LogConfig') or {}).get('Type') != 'none'
+                    or config.get('User') != '65534:65534'
+                    or labels.get('org.generic-agents.component') != 'dji-cloud2-sdk'
+                    or labels.get('org.generic-agents.lease') != lease):
+                raise ValueError()
+            if not self._same_network_namespace(guard_info['State']['Pid'], state['Pid']):
+                raise ValueError()
+            return sdk_id
+        except (ValueError, TypeError, KeyError, OSError, json.JSONDecodeError):
+            raise SandboxError('sdk_identity_unverified') from None
+
+    def _same_network_namespace(self, first_pid, second_pid):
+        first = os.stat('/proc/%d/ns/net' % first_pid)
+        second = os.stat('/proc/%d/ns/net' % second_pid)
+        return (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino)
+
+    def preflight_sdk(self, timeout=20):
+        """Verify isolation and container identity BEFORE sending credentials."""
+        if self.sdk is None or self._preflight_sdk_identity is not None:
+            raise SandboxError('sdk_identity_unverified')
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._failed.is_set() or self._stop.is_set() or self.sdk.poll() is not None or not self._allowed():
+                raise SandboxError('sdk_identity_unverified')
+            try:
+                self._preflight_sdk_identity = self._inspect_sdk_identity()
+                return
+            except (SandboxError, ValueError, OSError):
+                self._stop.wait(.25)
+        raise SandboxError('sdk_identity_unverified')
+
+    def read_sdk_ready(self, timeout=20):
+        """Read READY from this sandbox's SDK pipe, then bind its actual ID."""
+        if self.sdk is None or not self._preflight_sdk_identity or not self._init_attempted or self._sdk_ready_identity is not None:
+            raise SandboxError('sdk_identity_unverified')
+        deadline = time.monotonic() + timeout
+        output = bytearray()
+        fd = self.sdk.stdout.fileno()
+        while time.monotonic() < deadline:
+            if self._failed.is_set() or self._stop.is_set() or self.sdk.poll() is not None:
+                raise SandboxError('sdk_identity_unverified')
+            readable, _, _ = select.select([fd], [], [], min(.25, max(0, deadline-time.monotonic())))
+            if not readable:
+                continue
+            chunk = os.read(fd, 1)
+            if not chunk or len(output) >= 32:
+                raise SandboxError('sdk_identity_unverified')
+            if chunk == b'\n':
+                if bytes(output) != b'READY\t1':
+                    raise SandboxError('sdk_identity_unverified')
+                sdk_id = self._inspect_sdk_identity()
+                if sdk_id != self._preflight_sdk_identity:
+                    raise SandboxError('sdk_identity_unverified')
+                self._sdk_ready_identity = sdk_id
+                return
+            output.extend(chunk)
+        raise SandboxError('sdk_identity_unverified')
+
+    def send_init(self, frame, timeout=3):
+        """Bounded one-shot write; caller holds the DB authorization fence."""
+        if not isinstance(timeout, (int, float)) or isinstance(timeout, bool) or not 0 < timeout <= 3:
+            raise SandboxError('sdk_init_unconfirmed')
+        if not self._sdk_send_lock.acquire(blocking=False):
+            raise SandboxError('sdk_init_unconfirmed')
+        try:
+            if (self.sdk is None or not self._preflight_sdk_identity or self._init_attempted
+                    or self.guard is None or self.guard.poll() is not None
+                    or self._failed.is_set() or self._stop.is_set() or self.sdk.poll() is not None
+                    or not isinstance(frame, bytes) or len(frame) > 16384
+                    or not frame.startswith(b'INIT\t1\t') or not frame.endswith(b'\n')):
+                raise SandboxError('sdk_init_unconfirmed')
+            # A partial write has unknown outcome; never send a second INIT on
+            # this process. No database or Docker RPC occurs while the caller
+            # holds the database authorization fence.
+            self._init_attempted = True
+            deadline, offset = time.monotonic()+timeout, 0
+            try:
+                fd = self.sdk.stdin.fileno()
+                os.set_blocking(fd, False)
+                while offset < len(frame):
+                    if (self._failed.is_set() or self._stop.is_set() or self.guard.poll() is not None
+                            or self.sdk.poll() is not None):
+                        raise SandboxError('sdk_init_unconfirmed')
+                    remain = deadline-time.monotonic()
+                    if remain <= 0:
+                        raise SandboxError('sdk_init_unconfirmed')
+                    _, writable, _ = select.select([], [fd], [], min(.25, remain))
+                    if writable:
+                        try: offset += os.write(fd, frame[offset:])
+                        except BlockingIOError: continue
+            except (OSError, ValueError):
+                raise SandboxError('sdk_init_unconfirmed') from None
+        finally:
+            self._sdk_send_lock.release()
+
+    def verify_preflight(self):
+        """Bounded Docker checks must occur before acquiring DB row locks."""
+        if (self.sdk is None or not self._preflight_sdk_identity or self._init_attempted
+                or self._failed.is_set() or self._stop.is_set() or self.sdk.poll() is not None):
+            raise SandboxError('sdk_init_unconfirmed')
+        if self._inspect_sdk_identity() != self._preflight_sdk_identity:
+            raise SandboxError('sdk_init_unconfirmed')
+
+    def verify_sdk_ready(self):
+        """Re-check the same container before marking its durable intent active."""
+        if not self._sdk_ready_identity or self._sdk_ready_identity != self._preflight_sdk_identity or self._failed.is_set() or self._stop.is_set():
+            raise SandboxError('sdk_identity_unverified')
+        if self._inspect_sdk_identity() != self._sdk_ready_identity:
+            raise SandboxError('sdk_identity_unverified')
+        return self._sdk_ready_identity
 
     def start(self):
         if self._started or not self._allowed():
@@ -405,7 +570,8 @@ class DockerSandbox:
             return None
 
     def stop(self):
-        self._stop.set()
+        with self._sdk_send_lock:
+            self._stop.set()
         if self.thread and self.thread is not threading.current_thread():
             self.thread.join(timeout=1)
         fenced = False
@@ -420,7 +586,8 @@ class DockerSandbox:
         # Guard can already be gone due to --rm, so only `ps` provides proof.
         for name in (self.sdk_name, self.guard_name):
             if not _NAME.fullmatch(name):
-                return StopResult(False, False, False)
+                self._last_stop_result = StopResult(False, False, False)
+                return self._last_stop_result
             self._docker(['kill', name])
         result = self._docker(['ps', '-a', '--format', '{{.Names}}'])
         stopped = result is not None and result.returncode == 0 and not ({self.sdk_name, self.guard_name} & set(result.stdout.decode('utf-8','replace').splitlines()))
@@ -440,11 +607,15 @@ class DockerSandbox:
                     proc.wait(timeout=0.5)
                 except subprocess.TimeoutExpired:
                     try:
-                        proc.terminate(); proc.wait(timeout=0.5)
-                    except subprocess.TimeoutExpired:
-                        proc.kill(); proc.wait(timeout=0.5)
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=0.5)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+                            proc.wait(timeout=0.5)
                     except (OSError, subprocess.TimeoutExpired):
                         reaped = False
                 except OSError:
                     reaped = False
-        return StopResult(fenced, stopped and reaped, removed)
+        self._last_stop_result = StopResult(fenced, stopped and reaped, removed)
+        return self._last_stop_result

@@ -18,10 +18,11 @@ from sqlalchemy import select, text
 from .contracts import digest
 from .dji_onboarding_api import _body
 from .dji_cloud2_process import init_frame, BridgeError
+from .dji_cloud2_auth_epoch import actor_identity
 from .ftps_gateway_api import _current_admin
 from .managed_file_grants import _key, _key_guard, _mac, _uuid, _safe_text
 from .managed_modbus_grants import in_ceiling
-from .models import Job, User, Membership, now
+from .models import Job, now
 from .security import require
 from .services import audit
 from .setup_api import P, DB
@@ -35,6 +36,16 @@ _FORBIDDEN = {'host', 'connection', 'content-length', 'transfer-encoding', 'cook
               'proxy-authorization', 'proxy-authenticate', 'upgrade', 'te', 'trailer', 'keep-alive',
               'origin', 'accept-encoding', 'auth_keys'}
 _STATES = {'not_verified', 'connecting', 'disconnected', 'authentication_failed', 'sdk_unavailable', 'connected', 'revoked'}
+
+
+class _AuthorizationLost(HTTPException):
+    def __init__(self):
+        super().__init__(403, '授权人身份或权限代次已变化，请撤销并重新新增连接')
+
+
+class _AuthorizationUnavailable(HTTPException):
+    def __init__(self, detail='安全校验暂不可用，请保留记录并联系管理员恢复原配置'):
+        super().__init__(503, detail)
 
 
 def _lock(db, workspace, *, shared=False):
@@ -57,14 +68,6 @@ def _endpoint_allowed(host, port):
     raw = os.getenv('GA_DJI_CLOUD2_ENDPOINTS', '')
     endpoints = raw.split(',') if raw else []
     return len(endpoints) <= 100 and in_ceiling(host) and f'{host}:{port}' in endpoints
-
-
-def _actor_active(db, workspace, actor):
-    q = (select(User.id).join(Membership, Membership.user_id == User.id)
-         .where(User.id == actor, User.active.is_(True), Membership.workspace_id == workspace,
-                Membership.role == 'admin').with_for_update(read=True, of=[User, Membership])
-         .execution_options(populate_existing=True))
-    return db.execute(q).first() is not None
 
 
 def _header(name, value):
@@ -98,6 +101,8 @@ def _binding(row, workspace, d):
              'actor_id': d['actor_id']}
     if 'http_header_names' in d:
         value.update(http_header_names=d['http_header_names'], ws_header_names=d['ws_header_names'])
+    if 'authorization' in d:
+        value['authorization'] = d['authorization']
     return value
 
 
@@ -118,6 +123,7 @@ def _public(row):
             'device_count': data.get('device_count') if state == 'connected' else None,
             'last_checked_at': data.get('last_checked_at'),
             'notice': ('上次仅设备列表 HTTP 查询成功；消息连接和设备控制尚未验证。' if state == 'connected'
+                       else '本工作区的连接授权已撤销。' if state == 'revoked'
                        else '已保存配置不代表大疆底座、鉴权或设备已验证。')}
 
 
@@ -125,6 +131,23 @@ def _receipt(row, rid):
     if row.kind == STOP: return {'request_id': rid, 'state': 'cancelled'}
     if row.kind != OP: raise HTTPException(409, '原请求无法核对')
     return {'request_id': rid, 'state': 'succeeded', 'connection': row.data['result']}
+
+
+def _current_receipt(db, workspace, row, rid):
+    """Keep request identity while exposing current, recoverable status."""
+    receipt = _receipt(row, rid)
+    if row.kind == OP and receipt['connection'].get('enabled') is True:
+        result = receipt['connection']
+        current = db.scalar(select(Job).where(Job.id == result['id'], Job.workspace_id == workspace,
+                            Job.kind == KIND, Job.status == 'internal').execution_options(populate_existing=True))
+        if current is not None and current.data.get('enabled') is False:
+            receipt['connection'] = _public(current)
+        else:
+            issue = ('authorization_unavailable' if current is None else
+                     _authorization_issue(db, workspace, current.id, current.version))
+            if issue:
+                receipt['connection'] = _with_authorization_issue(result, issue)
+    return receipt
 
 
 def _checked(row, workspace):
@@ -158,8 +181,23 @@ def acquire_snapshot(db, workspace, identity):
                     Job.kind == KIND, Job.status == 'internal').execution_options(populate_existing=True))
     if not row: raise HTTPException(404, '未找到 Cloud API 2 连接')
     d = _checked(row, workspace)
-    if not d['enabled'] or not _endpoint_allowed(d['host'], d['port']) or not _actor_active(db, workspace, d['actor_id']):
-        raise HTTPException(403, '连接已撤销、授权人权限已变化或地址超出允许范围')
+    if not d['enabled']:
+        raise _AuthorizationLost()
+    if not _endpoint_allowed(d['host'], d['port']):
+        raise _AuthorizationUnavailable('允许的底座地址暂不可用，请保留记录并联系管理员恢复原配置')
+    # Legacy configurations have no durable identity generation and cannot
+    # safely become active again after a permission loss and restoration.
+    expected = d.get('authorization')
+    if not isinstance(expected, dict):
+        raise _AuthorizationLost()
+    try:
+        current = actor_identity(db, workspace, d['actor_id'])
+    except HTTPException as error:
+        if error.status_code == 403:
+            raise _AuthorizationLost() from None
+        raise _AuthorizationUnavailable() from None
+    if current != expected:
+        raise _AuthorizationLost()
     try:
         key = _key(); _key_guard(db, key, workspace)
         secret = json.loads(Fernet(key).decrypt(d['cipher'].encode()))
@@ -174,7 +212,7 @@ def acquire_snapshot(db, workspace, identity):
         return {'id': row.id, 'workspace_id': workspace, 'version': row.version,
                 'host': d['host'], 'port': d['port'], 'http_headers': http, 'ws_headers': ws}
     except (InvalidToken, ValueError, KeyError, TypeError, UnicodeError, HTTPException):
-        raise HTTPException(503, '连接凭据无法核对，请恢复原密钥或重新配置') from None
+        raise _AuthorizationUnavailable('连接凭据暂无法核对，请保留记录并联系管理员恢复原密钥') from None
 
 
 def publish_state(db, workspace, identity, expected_version, state, device_count=None):
@@ -187,7 +225,7 @@ def publish_state(db, workspace, identity, expected_version, state, device_count
                     Job.kind == KIND, Job.status == 'internal').with_for_update())
     if not row: return False
     d = _checked(row, workspace)
-    if not d['enabled'] or row.version != expected_version or not _endpoint_allowed(d['host'], d['port']) or not _actor_active(db, workspace, d['actor_id']): return False
+    if not d['enabled'] or row.version != expected_version or not _endpoint_allowed(d['host'], d['port']): return False
     try:
         if acquire_snapshot(db, workspace, identity)['version'] != expected_version: return False
     except HTTPException:
@@ -204,6 +242,25 @@ def is_current(db, workspace, identity, expected_version):
         return False
 
 
+def _authorization_issue(db, workspace, identity, expected_version):
+    try:
+        snapshot = acquire_snapshot(db, workspace, identity)
+        # A concurrent change may be temporary; do not tell the user to
+        # destroy a potentially recoverable record on that basis alone.
+        return None if snapshot['version'] == expected_version else 'authorization_unavailable'
+    except _AuthorizationLost:
+        return 'authorization_lost'
+    except HTTPException:
+        return 'authorization_unavailable'
+
+
+def _with_authorization_issue(item, issue):
+    notice = ('授权人身份或权限已变化，请先撤销旧连接，再重新新增。'
+              if issue == 'authorization_lost' else
+              '安全校验、凭据或允许地址暂不可用，请保留记录并联系管理员恢复原配置。')
+    return {**item, 'status': issue, 'device_count': None, 'notice': notice}
+
+
 @router.get('/connections')
 def list_connections(p: P, db: DB, response: Response):
     require(p, 'admin', 'operator', 'viewer'); response.headers['Cache-Control'] = 'no-store'
@@ -212,8 +269,9 @@ def list_connections(p: P, db: DB, response: Response):
     items = []
     for row in rows:
         item = _public(row)
-        if item['enabled'] and not is_current(db, p.workspace_id, row.id, row.version):
-            item.update(status='authorization_lost', device_count=None)
+        issue = _authorization_issue(db, p.workspace_id, row.id, row.version) if item['enabled'] else None
+        if issue:
+            item = _with_authorization_issue(item, issue)
         items.append(item)
     return {'connections': items,
             'notice': 'Cloud API 2 底座和官方模拟器尚需许可证与实际环境验证。'}
@@ -248,7 +306,8 @@ async def create_connection(request: Request, p: P, db: DB):
     if prior:
         if prior.kind == STOP: return _receipt(prior, rid)
         if prior.kind != OP or prior.data.get('fingerprint') != fingerprint: raise HTTPException(409, '原请求已绑定其他配置')
-        return _receipt(prior, rid)
+        return _current_receipt(db, p.workspace_id, prior, rid)
+    authorization = actor_identity(db, p.workspace_id, p.user_id)
     count = len(db.scalars(select(Job.id).where(Job.workspace_id == p.workspace_id, Job.kind == KIND,
                                                 Job.status == 'internal').limit(100)).all())
     if count >= 100: raise HTTPException(409, '连接配置已达数量上限')
@@ -259,7 +318,8 @@ async def create_connection(request: Request, p: P, db: DB):
               data={'name': body['name'].strip(), 'host': body['host'], 'port': body['port'],
                     'http_header_name': http[0]['name'], 'ws_header_name': ws[0]['name'],
                     'http_header_names': [v['name'] for v in http], 'ws_header_names': [v['name'] for v in ws],
-                    'enabled': True, 'actor_id': p.user_id, 'runtime_state': 'not_verified', 'cipher': ''})
+                    'enabled': True, 'actor_id': p.user_id, 'authorization': authorization,
+                    'runtime_state': 'not_verified', 'cipher': ''})
     db.add(row); db.flush()
     secret = {'binding': digest(_binding(row, p.workspace_id, row.data)), 'http_headers': http, 'ws_headers': ws}
     row.data = {**row.data, 'cipher': Fernet(key).encrypt(json.dumps(secret).encode()).decode()}; db.flush()
@@ -300,13 +360,13 @@ async def revoke_connection(identity: str, request: Request, p: P, db: DB):
 def operation(request_id: str, p: P, db: DB):
     rid = _uuid(request_id); row = _row(db, p.workspace_id, _operation_key(p.user_id, rid))
     if not row: raise HTTPException(404, '尚未找到原请求')
-    return _receipt(row, rid)
+    return _current_receipt(db, p.workspace_id, row, rid)
 
 
 @router.post('/operations/{request_id}/cancel')
 def cancel(request_id: str, p: P, db: DB):
     rid = _uuid(request_id); _lock(db, p.workspace_id)
     prior = _row(db, p.workspace_id, _operation_key(p.user_id, rid))
-    if prior: return _receipt(prior, rid)
+    if prior: return _current_receipt(db, p.workspace_id, prior, rid)
     db.add(Job(workspace_id=p.workspace_id, kind=STOP, status='internal', idempotency_key=_operation_key(p.user_id, rid), data={'actor_id': p.user_id})); db.commit()
     return {'request_id': rid, 'state': 'cancelled'}

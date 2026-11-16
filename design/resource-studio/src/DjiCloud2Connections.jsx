@@ -3,7 +3,7 @@ import {json} from './runtime-api';
 
 const emptyDraft = () => ({name:'', host:'', port:'443', http_header_names:[''], ws_header_names:['']});
 const emptySecrets = (d=emptyDraft()) => ({http:d.http_header_names.map(()=>''), ws:d.ws_header_names.map(()=>'')});
-const labels = {not_verified:'尚未验证', stopped:'已停止', revoked:'已撤销', pending:'等待连接', connecting:'正在连接', connected:'上次设备查询成功；消息连接未验证', backoff:'连接中断，等待重试', disconnected:'未连接', authentication_failed:'鉴权未通过，请核对配置', authorization_lost:'授权已失效，连接已停用', sdk_unavailable:'受安全限制，底座连接未开放', blocked:'连接被阻止', error:'连接异常'};
+const labels = {not_verified:'尚未验证', stopped:'已停止', revoked:'已撤销', pending:'等待连接', connecting:'正在连接', connected:'上次设备查询成功；消息连接未验证', backoff:'连接中断，等待重试', disconnected:'未连接', authentication_failed:'鉴权未通过，请核对配置', authorization_lost:'授权已失效，连接已停用', authorization_unavailable:'授权暂不可核验，连接已暂停', sdk_unavailable:'受安全限制，底座连接未开放', blocked:'连接被阻止', error:'连接异常'};
 const clean = (x,n=253) => typeof x === 'string' && x.length <= n && !/[\u0000-\u001f\u007f]/.test(x);
 const validDraft = d => d && Object.keys(d).sort().join(',') === Object.keys(emptyDraft()).sort().join(',') && ['name','host','port'].every(k=>clean(d[k])) && ['http_header_names','ws_header_names'].every(k=>Array.isArray(d[k])&&d[k].length>=1&&d[k].length<=8&&d[k].every(x=>clean(x,64)));
 const migrateDraft = d => d && typeof d.http_header_name==='string' && typeof d.ws_header_name==='string' ? {name:d.name,host:d.host,port:d.port,http_header_names:[d.http_header_name],ws_header_names:[d.ws_header_name]} : d;
@@ -92,7 +92,8 @@ function Panel({account, Btn, onRegisterGuard, request=json}) {
     await clear(value);if(!alive.current)return;
     setSecrets(emptySecrets(draft));setConfirmRevoke(null);
     if(reply.state==='succeeded'&&value.kind==='create'){setDraft(emptyDraft());try{localStorage.removeItem(draftKey);}catch{setBadStorage(true);setError('配置已保存，但本机草稿无法清除。');}}
-    setNotice(reply.state==='cancelled'?'原请求已安全结束。':value.kind==='create'?'连接配置已保存，官方底座联调结果仍需核验。':'已撤销该连接的本地授权。');
+    const createNotice=reply.connection?.enabled===false?'原连接已撤销；如需使用，请新增连接。':reply.connection?.status==='authorization_lost'?'原授权已失效，请撤销后重新新增连接。':reply.connection?.status==='authorization_unavailable'?'配置已保留，但授权暂不可核验；请先恢复原有安全配置。':'连接配置已保存，官方底座联调结果仍需核验。';
+    setNotice(reply.state==='cancelled'?'原请求已安全结束。':value.kind==='create'?createNotice:'已撤销该连接的本地授权。');
     try{await load();}catch{if(alive.current)setError('操作已保存，但清单刷新失败，请重试读取。');}
   }
   async function create(e) {
@@ -139,7 +140,7 @@ function Panel({account, Btn, onRegisterGuard, request=json}) {
       <Btn type="submit">保存连接</Btn> <Btn type="button" onClick={()=>setSecrets(emptySecrets(draft))}>清除鉴权值</Btn>
     </fieldset></form></details>}
     <h3>当前工作区的连接</h3>{connections===null?<p>正在读取…</p>:!connections.length?<p>尚未保存大疆上云 API 2 连接。</p>:connections.map(row=><article className="media-form" key={row.id}>
-      <h4>{row.name}</h4><p>底座：{row.host}:{row.port}；{row.enabled===false?'授权已撤销':(labels[row.status]||'状态待核验')}。{row.last_checked_at&&<> 最近检查：{row.last_checked_at}。</>}</p>{(row.http_header_names||row.ws_header_names)&&<p>鉴权头名称：HTTP {(row.http_header_names||[]).join('、')||'无'}；消息连接 {(row.ws_header_names||[]).join('、')||'无'}。鉴权值不会显示。</p>}{row.notice&&<p>{row.notice}</p>}
+      <h4>{row.name}</h4><p>底座：{row.host}:{row.port}；{row.enabled===false?'授权已撤销':(labels[row.status]||'状态待核验')}。{row.last_checked_at&&<> 最近检查：{row.last_checked_at}。</>}</p>{row.status==='authorization_lost'&&<p>授权人身份或权限已变化。请先撤销旧连接，再由管理员重新新增授权。</p>}{row.status==='authorization_unavailable'&&<p>请联系管理员检查密钥、权限保护和允许地址。原配置仍保留，恢复后可刷新核验。</p>}{(row.http_header_names||row.ws_header_names)&&<p>鉴权头名称：HTTP {(row.http_header_names||[]).join('、')||'无'}；消息连接 {(row.ws_header_names||[]).join('、')||'无'}。鉴权值不会显示。</p>}{row.notice&&<p>{row.notice}</p>}
       {account.role==='admin'&&row.enabled!==false&&(confirmRevoke===row.id?<div><p>撤销后本工作区将停止使用此连接；如需再次使用，请新增连接。若大疆底座另有独立授权，也需要在那里撤销。</p><Btn disabled={disabled} onClick={()=>revoke(row)}>确认撤销</Btn> <Btn disabled={busy} onClick={()=>setConfirmRevoke(null)}>返回</Btn></div>:<Btn disabled={disabled} onClick={()=>setConfirmRevoke(row.id)}>撤销授权</Btn>)}
     </article>)}<Btn disabled={busy} onClick={()=>load().catch(()=>setError('无法刷新连接清单，请稍后重试。'))}>刷新连接状态</Btn>
   </section>;
