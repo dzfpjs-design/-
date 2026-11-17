@@ -110,3 +110,57 @@
  
      // 拼 SessionManager 初始化参数 + session 0（之后只认 int session_id）
      SessionManagerInitParams sm_params;
+--- a/sdk/src/bll/notification_center/notification_center.cpp
++++ b/sdk/src/bll/notification_center/notification_center.cpp
+@@ -10,0 +11 @@
++#include <atomic>
+@@ -17,0 +19,19 @@
++// One process owns one main SDK session. Snapshot contains no server text or
++// credentials. Low bits: pending=0, open=1, disconnected=4; upper bits: last
++// authentication rejection none=0, 401=2, 403=3. Only OnOpen clears history.
++namespace {
++std::atomic<int> bridge_ws_snapshot{0};
++void bridge_failed(int auth) {
++    int previous = bridge_ws_snapshot.load();
++    int next;
++    do {
++        const int last_auth = auth ? auth : (previous >> 3);
++        next = 4 | (last_auth << 3);
++    } while (!bridge_ws_snapshot.compare_exchange_weak(previous, next));
++}
++}
++extern "C" __attribute__((visibility("default"))) int
++Java_DjiCloud2Bridge_nativeWebSocketSnapshotV2(void*, void*) {
++    return bridge_ws_snapshot.load();
++}
++
+@@ -45,0 +66,3 @@
++            }
++            if (notification_center_->getState() == NotificationCenterState::CONNECTED) {
++                bridge_ws_snapshot.store(1);
+@@ -52,0 +76 @@
++            bridge_failed(0);
+@@ -77,0 +102,3 @@
++            if (error == "auth_failed:http_401") bridge_failed(2);
++            else if (error == "auth_failed:http_403") bridge_failed(3);
++            else bridge_failed(0);
+@@ -84 +111 @@
+-            LOG_ERROR("[NotificationCenter] WebSocket 错误: %s", error.c_str());
++            LOG_ERROR("[NotificationCenter] WebSocket connection error");
+--- a/sdk/deps/notification_center_sdk/src/websocket/CppWebSocket.cpp
++++ b/sdk/deps/notification_center_sdk/src/websocket/CppWebSocket.cpp
+@@ -1507,3 +1507,2 @@
+-            LOG_ERROR("CppWebSocket[LWS_CALLBACK_CLIENT_CONNECTION_ERROR]: 连接出错 "
+-                "- HTTP状态: %u, 详细信息: %s, 目标地址: %s, URL: %s",
+-                http_code, error_details.c_str(), peer_info.c_str(), self->url.c_str());
++            // Do not expose server error text or URLs to logs.
++            LOG_ERROR("CppWebSocket: connection error, HTTP status: %u", http_code);
+@@ -1520 +1519 @@
+-                    [self, weak_dummy = std::weak_ptr<drc_sdk::common::Dummy>(self->dummy_ptr_), error_details, http_code]() -> void {
++                    [self, weak_dummy = std::weak_ptr<drc_sdk::common::Dummy>(self->dummy_ptr_), http_code]() -> void {
+@@ -1525 +1524 @@
+-                            self->parent_->callOnError("auth_failed:http_" + std::to_string(http_code) + ":" + error_details);
++                            self->parent_->callOnError("auth_failed:http_" + std::to_string(http_code));
+@@ -1527 +1526 @@
+-                            self->parent_->callOnError(error_details);
++                            self->parent_->callOnError("transport_error");

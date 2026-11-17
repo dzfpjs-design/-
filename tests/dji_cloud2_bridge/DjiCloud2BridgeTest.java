@@ -11,6 +11,7 @@ final class DjiCloud2BridgeTest {
     static String init(String value) { return "INIT\t1\t" + b64("10.1.2.3") + "\t443\t1\t" + b64("x-http-auth") + "\t" + b64(value) + "\t1\t" + b64("x-ws-auth") + "\t" + b64("ws-secret") + "\n"; }
     static final class Fake implements DjiCloud2Bridge.Driver {
         boolean started, closed, listed, badData, timeout;
+        String status = "PENDING\tNONE";
         public void start(String h, int p, List<HeaderKeyValue> http, List<HeaderKeyValue> ws) throws DjiCloud2Bridge.BridgeError {
             if (!h.equals("10.1.2.3") || p != 443 || !http.get(0).getValue().equals(SECRET) || !ws.get(0).getValue().equals("ws-secret")) throw new DjiCloud2Bridge.BridgeError("PROTOCOL");
             started = true;
@@ -21,6 +22,7 @@ final class DjiCloud2BridgeTest {
             if (badData) return List.of(new DjiCloud2Bridge.DeviceView("x".repeat(257), "", "", true));
             return List.of(new DjiCloud2Bridge.DeviceView("device-01", "机场", "dock", true));
         }
+        public String wsStatus() { return status; }
         public void close() { closed = true; }
     }
     static String run(String input, Fake d) {
@@ -52,6 +54,18 @@ final class DjiCloud2BridgeTest {
         check(run(init(SECRET).replace(b64("x-http-auth"), b64("Sec-WebSocket-Protocol")), d).equals("FATAL\tPROTOCOL\n") && !d.started);
         d = new Fake();
         check(run(init(SECRET).replace(b64("x-http-auth"), b64("auth_keys")), d).equals("FATAL\tPROTOCOL\n") && !d.started);
-        System.out.println("DJI bridge protocol: 10 tests passed");
+        for (String status : List.of("PENDING\tNONE", "CONNECTED\tNONE", "DISCONNECTED\tNONE", "DISCONNECTED\tAUTH_401", "DISCONNECTED\tAUTH_403")) {
+            d = new Fake(); d.status = status;
+            out = run(init(SECRET) + "WS_STATUS\t" + RID + "\nCLOSE\n", d);
+            check(out.equals("READY\t1\nWS_STATUS\t" + RID + "\t" + status + "\n"));
+            check(!out.contains(SECRET) && !out.contains("ws-secret"));
+        }
+        d = new Fake(); d.status = "unknown-server-text";
+        check(run(init(SECRET) + "WS_STATUS\t" + RID + "\nCLOSE\n", d).equals("READY\t1\nERROR\t" + RID + "\tSDK_UNSUPPORTED\n"));
+        d = new Fake(); d.status = "CONNECTED\tAUTH_401";
+        check(run(init(SECRET) + "WS_STATUS\t" + RID + "\nCLOSE\n", d).equals("READY\t1\nERROR\t" + RID + "\tSDK_UNSUPPORTED\n"));
+        d = new Fake();
+        check(run(init(SECRET) + "WS_STATUS\tbad\n", d).equals("READY\t1\nFATAL\tPROTOCOL\n"));
+        System.out.println("DJI bridge protocol: 18 tests passed");
     }
 }

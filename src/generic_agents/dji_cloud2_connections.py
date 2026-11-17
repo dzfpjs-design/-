@@ -36,6 +36,7 @@ _FORBIDDEN = {'host', 'connection', 'content-length', 'transfer-encoding', 'cook
               'proxy-authorization', 'proxy-authenticate', 'upgrade', 'te', 'trailer', 'keep-alive',
               'origin', 'accept-encoding', 'auth_keys'}
 _STATES = {'not_verified', 'connecting', 'disconnected', 'authentication_failed', 'sdk_unavailable', 'connected', 'revoked'}
+_WS_STATES = {'pending', 'connected', 'auth_401', 'auth_403', 'disconnected'}
 
 
 class _AuthorizationLost(HTTPException):
@@ -116,13 +117,26 @@ def _public(row):
             if age < 0 or age > 90: state = 'disconnected'
         except (KeyError, ValueError, TypeError):
             state = 'disconnected'
+    ws_last = data.get('websocket_state') if data.get('websocket_state') in _WS_STATES else None
+    ws_state = 'unknown'
+    if data['enabled'] and state == 'connected' and ws_last:
+        try:
+            age = (now() - datetime.fromisoformat(data['websocket_checked_at'])).total_seconds()
+            if 0 <= age <= 30: ws_state = ws_last
+        except (KeyError, ValueError, TypeError):
+            pass
     return {'id': row.id, 'version': row.version, 'name': data['name'], 'host': data['host'],
             'port': data['port'], 'http_header_name': data['http_header_name'],
             'ws_header_name': data['ws_header_name'], 'http_header_names': _names(data, 'http'),
             'ws_header_names': _names(data, 'ws'), 'enabled': data['enabled'], 'status': state,
             'device_count': data.get('device_count') if state == 'connected' else None,
+            'websocket_status': ws_state,
+            'websocket_last_failure': (data.get('websocket_last_failure') or
+                                       (ws_last if ws_last in ('auth_401', 'auth_403') else None)) if data['enabled'] else None,
+            'websocket_checked_at': data.get('websocket_checked_at'),
             'last_checked_at': data.get('last_checked_at'),
-            'notice': ('上次仅设备列表 HTTP 查询成功；消息连接和设备控制尚未验证。' if state == 'connected'
+            'notice': (('上次设备列表 HTTP 查询成功；设备控制尚未验证。' if ws_state != 'unknown'
+                        else '上次仅设备列表 HTTP 查询成功；消息连接和设备控制尚未验证。') if state == 'connected'
                        else '本工作区的连接授权已撤销。' if state == 'revoked'
                        else '已保存配置不代表大疆底座、鉴权或设备已验证。')}
 
@@ -230,7 +244,42 @@ def publish_state(db, workspace, identity, expected_version, state, device_count
         if acquire_snapshot(db, workspace, identity)['version'] != expected_version: return False
     except HTTPException:
         return False
-    row.data = {**d, 'runtime_state': state, 'device_count': device_count, 'last_checked_at': now().isoformat()}
+    updated = {**d, 'runtime_state': state, 'device_count': device_count, 'last_checked_at': now().isoformat()}
+    if state != 'connected':
+        # A stopped/restarted child cannot inherit an earlier process's OnOpen.
+        if d.get('websocket_state') in ('auth_401', 'auth_403'):
+            updated['websocket_last_failure'] = d['websocket_state']
+        updated.pop('websocket_state', None)
+        updated.pop('websocket_checked_at', None)
+    row.data = updated
+    db.flush()
+    return True
+
+
+def publish_websocket_state(db, workspace, identity, expected_version, state, last_failure=None):
+    """Save only a fixed SDK callback state after the same authorization fence."""
+    if (state, last_failure) not in {('pending', None), ('connected', None), ('disconnected', None),
+                                    ('disconnected', 'auth_401'), ('disconnected', 'auth_403')}:
+        raise ValueError('unsupported websocket state')
+    _lock(db, workspace)
+    row = db.scalar(select(Job).where(Job.id == identity, Job.workspace_id == workspace,
+                    Job.kind == KIND, Job.status == 'internal').with_for_update())
+    if not row:
+        return False
+    data = _checked(row, workspace)
+    if not data['enabled'] or row.version != expected_version or not _endpoint_allowed(data['host'], data['port']):
+        return False
+    try:
+        if acquire_snapshot(db, workspace, identity)['version'] != expected_version:
+            return False
+    except HTTPException:
+        return False
+    updated = {**data, 'websocket_state': state, 'websocket_checked_at': now().isoformat()}
+    if last_failure is not None:
+        updated['websocket_last_failure'] = last_failure
+    elif state == 'connected':
+        updated.pop('websocket_last_failure', None)
+    row.data = updated
     db.flush()
     return True
 
@@ -258,7 +307,8 @@ def _with_authorization_issue(item, issue):
     notice = ('授权人身份或权限已变化，请先撤销旧连接，再重新新增。'
               if issue == 'authorization_lost' else
               '安全校验、凭据或允许地址暂不可用，请保留记录并联系管理员恢复原配置。')
-    return {**item, 'status': issue, 'device_count': None, 'notice': notice}
+    return {**item, 'status': issue, 'device_count': None, 'websocket_status': 'unknown',
+            'websocket_last_failure': None, 'notice': notice}
 
 
 @router.get('/connections')

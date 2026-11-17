@@ -20,6 +20,8 @@ import java.util.concurrent.*;
 import java.util.regex.Pattern;
 
 public final class DjiCloud2Bridge {
+    // Available only in our experimental SDK build, not DJI's stock JNI.
+    private static native int nativeWebSocketSnapshotV2();
     private static final int MAX_INPUT = 16384, MAX_OUTPUT = 262144, MAX_DEVICES = 1000;
     private static final Pattern HEADER = Pattern.compile("[A-Za-z][A-Za-z0-9_-]{0,63}");
     private static final Set<String> FORBIDDEN = Set.of("host", "connection", "content-length", "transfer-encoding", "cookie", "set-cookie", "proxy-authorization", "proxy-authenticate", "upgrade", "te", "trailer", "keep-alive", "origin", "accept-encoding", "auth_keys");
@@ -55,6 +57,7 @@ public final class DjiCloud2Bridge {
     interface Driver {
         void start(String host, int port, List<HeaderKeyValue> http, List<HeaderKeyValue> ws) throws BridgeError;
         List<DeviceView> list() throws BridgeError;
+        String wsStatus() throws BridgeError;
         void close();
     }
     static final class SdkDriver implements Driver {
@@ -64,6 +67,8 @@ public final class DjiCloud2Bridge {
                 // Prevent the Java SDK logger from writing any credentials to files/console.
                 Logger.initialize(null, null, Logger.LogLevel.ERROR, false, false, 1, 1);
                 JniLibraryLoader.loadLibrary();
+                // Reject old/native-unmodified SDKs before passing either credential.
+                try { wsStatus(); } catch (BridgeError e) { throw new BridgeError("SDK_UNSUPPORTED"); }
                 if (FlightHubSDK.setWebSocketAuthHeaders(ws) != FlightHubSdkErrorCode.SUCCESS ||
                     FlightHubSDK.setHttpHeaders(http) != FlightHubSdkErrorCode.SUCCESS) throw new BridgeError("AUTH_SETUP");
                 FlightHubSdkConfig cfg = new FlightHubSdkConfig();
@@ -104,6 +109,18 @@ public final class DjiCloud2Bridge {
                 if (cause instanceof BridgeError) throw (BridgeError) cause;
                 throw new BridgeError("UPSTREAM");
             } catch (Throwable e) { throw new BridgeError("UPSTREAM"); }
+        }
+        public String wsStatus() throws BridgeError {
+            try {
+                switch (nativeWebSocketSnapshotV2()) {
+                    case 0: return "PENDING\tNONE";
+                    case 1: return "CONNECTED\tNONE";
+                    case 4: return "DISCONNECTED\tNONE";
+                    case 20: return "DISCONNECTED\tAUTH_401";
+                    case 28: return "DISCONNECTED\tAUTH_403";
+                    default: throw new BridgeError("SDK_UNSUPPORTED");
+                }
+            } catch (UnsatisfiedLinkError e) { throw new BridgeError("SDK_UNSUPPORTED"); }
         }
         private static void add(List<DeviceView> result, Device d) throws BridgeError {
             if (d == null || result.size() >= MAX_DEVICES) throw new BridgeError("UPSTREAM");
@@ -169,8 +186,14 @@ public final class DjiCloud2Bridge {
             while ((line = readLine(in)) != null) {
                 f = line.split("\\t", -1);
                 if (f.length == 1 && f[0].equals("CLOSE")) return 0;
-                if (f.length != 2 || !f[0].equals("LIST") || !UUID.matcher(f[1]).matches()) throw new BridgeError("PROTOCOL");
+                if (f.length != 2 || !(f[0].equals("LIST") || f[0].equals("WS_STATUS")) || !UUID.matcher(f[1]).matches()) throw new BridgeError("PROTOCOL");
                 try {
+                    if (f[0].equals("WS_STATUS")) {
+                        String status = driver.wsStatus();
+                        if (!Set.of("PENDING\tNONE", "CONNECTED\tNONE", "DISCONNECTED\tNONE", "DISCONNECTED\tAUTH_401", "DISCONNECTED\tAUTH_403").contains(status)) throw new BridgeError("SDK_UNSUPPORTED");
+                        writer.println("WS_STATUS\t" + f[1] + "\t" + status);
+                        continue;
+                    }
                     List<DeviceView> devices = driver.list();
                     if (devices == null || devices.size() > MAX_DEVICES) throw new BridgeError("UPSTREAM");
                     StringBuilder output = new StringBuilder("RESULT\t").append(f[1]).append('\t').append(devices.size());

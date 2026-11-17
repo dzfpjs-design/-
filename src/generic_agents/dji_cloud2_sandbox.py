@@ -1,8 +1,9 @@
 """EXPERIMENT ONLY: NOT a production isolation or DJI connection boundary.
 
 This module is deliberately not connected to the product's real-SDK gate. It
-creates only a dedicated *internal* Docker bridge, which cannot reach a real
-external LAN device. Failure to identify a local Linux dockerd and demonstrate
+creates dedicated Docker bridges. The default is *internal*; `lan_test` is an
+explicit research-only mode for synthetic endpoints, never a production gate.
+Failure to identify a local Linux dockerd and demonstrate
 distinct guard and host network namespaces stops BEFORE arming the guard; the
 unarmed guard must never run any firewall command. Do not weaken those checks
 for Docker Desktop, remote daemons or containerized managers.
@@ -127,6 +128,7 @@ class SandboxSpec:
     guard_image: str
     sdk_image: str
     allowed_networks: tuple[str, ...]
+    network_mode: str = 'internal'
     # External IDs, especially a host-network ID, MUST NEVER be accepted.
     docker_network_id: str = ''
 
@@ -147,7 +149,8 @@ class SandboxSpec:
             nets = [ipaddress.IPv4Network(n, strict=True) for n in self.allowed_networks]
             if not any(ip in n and (n.prefixlen >= 31 or ip not in (n.network_address, n.broadcast_address)) for n in nets):
                 raise ValueError()
-            if (not _HEX.fullmatch(self.policy_digest) or not _IMAGE.fullmatch(self.guard_image)
+            if (self.network_mode not in ('internal', 'lan_test')
+                    or not _HEX.fullmatch(self.policy_digest) or not _IMAGE.fullmatch(self.guard_image)
                     or not _IMAGE.fullmatch(self.sdk_image) or self.docker_network_id != ''):
                 raise ValueError()
         except (ValueError, TypeError, AttributeError):
@@ -172,9 +175,13 @@ class DockerSandbox:
     Inability to verify fence and removal means unknown, not successful stop.
     """
     def __init__(self, spec: SandboxSpec, authorize, *, docker='/usr/bin/docker',
-                 popen=subprocess.Popen, run=subprocess.run, lease_seconds=2.0):
+                 popen=subprocess.Popen, run=subprocess.run, lease_seconds=2.0,
+                 experimental_lan=False):
         spec.validate()
-        if not callable(authorize) or not os.path.isabs(docker) or not 1.0 <= lease_seconds <= 5.0:
+        if (not callable(authorize) or not os.path.isabs(docker) or not 1.0 <= lease_seconds <= 5.0
+                or type(experimental_lan) is not bool
+                or spec.network_mode == 'lan_test' and
+                   (not experimental_lan or os.environ.get('GA_DJI2_LAN_E2E_ENABLE') != '1')):
             raise SandboxError('invalid_sandbox_spec')
         self.spec, self.authorize, self.docker = spec, authorize, docker
         self._popen, self._run, self.lease_seconds = popen, run, lease_seconds
@@ -186,11 +193,19 @@ class DockerSandbox:
         self._network_create_attempted = False
         self.guard = self.sdk = self.thread = self.monitor = None
         self._stop = threading.Event()
+        self._lifecycle_lock = threading.RLock()
+        self._timeout_stop_result = StopResult(False, False, False)
+        self._stop_timeout_observed = threading.Event()
         self._io_lock = threading.Lock()
         self._sdk_send_lock = threading.Lock()
         self._failed = threading.Event()
         self._started = False
+        self._guard_create_attempted = False
+        self._sdk_create_attempted = False
         self._preflight_sdk_identity = None
+        self._preflight_guard_identity = None
+        self._last_guard_identity = None
+        self._owned_guard_id = None
         self._sdk_ready_identity = None
         self._init_attempted = False
         self._last_stop_result = None
@@ -201,7 +216,8 @@ class DockerSandbox:
 
     def _allowed(self):
         try:
-            return self.authorize(self.spec) is True
+            return (not self._stop.is_set() and self.authorize(self.spec) is True
+                    and not self._stop.is_set())
         except Exception:
             return False
 
@@ -249,7 +265,11 @@ class DockerSandbox:
                 '--entrypoint', '/opt/dji-cloud2/bridge-launch', s.sdk_image]
 
     def prepare_network(self):
-        """Create our own internal bridge; cannot reach an external LAN device."""
+        with self._lifecycle_lock:
+            return self._prepare_network_locked()
+
+    def _prepare_network_locked(self):
+        """Create our own bridge; LAN mode is explicit and research-only."""
         if self.network_id is not None or self._started or not self._allowed():
             raise SandboxError('authorization_unavailable')
         try:
@@ -260,9 +280,11 @@ class DockerSandbox:
         # Caller must durably journal the generated names before this call in
         # a future integration. A timed-out Docker create is not proof of absence.
         self._network_create_attempted = True
-        created = self._docker(['network', 'create', '--driver', 'bridge', '--internal',
-                                '--label', 'org.generic-agents.component=dji-cloud2-test-network',
-                                '--label', 'org.generic-agents.lease='+lease, self.network_name])
+        args = ['network', 'create', '--driver', 'bridge']
+        if self.spec.network_mode == 'internal': args.append('--internal')
+        args += ['--label', 'org.generic-agents.component=dji-cloud2-test-network',
+                 '--label', 'org.generic-agents.lease='+lease, self.network_name]
+        created = self._docker(args)
         if created is None or created.returncode != 0:
             raise SandboxError('network_create_unconfirmed')
         try:
@@ -272,6 +294,9 @@ class DockerSandbox:
             self.network_id = network_id
             self._verify_network(require_empty=True)
             self._owned_network_id = network_id
+            if not self._allowed():
+                self._stop_locked()
+                raise SandboxError('authorization_unavailable')
             return network_id
         except (ValueError, TypeError, UnicodeError, json.JSONDecodeError):
             # Ownership could not be proven: do not remove an unknown network.
@@ -286,7 +311,9 @@ class DockerSandbox:
         network = json.loads(inspect.stdout)
         if (network.get('Id') != self.network_id or network.get('Name') != self.network_name
                 or network.get('Driver') != 'bridge' or network.get('Scope') != 'local'
-                or network.get('Internal') is not True or require_empty and network.get('Containers')
+                or network.get('Internal') is not (self.spec.network_mode == 'internal')
+                or not isinstance(network.get('Containers'), dict)
+                or require_empty and network.get('Containers')
                 or network.get('Labels', {}).get('org.generic-agents.component') != 'dji-cloud2-test-network'
                 or network.get('Labels', {}).get('org.generic-agents.lease') != self.network_name.rsplit('-',1)[1]):
             raise ValueError()
@@ -312,6 +339,15 @@ class DockerSandbox:
         if (host.st_dev, host.st_ino) == (guard.st_dev, guard.st_ino):
             raise ValueError()
 
+    def _verify_guard_network_only(self, guard_id):
+        self._verify_network()
+        inspected = self._docker(['network', 'inspect', '--format', '{{json .}}', self.network_id])
+        if inspected is None or inspected.returncode:
+            raise ValueError()
+        members = json.loads(inspected.stdout).get('Containers')
+        if not isinstance(members, dict) or set(members) != {guard_id}:
+            raise ValueError()
+
     def _verify_daemon_identity(self):
         """Reject remote/proxy daemons or ambiguous PID namespaces."""
         if not hasattr(socket, 'SO_PEERCRED'):
@@ -326,9 +362,33 @@ class DockerSandbox:
         if len({(item.st_dev, item.st_ino) for item in namespaces}) != 1:
             raise ValueError()
 
+    def verified_guard_id(self):
+        """Recheck guard namespace, immutable image and generated lease label."""
+        self._verify_guard_namespace()
+        result = self._docker(['inspect', '--format', '{{json .}}', self.guard_name])
+        if result is None or result.returncode:
+            raise SandboxError('guard_identity_unverified')
+        try:
+            info = json.loads(result.stdout)
+            identity = info['Id']
+            labels = info['Config'].get('Labels') or {}
+            if (not _NETWORK.fullmatch(identity) or info.get('Name') != '/'+self.guard_name
+                    or info.get('Image') != self.spec.guard_image or not info['State'].get('Running')
+                    or self._preflight_guard_identity is not None and identity != self._preflight_guard_identity
+                    or labels.get('org.generic-agents.component') != 'dji-cloud2-egress'
+                    or labels.get('org.generic-agents.lease') != self.guard_name.rsplit('-',1)[1]):
+                raise ValueError()
+            return identity
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            raise SandboxError('guard_identity_unverified') from None
+
     def _inspect_sdk_identity(self):
         """Check the daemon's actual SDK container, not the docker CLI process."""
-        self._verify_guard_namespace()
+        verified_guard = self.verified_guard_id()
+        try:
+            self._verify_guard_network_only(verified_guard)
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            raise SandboxError('sdk_identity_unverified') from None
         guard = self._docker(['inspect', '--format', '{{json .}}', self.guard_name])
         sdk = self._docker(['inspect', '--format', '{{json .}}', self.sdk_name])
         if guard is None or sdk is None or guard.returncode or sdk.returncode:
@@ -365,7 +425,7 @@ class DockerSandbox:
                     raise ValueError()
             if not {'PATH', 'JAVA_HOME'}.issubset(seen):
                 raise ValueError()
-            if (not _NETWORK.fullmatch(guard_id) or not _NETWORK.fullmatch(sdk_id)
+            if (guard_id != verified_guard or not _NETWORK.fullmatch(guard_id) or not _NETWORK.fullmatch(sdk_id)
                     or info.get('Name') != '/'+self.sdk_name or info.get('Image') != self.spec.sdk_image
                     or not state.get('Running') or type(state.get('Pid')) is not int or state['Pid'] <= 1
                     or host.get('NetworkMode') not in ('container:'+guard_id, 'container:'+self.guard_name)
@@ -382,6 +442,9 @@ class DockerSandbox:
                 raise ValueError()
             if not self._same_network_namespace(guard_info['State']['Pid'], state['Pid']):
                 raise ValueError()
+            if self.verified_guard_id() != guard_id:
+                raise ValueError()
+            self._last_guard_identity = guard_id
             return sdk_id
         except (ValueError, TypeError, KeyError, OSError, json.JSONDecodeError):
             raise SandboxError('sdk_identity_unverified') from None
@@ -401,6 +464,10 @@ class DockerSandbox:
                 raise SandboxError('sdk_identity_unverified')
             try:
                 self._preflight_sdk_identity = self._inspect_sdk_identity()
+                if not isinstance(self._last_guard_identity, str) or not _NETWORK.fullmatch(self._last_guard_identity):
+                    self._preflight_sdk_identity = None
+                    raise SandboxError('guard_identity_unverified')
+                self._preflight_guard_identity = self._last_guard_identity
                 return
             except (SandboxError, ValueError, OSError):
                 self._stop.wait(.25)
@@ -426,7 +493,7 @@ class DockerSandbox:
                 if bytes(output) != b'READY\t1':
                     raise SandboxError('sdk_identity_unverified')
                 sdk_id = self._inspect_sdk_identity()
-                if sdk_id != self._preflight_sdk_identity:
+                if sdk_id != self._preflight_sdk_identity or self._last_guard_identity != self._preflight_guard_identity:
                     raise SandboxError('sdk_identity_unverified')
                 self._sdk_ready_identity = sdk_id
                 return
@@ -475,36 +542,49 @@ class DockerSandbox:
         if (self.sdk is None or not self._preflight_sdk_identity or self._init_attempted
                 or self._failed.is_set() or self._stop.is_set() or self.sdk.poll() is not None):
             raise SandboxError('sdk_init_unconfirmed')
-        if self._inspect_sdk_identity() != self._preflight_sdk_identity:
+        if (self._inspect_sdk_identity() != self._preflight_sdk_identity
+                or self._last_guard_identity != self._preflight_guard_identity):
             raise SandboxError('sdk_init_unconfirmed')
 
     def verify_sdk_ready(self):
         """Re-check the same container before marking its durable intent active."""
         if not self._sdk_ready_identity or self._sdk_ready_identity != self._preflight_sdk_identity or self._failed.is_set() or self._stop.is_set():
             raise SandboxError('sdk_identity_unverified')
-        if self._inspect_sdk_identity() != self._sdk_ready_identity:
+        if (self._inspect_sdk_identity() != self._sdk_ready_identity
+                or self._last_guard_identity != self._preflight_guard_identity):
             raise SandboxError('sdk_identity_unverified')
         return self._sdk_ready_identity
 
     def start(self):
+        with self._lifecycle_lock:
+            return self._start_locked()
+
+    def _start_locked(self):
         if self._started or not self._allowed():
             raise SandboxError('authorization_unavailable')
         if self.network_id is None:
             self.prepare_network()
         try:
-            self._verify_network()
+            self._verify_network(require_empty=True)
+            if not self._allowed():
+                raise SandboxError('authorization_unavailable')
         except (ValueError, TypeError, UnicodeError, json.JSONDecodeError):
             # Only our already verified internally-created network can be
             # considered for cleanup; inability to verify remains unknown.
             self.stop()
             raise SandboxError('network_verification_failed') from None
+        except SandboxError:
+            self.stop()
+            raise
         self._started = True
         try:
+            self._guard_create_attempted = True
             self.guard = self._popen(self._guard_cmd(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL, env=self._env(), close_fds=True, bufsize=0)
             if self._line(5) != b'BOOT' or not self._allowed():
                 raise SandboxError('guard_unavailable')
             self._verify_guard_namespace()
+            self._owned_guard_id = self.verified_guard_id()
             if not self._allowed():
                 raise SandboxError('authorization_unavailable')
             self.guard.stdin.write(b'ARM\n'); self.guard.stdin.flush()
@@ -517,6 +597,7 @@ class DockerSandbox:
             self.thread.start()
             if self._failed.is_set() or not self._allowed():
                 raise SandboxError('authorization_unavailable')
+            self._sdk_create_attempted = True
             self.sdk = self._popen(self._sdk_cmd(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                    stderr=subprocess.DEVNULL, env=self._env(), close_fds=True, bufsize=0)
             if self._failed.is_set() or not self._allowed():
@@ -547,7 +628,7 @@ class DockerSandbox:
         except (OSError, ValueError): pass
         # Best effort only; `stop()` must report unverified if fence was not
         # explicitly acknowledged, even when this succeeds.
-        self._docker(['kill', self.sdk_name])
+        self._kill_owned('sdk')
 
     def _monitor_guard(self):
         # This thread never calls the authorization store: a blocked database
@@ -560,7 +641,29 @@ class DockerSandbox:
         if not self._stop.is_set():
             self._failed.set()
             self._stop.set()
-            self._docker(['kill', self.sdk_name])
+            self._kill_owned('sdk')
+
+    def _kill_owned(self, kind):
+        """Never kill a replacement by name, or an unverified create outcome."""
+        identity = self._preflight_sdk_identity if kind == 'sdk' else self._owned_guard_id
+        name = self.sdk_name if kind == 'sdk' else self.guard_name
+        image = self.spec.sdk_image if kind == 'sdk' else self.spec.guard_image
+        component = 'dji-cloud2-sdk' if kind == 'sdk' else 'dji-cloud2-egress'
+        if not isinstance(identity, str) or not _NETWORK.fullmatch(identity):
+            return
+        result = self._docker(['inspect', '--format', '{{json .}}', identity])
+        if result is None or result.returncode:
+            return
+        try:
+            obj = json.loads(result.stdout)
+            labels = obj['Config'].get('Labels') or {}
+            if (obj.get('Id') != identity or obj.get('Name') != '/' + name or obj.get('Image') != image
+                    or labels.get('org.generic-agents.component') != component
+                    or labels.get('org.generic-agents.lease') != name.rsplit('-', 1)[1]):
+                return
+            self._docker(['kill', identity])
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+            return
 
     def _docker(self, args, timeout=3):
         try:
@@ -570,6 +673,16 @@ class DockerSandbox:
             return None
 
     def stop(self):
+        self._stop.set()
+        if not self._lifecycle_lock.acquire(timeout=3):
+            self._stop_timeout_observed.set()
+            return self._timeout_stop_result
+        try:
+            return self._stop_locked()
+        finally:
+            self._lifecycle_lock.release()
+
+    def _stop_locked(self):
         with self._sdk_send_lock:
             self._stop.set()
         if self.thread and self.thread is not threading.current_thread():
@@ -582,20 +695,44 @@ class DockerSandbox:
                 fenced = self._line(3) == b'FENCED'
             except (OSError, ValueError, SandboxError):
                 pass
-        # Each name is generated internally and bound to this unique instance.
         # Guard can already be gone due to --rm, so only `ps` provides proof.
-        for name in (self.sdk_name, self.guard_name):
+        for kind, name in (('sdk', self.sdk_name), ('guard', self.guard_name)):
             if not _NAME.fullmatch(name):
                 self._last_stop_result = StopResult(False, False, False)
                 return self._last_stop_result
-            self._docker(['kill', name])
+            self._kill_owned(kind)
         result = self._docker(['ps', '-a', '--format', '{{.Names}}'])
-        stopped = result is not None and result.returncode == 0 and not ({self.sdk_name, self.guard_name} & set(result.stdout.decode('utf-8','replace').splitlines()))
+        ids_result = self._docker(['ps', '-a', '--no-trunc', '--format', '{{.ID}}'])
+        def verified_ids(response):
+            if response is None or response.returncode:
+                return None
+            try:
+                values = response.stdout.decode('ascii', 'strict').splitlines()
+                if any(not _NETWORK.fullmatch(value) for value in values):
+                    return None
+                return set(values)
+            except (UnicodeError, AttributeError):
+                return None
+        listed_ids = verified_ids(ids_result)
+        try:
+            names = result.stdout.decode('ascii', 'strict').splitlines() if result is not None and not result.returncode else None
+            if names is not None and any(not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]*', value) for value in names):
+                names = None
+        except (UnicodeError, AttributeError):
+            names = None
+        owned_ids = (self._preflight_sdk_identity, self._owned_guard_id)
+        identities_known = all(not attempted or isinstance(identity, str) and _NETWORK.fullmatch(identity)
+            for attempted, identity in zip((self._sdk_create_attempted, self._guard_create_attempted), owned_ids))
+        stopped = (identities_known and names is not None
+            and listed_ids is not None
+            and not ({self.sdk_name, self.guard_name} & set(names))
+            and not (set(filter(None, owned_ids)) & listed_ids))
         if self._owned_network_id:
             self._docker(['network', 'rm', self._owned_network_id])
         networks = self._docker(['network', 'ls', '--no-trunc', '--quiet'])
-        removed = (not self._network_create_attempted or self._owned_network_id is not None and networks is not None
-                   and networks.returncode == 0 and self._owned_network_id not in networks.stdout.decode('ascii','replace').splitlines())
+        network_ids = verified_ids(networks)
+        removed = (not self._network_create_attempted or self._owned_network_id is not None
+                   and network_ids is not None and self._owned_network_id not in network_ids)
         reaped = True
         for proc in (self.sdk, self.guard):
             if proc is not None:

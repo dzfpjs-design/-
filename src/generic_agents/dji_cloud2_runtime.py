@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import engine
-from .dji_cloud2_connections import KIND, acquire_snapshot, is_current, publish_state
+from .dji_cloud2_connections import KIND, acquire_snapshot, is_current, publish_state, publish_websocket_state
 from .dji_cloud2_process import Bridge, BridgeError, BridgeRevoked, init_frame
 from .models import Job
 from .mqtt_subscriber import subscription_lease, LeaseBusy
@@ -43,9 +43,20 @@ def _current(workspace, identity, version):
         return is_current(db, workspace, identity, version)
 
 
-def _report(workspace, identity, version, state, count=None):
-    with Session(engine()) as db:
+def _report(lease, workspace, identity, version, state, count=None):
+    # The session advisory lease and the publication must share one DB
+    # connection. Otherwise loss of the lease can allow an old process to
+    # publish after its replacement has started.
+    with lease.session() as db:
         ok = publish_state(db, workspace, identity, version, state, device_count=count)
+        db.commit()
+        return ok
+
+
+def _report_websocket(lease, workspace, identity, version, state):
+    with lease.session() as db:
+        current, last_failure = state
+        ok = publish_websocket_state(db, workspace, identity, version, current, last_failure)
         db.commit()
         return ok
 
@@ -53,64 +64,88 @@ def _report(workspace, identity, version, state, count=None):
 def _run_connection(workspace, identity, stop, *, command_factory=_command):
     delay = 1
     while not stop.is_set():
-        bridge = None
-        version = None
         try:
             with subscription_lease('dji-cloud2:' + workspace + ':' + identity) as lease:
-                snapshot = _snapshot(workspace, identity)
-                version = snapshot['version']
-                command = command_factory()
-                if not command:
-                    _report(workspace, identity, version, 'sdk_unavailable')
-                    stop.wait(15)
-                    continue
-                if not _report(workspace, identity, version, 'connecting'):
+                bridge = None
+                version = None
+                try:
+                    snapshot = _snapshot(workspace, identity)
+                    version = snapshot['version']
+                    command = command_factory()
+                    if not command:
+                        _report(lease, workspace, identity, version, 'sdk_unavailable')
+                        stop.wait(15)
+                        continue
+                    if not _report(lease, workspace, identity, version, 'connecting'):
+                        return
+
+                    def allowed():
+                        lease.check()
+                        lease.connection.commit()
+                        return _current(workspace, identity, version)
+
+                    bridge = Bridge(command, allowed, stop, timeout=15, interval=.5)
+                    http = {item['name']: item['value'] for item in snapshot['http_headers']}
+                    ws = {item['name']: item['value'] for item in snapshot['ws_headers']}
+                    bridge.start(init_frame(snapshot['host'], snapshot['port'], http, ws))
+                    del http, ws, snapshot
+                    while not stop.is_set():
+                        try:
+                            devices = bridge.list_devices()
+                        except BridgeError as error:
+                            # Only a valid, complete HTTP error response leaves the
+                            # protocol synchronized. On timeout/EOF/revocation,
+                            # never issue a further request to the old process.
+                            if type(error) is BridgeError and str(error) in ('authentication_failed', 'upstream_error'):
+                                previous_timeout = bridge.timeout
+                                try:
+                                    bridge.timeout = min(previous_timeout, 1)
+                                    status = bridge.websocket_status()
+                                    _report_websocket(lease, workspace, identity, version, status)
+                                except BridgeRevoked:
+                                    raise
+                                except BridgeError:
+                                    pass
+                                finally:
+                                    bridge.timeout = previous_timeout
+                            raise
+                        if not _report(lease, workspace, identity, version, 'connected', len(devices)):
+                            raise BridgeRevoked('revoked')
+                        del devices
+                        delay = 1
+                        for second in range(30):
+                            if second % 5 == 0:
+                                ws_state = bridge.websocket_status()
+                                if not _report_websocket(lease, workspace, identity, version, ws_state):
+                                    raise BridgeRevoked('revoked')
+                            if stop.wait(1): break
+                            if not allowed(): raise BridgeRevoked('revoked')
+                    # A normal worker shutdown is not evidence the socket remains
+                    # live. Revocation is fenced again in the DB publication.
+                    _report(lease, workspace, identity, version, 'disconnected')
                     return
-
-                def allowed():
-                    lease.check()
-                    lease.connection.commit()
-                    return _current(workspace, identity, version)
-
-                bridge = Bridge(command, allowed, stop, timeout=15, interval=.5)
-                http = {item['name']: item['value'] for item in snapshot['http_headers']}
-                ws = {item['name']: item['value'] for item in snapshot['ws_headers']}
-                bridge.start(init_frame(snapshot['host'], snapshot['port'], http, ws))
-                del http, ws, snapshot
-                while not stop.is_set():
-                    devices = bridge.list_devices()
-                    if not _report(workspace, identity, version, 'connected', len(devices)):
-                        raise BridgeRevoked('revoked')
-                    del devices
-                    delay = 1
-                    # Recheck revocation during the otherwise idle interval.
-                    for _ in range(30):
-                        if stop.wait(1): break
-                        if not allowed(): raise BridgeRevoked('revoked')
-                return
-        except BridgeRevoked:
-            return
+                except BridgeRevoked:
+                    if version is not None:
+                        try: _report(lease, workspace, identity, version, 'disconnected')
+                        except Exception: pass
+                    return
+                except Exception as error:
+                    if version is not None:
+                        try:
+                            state = ('authentication_failed' if isinstance(error, BridgeError) and str(error) == 'authentication_failed' else
+                                     'sdk_unavailable' if isinstance(error, BridgeError) and str(error) == 'sdk_unsupported' else 'disconnected')
+                            _report(lease, workspace, identity, version, state)
+                        except Exception:
+                            pass
+                finally:
+                    if bridge is not None:
+                        bridge.close()
         except LeaseBusy:
             stop.wait(5)
             continue
-        except BridgeError as error:
-            if version is not None:
-                try:
-                    state = 'authentication_failed' if str(error) == 'authentication_failed' else 'disconnected'
-                    _report(workspace, identity, version, state)
-                except Exception:
-                    pass
         except Exception:
-            # Only fixed status categories are retained; never exception text,
-            # child output, URLs, headers, serials or upstream response bodies.
-            if version is not None:
-                try:
-                    _report(workspace, identity, version, 'disconnected')
-                except Exception:
-                    pass
-        finally:
-            if bridge is not None:
-                bridge.close()
+            # No publication is safe after losing or failing to acquire lease.
+            pass
         if stop.wait(delay): return
         delay = min(delay * 2, 30)
 

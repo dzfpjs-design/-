@@ -12,18 +12,8 @@ from generic_agents import dji_cloud2_sandbox_journal as journal
 from generic_agents.db import engine
 from generic_agents.dji_cloud2_connections import is_current
 from generic_agents.dji_cloud2_process import parse_result
-from generic_agents.dji_cloud2_sandbox import DockerSandbox, SandboxSpec
-
-
-class FixedTestSubnet(DockerSandbox):
-    def __init__(self, *args, subnet, **kwargs):
-        self.subnet = subnet
-        super().__init__(*args, **kwargs)
-
-    def _docker(self, args, timeout=3):
-        if args[:2] == ['network', 'create']:
-            args = [*args[:-1], '--subnet', self.subnet, args[-1]]
-        return super()._docker(args, timeout=timeout)
+from generic_agents.dji_cloud2_sandbox import SandboxSpec
+from tests.dji_cloud2_e2e.test_sandbox_sdk import TestOnlySubnetSandbox
 
 
 def send(**message):
@@ -50,7 +40,7 @@ def main():
         guard_image=item['guard_image'], sdk_image=item['sdk_image'], allowed_networks=(item['subnet'],))
     def authorize(_spec):
         with Session(engine()) as db: return is_current(db, workspace, spec.connection_id, spec.generation)
-    sandbox = FixedTestSubnet(spec, authorize, docker='/usr/bin/docker', subnet=item['subnet'])
+    sandbox = TestOnlySubnetSandbox(spec, authorize, docker='/usr/bin/docker', subnet=item['subnet'], allow_test_fixtures=True)
     with Session(engine()) as db:
         journal_id = journal.begin(db, sandbox); db.commit()
     send(event='intent', journal_id=journal_id, guard=sandbox.guard_name, sdk=sandbox.sdk_name, network=sandbox.network_name)

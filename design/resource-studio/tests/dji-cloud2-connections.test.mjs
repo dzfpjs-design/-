@@ -53,8 +53,18 @@ test('允许增删多条鉴权头，已失效授权不会显示为已连接',asy
 });
 test('设备查询成功不代表消息通道已连接',async()=>{
  const dom=setup(),Studio=await component(),root=require('react-dom/client').createRoot(document.getElementById('root'));
- try{await act(async()=>{root.render(React.createElement(Studio,{account,Btn,request:async()=>({connections:[{id:'cfg',version:1,name:'底座',host:'192.0.2.10',port:443,status:'connected',enabled:true}]})}));await wait();});assert.match(document.body.textContent,/上次设备查询成功；消息连接未验证/);assert.match(document.body.textContent,/后台尚不能连接底座，设备查询和断线恢复尚不能使用/);}
+ try{await act(async()=>{root.render(React.createElement(Studio,{account,Btn,request:async()=>({connections:[{id:'cfg',version:1,name:'底座',host:'192.0.2.10',port:443,status:'connected',enabled:true}]})}));await wait();});assert.match(document.body.textContent,/上次设备查询成功/);assert.match(document.body.textContent,/消息连接：尚未确认/);assert.match(document.body.textContent,/后台尚不能连接底座，设备查询和断线恢复尚不能使用/);}
  finally{await act(async()=>root.unmount());cleanup(dom);}
+});
+test('消息通道鉴权失败独立显示，过期状态保留上次失败',async()=>{
+ const dom=setup(),Studio=await component(),root=require('react-dom/client').createRoot(document.getElementById('root'));
+ const row={id:'cfg',version:1,name:'底座',host:'192.0.2.10',port:443,status:'connected',enabled:true,websocket_status:'disconnected',websocket_last_failure:'auth_403'};
+ try{await act(async()=>{root.render(React.createElement(Studio,{account,Btn,request:async()=>({connections:[row]})}));await wait();});
+  assert.match(document.body.textContent,/上次设备查询成功/);assert.match(document.body.textContent,/消息连接：已断开/);assert.match(document.body.textContent,/最近一次鉴权失败（403）/);
+  row.websocket_status='unknown';row.websocket_last_failure='auth_401';
+  await act(async()=>{button('刷新连接状态').click();await wait();});
+  assert.match(document.body.textContent,/最近一次鉴权失败（401）/);assert.match(document.body.textContent,/消息连接：尚未确认/);
+ }finally{await act(async()=>root.unmount());cleanup(dom);}
 });
 test('安全配置暂不可核验时保留记录并引导恢复',async()=>{
  const dom=setup(),Studio=await component(),root=require('react-dom/client').createRoot(document.getElementById('root'));

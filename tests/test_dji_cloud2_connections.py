@@ -131,6 +131,58 @@ def test_stale_success_and_permission_loss_are_not_shown_as_connected(client, ac
     assert value['status']=='authorization_lost' and value['device_count'] is None
 
 
+def test_websocket_auth_failure_is_distinct_latched_stale_and_revocation_fenced(client, account, allowed):
+    from datetime import timedelta
+    from generic_agents.models import now
+    con=client.post('/api/dji/cloud2/connections',json=payload()).json()['connection']
+    def publish(state, failure=None):
+        with Session(engine()) as db:
+            result=cloud2.publish_websocket_state(db,account[2],con['id'],con['version'],state,failure)
+            db.commit();return result
+    with Session(engine()) as db:
+        assert cloud2.publish_state(db,account[2],con['id'],con['version'],'connected',1)
+        db.commit()
+    assert publish('disconnected', 'auth_401')
+    assert publish('pending')  # Current retry and historical rejection remain distinct.
+    value=client.get('/api/dji/cloud2/connections').json()['connections'][0]
+    assert value['websocket_status']=='pending' and value['websocket_last_failure']=='auth_401'
+    with Session(engine()) as db:
+        row=db.get(Job,con['id']);row.data={**row.data,'websocket_checked_at':(now()-timedelta(seconds=31)).isoformat()};db.commit()
+    value=client.get('/api/dji/cloud2/connections').json()['connections'][0]
+    assert value['websocket_status']=='unknown' and value['websocket_last_failure']=='auth_401'
+    assert publish('connected')
+    value=client.get('/api/dji/cloud2/connections').json()['connections'][0]
+    assert value['websocket_status']=='connected' and value['websocket_last_failure'] is None
+    result=client.post('/api/dji/cloud2/connections/'+con['id']+'/revoke',
+        json={'request_id':str(uuid4()),'version':con['version'],'confirm':True})
+    assert result.status_code==200 and not publish('disconnected','auth_403')
+    value=client.get('/api/dji/cloud2/connections').json()['connections'][0]
+    assert value['status']=='revoked' and value['websocket_status']=='unknown'
+
+
+def test_websocket_connected_cannot_survive_child_failure_or_restart(client, account, allowed):
+    con=client.post('/api/dji/cloud2/connections',json=payload()).json()['connection']
+    def state(value, count=None):
+        with Session(engine()) as db:
+            assert cloud2.publish_state(db,account[2],con['id'],con['version'],value,count)
+            db.commit()
+    def ws(value, failure=None):
+        with Session(engine()) as db:
+            assert cloud2.publish_websocket_state(db,account[2],con['id'],con['version'],value,failure)
+            db.commit()
+    def read(): return client.get('/api/dji/cloud2/connections').json()['connections'][0]
+    state('connected', 1); ws('connected')
+    assert read()['websocket_status']=='connected'
+    state('disconnected')
+    assert read()['websocket_status']=='unknown'
+    state('connecting'); state('connected', 1)
+    assert read()['websocket_status']=='unknown'
+    ws('disconnected','auth_403'); state('sdk_unavailable')
+    assert read()['websocket_status']=='unknown' and read()['websocket_last_failure']=='auth_403'
+    state('connecting'); state('connected', 1); ws('connected')
+    assert read()['websocket_last_failure'] is None
+
+
 def test_missing_key_and_cipher_tampering_stop_inflight_results(client, account, allowed, vault):
     from cryptography.fernet import Fernet
     item=client.post('/api/dji/cloud2/connections',json=payload()).json()['connection']

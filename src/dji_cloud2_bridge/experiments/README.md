@@ -30,6 +30,20 @@ src/dji_cloud2_bridge/experiments/run-probes.sh "$OUTPUT_DIR" "$(pwd)/src/dji_cl
 
 回归脚本先验证 JAR 与 native 指纹，然后使用不继承宿主环境变量的 `--network none` 容器、仅本地生成的一次性测试证书，检测四类目标（跨端口、跨 IP、同 IP/端口不同 Host、同站相对路径）的 301/302/303/307/308。每一项必须同时在漏洞对照中观察到 HTTP 与 WSS 合成凭据泄露，并在修订版中确认目标未收到任何请求、未误报查询成功；接着验证正常 HTTP 查询、WSS 101、原生连接建立和默认/DEBUG 日志中的合成凭据。任一检查失败返回非零。临时证书和私钥仅在测试临时目录使用并删除。
 
+## 真实 JNI 消息连接状态回归
+
+实验 JNI 从 SDK 的 NotificationCenter 实际回调读取消息连接状态，并把**当前连接状态**和**最近一次鉴权失败**作为单个原子快照返回。失败历史只在真实 `OnOpen` 或新建进程时清除；自动重试时，若 SDK 没有暴露准确重试阶段，仍显示未连接。该桥限定一个进程对应一个工作区及 SDK 主会话；不能将全局快照用于一个进程内的多个 SDK 会话。旧 JNI 缺少 V2 符号时，桥会在传递凭据前拒绝启动。
+
+使用上一步的修订版 JAR、预先确认的本地 Java 17 镜像 ID（`TEST_JDK_IMAGE`），在 Linux aarch64 上执行：
+
+```sh
+docker run --init --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+  -v "$(pwd):/repo:ro" -v "$OUTPUT_DIR/sdk-patched.jar:/sdk.jar:ro" \
+  "$TEST_JDK_IMAGE" sh /repo/tests/dji_cloud2_bridge/run-native-ws-tls.sh /repo /sdk.jar
+```
+
+测试在容器回环地址运行合成 TLS 服务，使用临时自签名证书与合成凭据，验证握手 401、403、失败历史保留、连接建立后清除历史、断线和未返回握手结果，并检查协议输出及 native 标准错误中不含合成凭据。测试 CA 只注入临时的桥源码副本，正式桥始终保持证书校验。`PENDING` 表示尚无结果，不代表已经连接或 SDK 确实发生超时；调用方等待到期属于调用方超时，不是对 SDK 内部超时原因的证明。`CONNECTED` 只证明该 SDK 消息连接触发了 `OnOpen`，不证明业务订阅、消息投递或设备联动成功。
+
 ## 仍需满足的开放条件
 
 本实验只检查设备列表和一次 WebSocket 握手。必须完成真实大疆底座、官方模拟器、目标 Linux 运行时、所有相关 SDK 网络路径及日志的独立验证；跨目标出口应由已验证的隔离网络强制限制，清除代理和动态库注入环境。SDK 本身包含写接口：**底座端必须单独签发并验证仅允许设备只读查询的凭据与权限**，不能依赖补丁、Java 桥或文件哈希阻止写操作。还需核验 SDK/二进制和第三方许可、ABI、升级兼容与安全维护。上述条件未满足前，产品真实连接继续保持关闭。

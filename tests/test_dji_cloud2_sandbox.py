@@ -35,8 +35,10 @@ class FakeDocker:
         self.respond = respond
         self.daemon_up = True
         self.network = False
+        self.internal = True
         self.network_name = ''
         self.driver = 'bridge'
+        self.members = {}
 
     def popen(self, args, **kwargs):
         self.commands.append(args)
@@ -55,16 +57,25 @@ class FakeDocker:
         if not self.daemon_up:
             raise subprocess.TimeoutExpired(args, 3)
         if args[1:3] == ['network', 'create']:
-            self.network = True; self.network_name = args[-1]
+            self.network = True; self.network_name = args[-1]; self.internal = '--internal' in args
             return subprocess.CompletedProcess(args, 0, b'd'*64)
         if args[1:3] == ['network', 'inspect']:
             name = self.network_name
-            obj = {'Id':'d'*64,'Name':name,'Driver':self.driver,'Scope':'local','Internal':True,
-                   'Containers':{},'Labels':{'org.generic-agents.component':'dji-cloud2-test-network',
+            obj = {'Id':'d'*64,'Name':name,'Driver':self.driver,'Scope':'local','Internal':self.internal,
+                   'Containers':self.members,'Labels':{'org.generic-agents.component':'dji-cloud2-test-network',
                                               'org.generic-agents.lease':name.rsplit('-',1)[1]}}
             return subprocess.CompletedProcess(args,0,json.dumps(obj).encode())
         if args[1] == 'inspect':
+            requested = args[-1]
+            is_guard = requested == '1'*64 or 'guard' in requested
+            matching = [name for name in self.processes if ('guard' in name) == is_guard]
+            name = matching[0] if matching else requested
+            component = 'dji-cloud2-egress' if is_guard else 'dji-cloud2-sdk'
             obj = {'State':{'Running':True,'Pid':123},
+                   'Id': ('1' if is_guard else '2')*64, 'Name':'/'+name,
+                   'Image':spec().guard_image if is_guard else spec().sdk_image,
+                   'Config':{'Labels':{'org.generic-agents.component':component,
+                                       'org.generic-agents.lease':name.rsplit('-',1)[1]}},
                    'HostConfig':{'NetworkMode':'d'*64,'Privileged':False,'CapAdd':['NET_ADMIN'],'CapDrop':['ALL']},
                    'NetworkSettings':{'Networks':{self.network_name:{'NetworkID':'d'*64}}}}
             return subprocess.CompletedProcess(args,0,json.dumps(obj).encode())
@@ -73,14 +84,125 @@ class FakeDocker:
         if args[1:3] == ['network', 'ls']:
             return subprocess.CompletedProcess(args,0,b'd'*64 if self.network else b'')
         if args[1] == 'kill':
-            proc = self.processes.get(args[-1])
+            names = [name for name in self.processes if ('guard' in name) == (args[-1] == '1'*64)]
+            proc = self.processes.get(names[0]) if names else None
             if proc and proc.poll() is None:
                 proc.kill()
                 proc.wait(timeout=2)
         out = b''
         if args[1] == 'ps':
-            out = ('\n'.join(name for name,p in self.processes.items() if p.poll() is None)).encode()
+            if '{{.ID}}' in args:
+                out = ('\n'.join(('1' if 'guard' in name else '2')*64
+                                 for name,p in self.processes.items() if p.poll() is None)).encode()
+            else:
+                out = ('\n'.join(name for name,p in self.processes.items() if p.poll() is None)).encode()
         return subprocess.CompletedProcess(args, 0, out)
+
+
+def test_no_kill_for_unknown_or_replaced_container():
+    fake = FakeDocker()
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker', run=fake.run)
+    sandbox._kill_owned('sdk')
+    assert not any(cmd[1] == 'kill' for cmd in fake.commands)
+    sandbox._preflight_sdk_identity = '2'*64
+    fake.processes['replacement-other'] = SimpleNamespace(poll=lambda: None)
+    sandbox._kill_owned('sdk')
+    assert not any(cmd[1] == 'kill' for cmd in fake.commands)
+
+
+def test_renamed_owned_container_never_confirms_stop():
+    fake = FakeDocker()
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker', run=fake.run)
+    sandbox._sdk_create_attempted = True
+    sandbox._preflight_sdk_identity = '2'*64
+    fake.processes['renamed-other'] = SimpleNamespace(poll=lambda: None)
+    result = sandbox.stop()
+    assert not result.containers_stopped and not result.confirmed
+    assert not any(cmd[1] == 'kill' for cmd in fake.commands)
+
+
+def test_start_rejects_unexpected_network_attachment(monkeypatch):
+    fake = FakeDocker()
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker', popen=fake.popen, run=fake.run)
+    sandbox.prepare_network()
+    fake.members = {'f'*64: {'Name':'stranger'}}
+    with pytest.raises(SandboxError):
+        sandbox.start()
+    assert not any(cmd[1] == 'run' for cmd in fake.commands)
+
+
+def test_guard_network_rejects_unexpected_attachment():
+    fake = FakeDocker()
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker', run=fake.run)
+    sandbox.prepare_network()
+    fake.members = {'1'*64: {}, 'f'*64: {}}
+    with pytest.raises(ValueError):
+        sandbox._verify_guard_network_only('1'*64)
+
+
+def test_cancel_during_authorization_cannot_become_allowed():
+    entered, release, results = threading.Event(), threading.Event(), []
+    def authorize(_):
+        entered.set(); assert release.wait(5); return True
+    sandbox = DockerSandbox(spec(), authorize, docker='/usr/bin/docker')
+    thread = threading.Thread(target=lambda: results.append(sandbox._allowed()))
+    thread.start()
+    assert entered.wait(2)
+    sandbox._stop.set()
+    release.set(); thread.join(5)
+    assert results == [False]
+
+
+@pytest.mark.parametrize('bad_list', ['containers', 'networks'])
+def test_malformed_docker_id_listing_is_unverified(bad_list):
+    fake = FakeDocker()
+    def run(args, **kwargs):
+        if (bad_list == 'containers' and args[1:3] == ['ps', '-a'] and '{{.ID}}' in args
+                or bad_list == 'networks' and args[1:3] == ['network', 'ls']):
+            return subprocess.CompletedProcess(args, 0, b'truncated-or-corrupt\xff\n')
+        return fake.run(args, **kwargs)
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker', run=run)
+    if bad_list == 'networks':
+        sandbox._network_create_attempted = True
+        sandbox._owned_network_id = 'd'*64
+    outcome = sandbox.stop()
+    if bad_list == 'containers': assert not outcome.containers_stopped
+    else: assert not outcome.network_removed
+
+
+@pytest.mark.parametrize('blocked_step', ['network', 'guard', 'sdk'])
+def test_cancel_during_create_cannot_report_success_or_later_send_credentials(monkeypatch, blocked_step):
+    fake = FakeDocker()
+    entered, release = threading.Event(), threading.Event()
+    def run(args, **kwargs):
+        if blocked_step == 'network' and args[1:3] == ['network', 'create']:
+            entered.set(); assert release.wait(8)
+        return fake.run(args, **kwargs)
+    def popen(args, **kwargs):
+        if blocked_step in args[args.index('--name')+1]:
+            entered.set(); assert release.wait(8)
+        return fake.popen(args, **kwargs)
+    sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker', popen=popen, run=run, lease_seconds=1)
+    monkeypatch.setattr(sandbox, '_verify_guard_namespace', lambda: None)
+    errors = []
+    def launch():
+        try: sandbox.start()
+        except SandboxError as exc: errors.append(exc)
+    thread = threading.Thread(target=launch)
+    thread.start()
+    try:
+        assert entered.wait(5)
+        outcome = sandbox.stop()
+        assert not outcome.confirmed
+        release.set(); thread.join(10)
+        assert not thread.is_alive() and errors
+        assert not sandbox._init_attempted
+        if blocked_step in ('network', 'guard'):
+            assert not any(cmd[1] == 'run' and sandbox.sdk_name in cmd for cmd in fake.commands)
+    finally:
+        release.set(); thread.join(10)
+        for proc in fake.processes.values():
+            if proc.poll() is None: proc.kill(); proc.wait(timeout=2)
 
 
 def test_sdk_preflight_required_and_identity_must_remain_the_same(monkeypatch):
@@ -91,6 +213,7 @@ def test_sdk_preflight_required_and_identity_must_remain_the_same(monkeypatch):
         stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     try:
         with pytest.raises(SandboxError): sandbox.read_sdk_ready(timeout=.2)
+        sandbox._last_guard_identity = 'f'*64
         monkeypatch.setattr(sandbox, '_inspect_sdk_identity', lambda: 'a'*64)
         sandbox.preflight_sdk(timeout=1)
         sandbox.send_init(b'INIT\t1\tdGVzdA\n')
@@ -169,9 +292,13 @@ def test_stop_reports_unverified_when_process_survives_terminate_and_kill(monkey
 def test_sdk_inspection_rejects_untrusted_environment_volume_and_image(monkeypatch):
     sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker')
     monkeypatch.setattr(sandbox, '_verify_guard_namespace', lambda: None)
+    monkeypatch.setattr(sandbox, '_verify_guard_network_only', lambda _id: None)
     monkeypatch.setattr(sandbox, '_same_network_namespace', lambda *_: True)
     guard_id, sdk_id = 'd'*64, 'e'*64
-    guard = {'Id':guard_id, 'State':{'Pid':100}}
+    guard = {'Id':guard_id, 'Name':'/'+sandbox.guard_name, 'Image':sandbox.spec.guard_image,
+             'State':{'Pid':100,'Running':True},
+             'Config':{'Labels':{'org.generic-agents.component':'dji-cloud2-egress',
+                                 'org.generic-agents.lease':sandbox.guard_name.rsplit('-',1)[1]}}}
     info = {'Id':sdk_id, 'Name':'/'+sandbox.sdk_name, 'Image':sandbox.spec.sdk_image,
         'State':{'Running':True,'Pid':101}, 'Mounts':[],
         'HostConfig':{'NetworkMode':'container:'+guard_id,'Privileged':False,'ReadonlyRootfs':True,
@@ -221,8 +348,24 @@ def test_spec_fails_closed_and_accepts_an_explicit_32_host_ceiling():
     spec().validate()
     for overrides in ({'host':'127.0.0.1'}, {'host':'10.1.2.4'}, {'host':'example.test'},
                       {'port':True}, {'generation':0}, {'guard_image':'untrusted:latest'},
-                      {'docker_network_id':'d'*64}, {'allowed_networks':()}):
+                      {'docker_network_id':'d'*64}, {'allowed_networks':()}, {'network_mode':'unexpected'}):
         with pytest.raises(SandboxError): spec(**overrides).validate()
+
+
+def test_lan_network_requires_explicit_experimental_opt_in_and_own_bridge(monkeypatch):
+    monkeypatch.delenv('GA_DJI2_LAN_E2E_ENABLE', raising=False)
+    lan = spec(network_mode='lan_test')
+    with pytest.raises(SandboxError): DockerSandbox(lan, lambda _: True)
+    with pytest.raises(SandboxError): DockerSandbox(lan, lambda _: True, experimental_lan=True)
+    monkeypatch.setenv('GA_DJI2_LAN_E2E_ENABLE', '1')
+    fake = FakeDocker()
+    sandbox = DockerSandbox(lan, lambda _: True, docker='/usr/bin/docker',
+                            run=fake.run, popen=fake.popen, experimental_lan=True)
+    assert sandbox.prepare_network() == 'd'*64
+    creation = next(args for args in fake.commands if args[1:3] == ['network', 'create'])
+    assert '--internal' not in creation
+    assert creation[-1] == sandbox.network_name
+    assert sandbox.stop().network_removed
 
 
 def test_launch_order_is_guard_then_sdk_and_fenced_stop(monkeypatch):
@@ -230,6 +373,7 @@ def test_launch_order_is_guard_then_sdk_and_fenced_stop(monkeypatch):
     sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker', popen=fake.popen, run=fake.run, lease_seconds=1)
     monkeypatch.setattr(sandbox, '_verify_guard_namespace', lambda: None)
     sandbox.start()
+    sandbox._preflight_sdk_identity = '2'*64
     guard, sdk = [cmd for cmd in fake.commands if len(cmd)>1 and cmd[1]=='run']
     assert guard[guard.index('--name')+1] == sandbox.guard_name
     assert sdk[sdk.index('--network')+1] == 'container:'+sandbox.guard_name
@@ -246,6 +390,7 @@ def test_missing_fence_ack_and_docker_failure_are_not_success(monkeypatch):
     sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker', popen=fake.popen, run=fake.run, lease_seconds=1)
     monkeypatch.setattr(sandbox, '_verify_guard_namespace', lambda: None)
     sandbox.start()
+    sandbox._preflight_sdk_identity = '2'*64
     result = sandbox.stop()
     assert not result.confirmed and not result.network_fenced
     assert result.containers_stopped
@@ -254,6 +399,7 @@ def test_missing_fence_ack_and_docker_failure_are_not_success(monkeypatch):
     sandbox = DockerSandbox(spec(), lambda _: True, docker='/usr/bin/docker', popen=fake.popen, run=fake.run, lease_seconds=1)
     monkeypatch.setattr(sandbox, '_verify_guard_namespace', lambda: None)
     sandbox.start()
+    sandbox._preflight_sdk_identity = '2'*64
     fake.daemon_up = False
     result = sandbox.stop()
     assert result.network_fenced and not result.containers_stopped and not result.confirmed
@@ -268,6 +414,7 @@ def test_authorization_revocation_stops_lease_and_kills_sdk(monkeypatch):
     sandbox = DockerSandbox(spec(), lambda _: authorized.is_set(), docker='/usr/bin/docker', popen=fake.popen, run=fake.run, lease_seconds=1)
     monkeypatch.setattr(sandbox, '_verify_guard_namespace', lambda: None)
     sandbox.start()
+    sandbox._preflight_sdk_identity = '2'*64
     authorized.clear()
     assert sandbox._failed.wait(3)
     end = time.monotonic()+3
@@ -288,6 +435,7 @@ def test_guard_death_is_monitored_even_if_authorization_blocks(monkeypatch):
     sandbox = DockerSandbox(spec(), authorize, docker='/usr/bin/docker', popen=fake.popen, run=fake.run, lease_seconds=1)
     monkeypatch.setattr(sandbox, '_verify_guard_namespace', lambda: None)
     sandbox.start()
+    sandbox._preflight_sdk_identity = '2'*64
     try:
         block.set()
         assert entered.wait(2)

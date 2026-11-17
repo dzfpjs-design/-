@@ -98,6 +98,22 @@ def parse_result(line, request_id):
     return devices
 
 
+def parse_websocket_status(line, request_id):
+    """Read only a fixed status from the SDK's actual notification callbacks."""
+    try:
+        fields = line.decode('ascii').split('\t')
+    except UnicodeError:
+        raise BridgeError('invalid_protocol') from None
+    if fields == ['ERROR', request_id, 'SDK_UNSUPPORTED']:
+        raise BridgeError('sdk_unsupported')
+    if (len(fields) != 4 or fields[0] != 'WS_STATUS' or fields[1] != request_id
+            or (fields[2], fields[3]) not in {('PENDING', 'NONE'), ('CONNECTED', 'NONE'),
+                                              ('DISCONNECTED', 'NONE'), ('DISCONNECTED', 'AUTH_401'),
+                                              ('DISCONNECTED', 'AUTH_403')}):
+        raise BridgeError('invalid_protocol')
+    return fields[2].lower(), None if fields[3] == 'NONE' else fields[3].lower()
+
+
 class Bridge:
     def __init__(self, command, authorize, stop, *, timeout=15, interval=0.25, authorization_ttl=5):
         self.command = command
@@ -155,6 +171,8 @@ class Bridge:
             self._allowed()
             self._send(frame)
             ready = self._readline()
+            if ready == b'FATAL\tSDK_UNSUPPORTED':
+                raise BridgeError('sdk_unsupported')
             if ready != b'READY\t1':
                 raise BridgeError('initialization_failed')
         except Exception:
@@ -214,6 +232,13 @@ class Bridge:
         request_id = str(uuid.uuid4())
         self._send(('LIST\t' + request_id + '\n').encode('ascii'))
         result = parse_result(self._readline(), request_id)
+        self._allowed()
+        return result
+
+    def websocket_status(self):
+        request_id = str(uuid.uuid4())
+        self._send(('WS_STATUS\t' + request_id + '\n').encode('ascii'))
+        result = parse_websocket_status(self._readline(), request_id)
         self._allowed()
         return result
 

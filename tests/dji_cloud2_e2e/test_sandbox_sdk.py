@@ -98,14 +98,45 @@ def choose_subnet():
 class TestOnlySubnetSandbox(DockerSandbox):
     """Only test-network allocation differs; all production checks stay intact."""
     __test__ = False
-    def __init__(self, *args, subnet, **kwargs):
+    def __init__(self, *args, subnet, allow_test_fixtures=False, **kwargs):
         self.test_subnet = subnet
+        self.allow_test_fixtures = allow_test_fixtures
         super().__init__(*args, **kwargs)
 
     def _docker(self, args, timeout=3):
         if args[:2] == ['network', 'create']:
             args = [*args[:-1], '--subnet', str(self.test_subnet), args[-1]]
         return super()._docker(args, timeout=timeout)
+
+    def _test_fixture_members(self, guard_id=None):
+        inspected = self._docker(['network', 'inspect', '--format', '{{json .}}', self.network_id])
+        if inspected is None or inspected.returncode:
+            raise ValueError('network inspection failed')
+        members = json.loads(inspected.stdout).get('Containers')
+        if not isinstance(members, dict) or guard_id is not None and guard_id not in members:
+            raise ValueError('guard missing')
+        for identity in set(members) - ({guard_id} if guard_id else set()):
+            result = self._docker(['inspect', '--format', '{{json .}}', identity])
+            if result is None or result.returncode:
+                raise ValueError('fixture inspection failed')
+            item = json.loads(result.stdout)
+            labels = item['Config'].get('Labels') or {}
+            if (item.get('Id') != identity or not item.get('Name', '').startswith('/ga-dji2-e2e-')
+                    or labels.get('org.generic-agents.component') != 'dji-cloud2-e2e-fixture'
+                    or labels.get('org.generic-agents.lease') != self.guard_name.rsplit('-', 1)[1]):
+                raise ValueError('unknown attachment')
+
+    def _verify_network(self, *, require_empty=False):
+        if not self.allow_test_fixtures or not require_empty:
+            return super()._verify_network(require_empty=require_empty)
+        super()._verify_network(require_empty=False)
+        self._test_fixture_members()
+
+    def _verify_guard_network_only(self, guard_id):
+        if not self.allow_test_fixtures:
+            return super()._verify_guard_network_only(guard_id)
+        super()._verify_network()
+        self._test_fixture_members(guard_id)
 
 
 def read_line(proc, timeout=20):
@@ -245,7 +276,7 @@ def one_scenario(client, account, monkeypatch, assets, *, mode, fault=None, vuln
             # A broken implementation must time out rather than hang the VM.
             db.execute(text("SET LOCAL statement_timeout = '3000ms'"))
             return is_current(db, workspace, record['id'], record['version'])
-    sandbox = TestOnlySubnetSandbox(spec, authorize, docker=DOCKER, subnet=subnet)
+    sandbox = TestOnlySubnetSandbox(spec, authorize, docker=DOCKER, subnet=subnet, allow_test_fixtures=True)
     names = ['ga-dji2-e2e-source-'+uuid4().hex, 'ga-dji2-e2e-target-'+uuid4().hex]
     lease = sandbox.guard_name.rsplit('-', 1)[1]
     proc = None; outcome = None; journal_id = None
@@ -478,6 +509,9 @@ def test_supervisor_sigkill_preserves_journal_and_blocks_automatic_restart(clien
             with pytest.raises(HTTPException) as blocked: journal.begin(db, other)
             assert blocked.value.status_code == 409
             db.rollback()
+        revoked = client.post('/api/dji/cloud2/connections/'+record['id']+'/revoke', json={
+            'request_id': str(uuid4()), 'version': record['version'], 'confirm': True})
+        assert revoked.status_code == 200
     finally:
         if worker.poll() is None:
             worker.kill(); worker.wait(timeout=5)
@@ -498,6 +532,11 @@ def test_supervisor_sigkill_preserves_journal_and_blocks_automatic_restart(clien
                 remove_owned_network(network_id, intent['network'], lease)
                 raise AssertionError('fresh supervisor recovery failed; journal requires investigation')
             assert json.loads(recovery.stdout)['state'] == 'cleanup_unverified'
+            assert json.loads(recovery.stdout)['outcome'] == 'resources_absent_unverified'
             with Session(engine()) as db:
                 assert any(row['id'] == intent['journal_id'] and row['state'] == 'cleanup_unverified'
                            for row in journal.pending(db, workspace))
+                assert not is_current(db, workspace, record['id'], record['version'])
+                with pytest.raises(HTTPException) as blocked:
+                    journal.begin(db, other)
+                assert blocked.value.status_code == 403

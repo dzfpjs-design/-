@@ -4,7 +4,9 @@ import threading
 import time
 from uuid import uuid4
 
+import pytest
 from generic_agents import dji_cloud2_runtime as runtime
+from generic_agents.mqtt_subscriber import LeaseBusy, LeaseLost, subscription_lease
 from tests.test_dji_cloud2_connections import allowed, payload
 from tests.test_managed_mqtt_grants import vault
 
@@ -86,3 +88,78 @@ time.sleep(2); print('RESULT\t'+parts[1]+'\t0',flush=True); time.sleep(5)
         assert current['status'] == 'revoked' and current['device_count'] is None
     finally:
         stop.set(); thread.join(timeout=4)
+
+
+def test_failing_worker_publishes_before_releasing_lease(client, account, allowed, monkeypatch):
+    created = client.post('/api/dji/cloud2/connections', json=payload()).json()['connection']
+    entered, release = threading.Event(), threading.Event()
+    original_report = runtime._report
+
+    def delayed_report(lease, workspace, identity, version, state, count=None):
+        if state == 'disconnected':
+            entered.set()
+            assert release.wait(5)
+        return original_report(lease, workspace, identity, version, state, count)
+
+    monkeypatch.setattr(runtime, '_report', delayed_report)
+    source = "import sys; sys.stdin.readline(); sys.exit(3)"
+    stop = threading.Event()
+    thread = threading.Thread(target=runtime._run_connection, args=(account[2], created['id'], stop),
+                              kwargs={'command_factory': lambda: [sys.executable, '-c', source]}, daemon=True)
+    thread.start()
+    key = 'dji-cloud2:' + account[2] + ':' + created['id']
+    try:
+        assert entered.wait(5)
+        # The replacement cannot publish until the old failure publication ends.
+        with pytest.raises(LeaseBusy):
+            with subscription_lease(key):
+                pass
+        stop.set()
+        release.set()
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+        with subscription_lease(key) as lease:
+            assert original_report(lease, account[2], created['id'], created['version'], 'connected', 1)
+        item = client.get('/api/dji/cloud2/connections').json()['connections'][0]
+        assert item['status'] == 'connected' and item['device_count'] == 1
+    finally:
+        release.set(); stop.set(); thread.join(timeout=5)
+
+
+def test_http_failure_preserves_independent_websocket_auth_failure(client, account, allowed):
+    created = client.post('/api/dji/cloud2/connections', json=payload()).json()['connection']
+    source = r'''import sys
+sys.stdin.readline(); print('READY\t1',flush=True)
+while True:
+ line=sys.stdin.readline()
+ if not line: break
+ parts=line.strip().split('\t')
+ if parts[0]=='LIST': print('ERROR\t'+parts[1]+'\tAUTH',flush=True)
+ if parts[0]=='WS_STATUS': print('WS_STATUS\t'+parts[1]+'\tDISCONNECTED\tAUTH_403',flush=True)
+'''
+    stop = threading.Event()
+    thread = threading.Thread(target=runtime._run_connection, args=(account[2], created['id'], stop),
+                              kwargs={'command_factory': lambda: [sys.executable, '-u', '-c', source]}, daemon=True)
+    thread.start()
+    try:
+        def failed():
+            item = client.get('/api/dji/cloud2/connections').json()['connections'][0]
+            return item if item['status'] == 'authentication_failed' else None
+        item = _wait(failed)
+        assert item['websocket_status'] == 'unknown'
+        assert item['websocket_last_failure'] == 'auth_403'
+    finally:
+        stop.set(); thread.join(timeout=5)
+
+
+def test_expired_lease_cannot_publish_over_replacement(client, account, allowed):
+    created = client.post('/api/dji/cloud2/connections', json=payload()).json()['connection']
+    key = 'dji-cloud2:' + account[2] + ':' + created['id']
+    with subscription_lease(key) as old_lease:
+        assert runtime._report(old_lease, account[2], created['id'], created['version'], 'connecting')
+    with subscription_lease(key) as new_lease:
+        assert runtime._report(new_lease, account[2], created['id'], created['version'], 'connected', 1)
+        with pytest.raises(LeaseLost):
+            runtime._report(old_lease, account[2], created['id'], created['version'], 'disconnected')
+    item = client.get('/api/dji/cloud2/connections').json()['connections'][0]
+    assert item['status'] == 'connected' and item['device_count'] == 1

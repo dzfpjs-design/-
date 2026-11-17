@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from generic_agents.dji_cloud2_process import Bridge, BridgeError, BridgeRevoked, init_frame, parse_result
+from generic_agents.dji_cloud2_process import Bridge, BridgeError, BridgeRevoked, init_frame, parse_result, parse_websocket_status
 
 
 def _b(value):
@@ -63,6 +63,33 @@ def test_oversized_or_malformed_protocol_is_rejected():
     with pytest.raises(BridgeError): init_frame('127.0.0.1', 443, {'x': 'a' * 20000}, {})
     with pytest.raises(BridgeError, match='authentication_failed'): parse_result(b'ERROR\tid\tAUTH', 'id')
     with pytest.raises(BridgeError, match='invalid_protocol'): parse_result(b'ERROR\tid\tSENSITIVE', 'id')
+
+
+def test_websocket_status_is_bound_to_request_and_whitelisted():
+    for status, failure in (('PENDING','NONE'), ('CONNECTED','NONE'), ('DISCONNECTED','NONE'),
+                            ('DISCONNECTED','AUTH_401'), ('DISCONNECTED','AUTH_403')):
+        assert parse_websocket_status(('WS_STATUS\tid\t'+status+'\t'+failure).encode(), 'id') == (status.lower(), None if failure=='NONE' else failure.lower())
+    with pytest.raises(BridgeError, match='sdk_unsupported'):
+        parse_websocket_status(b'ERROR\tid\tSDK_UNSUPPORTED', 'id')
+    for line in (b'WS_STATUS\twrong\tCONNECTED', b'WS_STATUS\tid\tOK',
+                 b'WS_STATUS\tid\tCONNECTED\tAUTH_401', b'ERROR\tid\tSECRET'):
+        with pytest.raises(BridgeError): parse_websocket_status(line, 'id')
+
+
+def test_websocket_status_reads_response_from_child_process():
+    source = """import sys,time
+sys.stdin.readline(); print('READY\\t1',flush=True)
+cmd=sys.stdin.readline().strip().split('\\t')
+assert cmd[0]=='WS_STATUS'
+print('WS_STATUS\\t'+cmd[1]+'\\tDISCONNECTED\\tAUTH_401',flush=True)
+time.sleep(1)
+"""
+    stop = threading.Event(); bridge = Bridge(_child(source), lambda: True, stop, timeout=2)
+    try:
+        bridge.start(init_frame('127.0.0.1', 443, {'h':'v'}, {'h':'v'}))
+        assert bridge.websocket_status() == ('disconnected', 'auth_401')
+    finally:
+        bridge.close()
 
 
 def test_auth_store_failure_closes_without_accepting_result():
