@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import Field
 from sqlalchemy import select,func
 from sqlalchemy.dialects.postgresql import insert
@@ -428,6 +428,25 @@ def content_material(object_id: str, p: P, db: DB):
     return Response(content, media_type=ev.media_type,
                     headers={'Content-Disposition': "attachment; filename*=UTF-8''" + quote(row.name),
                              'X-Content-SHA256': row.sha256, 'X-Content-Type-Options': 'nosniff'})
+
+
+@router.get('/materials/{object_id}/docx-structure')
+def material_docx_structure(object_id: str, p: P, db: DB, include_candidates: bool = False):
+    """Inspect the immutable original without changing prior parsing or review."""
+    from .document_parsers import ParseProblem
+    from .docx_structure_audit import audit_docx_structure
+    row = scoped(db, SetupMaterial, object_id, p)
+    if Path(row.name).suffix.lower() != '.docx':
+        raise HTTPException(415, '此项结构核对仅支持 Word DOCX 原件')
+    ev, content = evidence_bytes(db, p, row.evidence_id)
+    if ev.sha256 != row.sha256:
+        raise HTTPException(409, '资料原件身份不一致，请先恢复原文件')
+    try:
+        result = audit_docx_structure(content, include_candidates=include_candidates)
+    except ParseProblem as exc:
+        raise HTTPException(422, str(exc)) from None
+    return JSONResponse(result, headers={'Cache-Control': 'private, no-store',
+                                        'X-Content-Type-Options': 'nosniff'})
 
 
 class MaterialAction(Contract):

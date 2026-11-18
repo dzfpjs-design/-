@@ -85,7 +85,10 @@ def test_failed_unsupported_empty_and_tampered_content_not_success(client):
             upload(client, b'  ', 'empty.txt'), upload(client, b'opaque', '影像.tif')]
     for row in rows:process_once(row['job_id'])
     states = [client.get('/api/setup/materials/' + r['id']).json()['status'] for r in rows]
-    assert states == ['failed', 'failed', 'needs_input', 'needs_input']
+    # TIFF is handled by the dedicated raster parser; invalid bytes fail while
+    # the immutable original remains available for inspection.
+    assert states == ['failed', 'failed', 'needs_input', 'failed']
+    assert client.get('/api/setup/materials/' + rows[3]['id'] + '/content').content == b'opaque'
     row = upload(client, b'stored')
     with Session(engine()) as db:
         m = db.get(SetupMaterial, row['id'])
