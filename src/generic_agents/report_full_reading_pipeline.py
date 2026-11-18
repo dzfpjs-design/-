@@ -614,6 +614,18 @@ def failed_stage_candidate_route(identity: UUID, stage: str, response: Response,
     return failed_candidate_view(db, p, str(identity), stage, revision)
 
 
+@router.post('/report-full-readings/{identity}/stages/extract-2/resume-preview')
+def second_batch_resume_preview_route(identity: UUID, response: Response, p: ReadP, db: DB, revision: int = Query(..., ge=1)):
+    from .report_full_second_batch_preview import preview
+    # The global raw-map guard protects GET/HEAD paths containing "preview".
+    # This read-only POST starts its snapshot first but retains that same gate.
+    from .map_access import require_config
+    require_config(db,p)
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return preview(db,p,str(identity),revision)
+
+
 from .report_full_provisional import SaveCommand as ProvisionalSaveCommand
 
 
