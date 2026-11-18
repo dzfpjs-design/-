@@ -599,6 +599,13 @@ def get_route(identity: UUID, p: ReadP, db: DB):
     return draft_view(owned(db, p, identity), p)
 
 
+@router.get('/report-full-readings/{identity}/stages/{stage}/raw')
+def raw_stage_route(identity: UUID, stage: str, response: Response, p: ReadP, db: DB, revision: int = Query(..., ge=1)):
+    from .report_full_raw_view import raw_view
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return raw_view(db, p, str(identity), stage, revision)
+
+
 @router.get('/report-full-readings/{identity}/status')
 def status_route(identity: UUID, p: ReadP, db: DB):
     row = owned(db, p, identity)
