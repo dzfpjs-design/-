@@ -196,6 +196,19 @@ def _fourteen_frozen_maps_and_reduce(long_reading_scene, monkeypatch, mode):
     assert user_preview['maximum_call_count']==1 and user_preview['token_upper_bound']==value['token_bound']
     assert user_preview['price_limit_available'] is False and user_preview['price_upper_bound'] is None
     assert user_preview['supported_map_count']==14 and '无法计算或保证费用上限' in user_preview['price_note']
+    v2_response=long_reading_scene['client'].post(route+'/preview-v2',json=command.model_dump(mode='json'))
+    assert v2_response.status_code==200,v2_response.text
+    user_preview_v2=v2_response.json()
+    assert user_preview_v2['schema']=='delegated-reduce-preview-v2'
+    assert user_preview_v2['preflight']==user_preview['preflight']
+    assert user_preview_v2['can_start']==user_preview['can_start']
+    binding=user_preview_v2['receipt_binding']
+    assert set(binding)=={'schema','workspace_id','actor_id','draft_id','revision','request_id',
+        'preflight_hash','reduction_preview_hash','map_plan_hash','map_inputs_hash',
+        'reduction_preparation_hash','map_grant_manifest_hash','binding_hash'}
+    assert binding['preflight_hash']==value['preflight_hash'] and binding['map_grant_manifest_hash']==value['map_plan_hash']
+    assert binding['binding_hash']==digest({k:v for k,v in binding.items() if k!='binding_hash'})
+    assert binding['map_plan_hash']==draft['preview']['map_preparation']['plan']['plan_hash']
     start_body={'revision':command.revision,'request_id':command.request_id,
         'reduction_preview_hash':value['reduction_preview_hash'],'preflight_hash':value['preflight_hash'],'consent':True}
     if not scoped_mode:
@@ -224,6 +237,9 @@ def _fourteen_frozen_maps_and_reduce(long_reading_scene, monkeypatch, mode):
     response=long_reading_scene['client'].post(route+'/start',json=start_body)
     assert response.status_code==202,response.text
     issue={'job_id':response.json()['job_id'],'receipt':response.json()['receipt']}
+    assert issue['receipt']['schema']=='report-evidence-reduce-receipt-v2'
+    assert issue['receipt']['map_plan_hash']==binding['map_plan_hash']
+    assert issue['receipt']['map_inputs_hash']==binding['map_inputs_hash']
     from generic_agents import cloud_scoped_extra_reservation as scoped
     with Session(engine()) as db:
         grant=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,

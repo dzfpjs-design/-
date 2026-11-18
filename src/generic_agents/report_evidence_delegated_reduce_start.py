@@ -58,7 +58,7 @@ def scope_hash(principal, row, job_id, preflight):
         'preflight_hash':preflight['preflight_hash']})
 
 
-def preview_tx(db, principal, request, draft_id, command):
+def preview_tx(db, principal, request, draft_id, command, *, with_receipt_binding=False):
     from . import report_evidence_delegated_reduce_preflight as preflight
     from . import report_evidence_pipeline as evidence
     from . import report_reading_drafts as legacy
@@ -68,10 +68,11 @@ def preview_tx(db, principal, request, draft_id, command):
     legacy.workspace_draft(db,principal)
     _lock_authority(db,principal,request)
     row=evidence.owned(db,principal,draft_id)
-    value=preflight.preview(db,principal,row,command)
+    result=preflight.preview(db,principal,row,command, _with_receipt_binding=with_receipt_binding)
+    value=result[0] if with_receipt_binding else result
     if value['map_calls'] != 14:
         _deny()
-    return value
+    return result
 
 
 def start_tx(db, principal, request, draft_id, command, approved_preflight_hash):
@@ -295,12 +296,11 @@ def start_tx(db, principal, request, draft_id, command, approved_preflight_hash)
     return {'job_id':job.id,'grant_id':grant.id,'permit_id':permit.id,'receipt':copy.deepcopy(receipt),'replayed':False}
 
 
-@router.post('/report-evidence-readings/{identity}/delegated-reduce/preview')
-def preview_route(identity: UUID, body: evidence.ReducePreviewCommand, request: Request, response: Response,
-                  p: legacy.P, db: legacy.DB):
+def _preview_response(identity, body, request, response, p, db, *, with_receipt_binding=False):
     from .report_evidence_delegated_reduce_preflight import ReducePreflightDenied
     try:
-        value=preview_tx(db,p,request,str(identity),body)
+        result=preview_tx(db,p,request,str(identity),body,with_receipt_binding=with_receipt_binding)
+        value,binding = result if with_receipt_binding else (result,None)
     except (ReducePreflightDenied,ReduceAuthorizationDenied):
         raise HTTPException(409,detail={'code':'delegated_reduce_preflight_blocked',
             'message':'当前仅支持 14 个分段全部完成且依据、账本可核对的报告；未签发额度或调用模型。'}) from None
@@ -314,13 +314,29 @@ def preview_route(identity: UUID, body: evidence.ReducePreviewCommand, request: 
         pass
     db.rollback()
     response.headers['Cache-Control']='private, no-store'
-    return {'schema':'delegated-reduce-preview-v1','preflight':value,
+    payload = {'schema':'delegated-reduce-preview-v2' if with_receipt_binding else 'delegated-reduce-preview-v1',
+        'preflight':value,
         'supported_map_count':14,'maximum_call_count':1,'token_upper_bound':value['token_bound'],
         'price_limit_available':False,'price_upper_bound':None,
         'price_note':'未取得可核对的模型单价，无法计算或保证费用上限。',
         'additional_cost':True,'user_confirmed_business':False,
         'can_start':active,'can_send':active,
         'start_blocker':None if active else '该报告的定向启用未生效或已撤销；当前仅供核对。'}
+    if with_receipt_binding:
+        payload['receipt_binding']=binding
+    return payload
+
+
+@router.post('/report-evidence-readings/{identity}/delegated-reduce/preview')
+def preview_route(identity: UUID, body: evidence.ReducePreviewCommand, request: Request, response: Response,
+                  p: legacy.P, db: legacy.DB):
+    return _preview_response(identity, body, request, response, p, db)
+
+
+@router.post('/report-evidence-readings/{identity}/delegated-reduce/preview-v2')
+def preview_v2_route(identity: UUID, body: evidence.ReducePreviewCommand, request: Request, response: Response,
+                     p: legacy.P, db: legacy.DB):
+    return _preview_response(identity, body, request, response, p, db, with_receipt_binding=True)
 
 
 @router.post('/report-evidence-readings/{identity}/delegated-reduce/start', status_code=202)

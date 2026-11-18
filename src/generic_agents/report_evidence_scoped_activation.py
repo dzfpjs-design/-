@@ -12,12 +12,12 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Request, Response
 from pydantic import field_validator
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from .contracts import digest
-from .models import Audit, AuthSession, Job, Membership, User
+from .models import Audit, AuthSession, Job, Membership, SetupDraft, User
 from .security import Principal
 from .services import require
 from . import report_reading_drafts as legacy
@@ -269,6 +269,88 @@ def _response(record, replayed):
             'expires_at': record.data['manifest']['expires_at'], 'replayed': replayed,
             'this_action_calls_model': False, 'user_confirmed_business': False,
             'in_flight_may_continue': True}
+
+
+class ActivationStatusRequest(legacy.SafeContract):
+    preview_id: UUID
+
+
+def status_tx(db, principal, request, preview_id):
+    """Read a saved plan and its activation under the same locks as mutations.
+
+    A missing record means only that no matching record was found.  It says
+    nothing about provider-side requests, charges, or deleted historical data.
+    Invalid bindings and audits fail closed rather than becoming ``not_found``.
+    """
+    from . import report_evidence_delegated_budget_start as budget
+    from .report_full_provisional import _lock_authority
+    require(principal, 'admin')
+    workspace = _fetch(db, select(SetupDraft).where(SetupDraft.workspace_id == principal.workspace_id), lock=True)
+    if workspace is None:
+        legacy.fail('configuration_required', '请先保存工作区业务说明，再核对草案发送范围')
+    _lock_authority(db, principal, request)
+    preview, command = budget._saved_preview(db, principal, preview_id, lock=True)
+    summary = budget._summary(db, principal, preview, command)
+    allowance = preview.data['allowance']
+    # Check both canonical key and embedded references.  A malformed duplicate
+    # or a record whose key was altered must not be presented as absent.
+    issue_exists = select(Audit.id).where(Audit.workspace_id == principal.workspace_id,
+        Audit.object_id == Job.id, Audit.action == ISSUE_ACTION).exists()
+    query = select(Job).where(Job.workspace_id == principal.workspace_id, or_(
+        Job.idempotency_key == _key(allowance['draft_id']),
+        # Match a surviving preview reference even if kind/key were damaged.
+        Job.data['manifest']['preview_id'].as_string() == preview.id,
+        and_(Job.data['manifest']['draft_id'].as_string() == allowance['draft_id'],
+             or_(Job.kind == KIND, issue_exists)),
+    )).order_by(Job.id).limit(2).with_for_update(nowait=True).execution_options(populate_existing=True)
+    try:
+        rows = db.scalars(query).all()
+    except OperationalError as error:
+        if getattr(error.orig, 'sqlstate', None) == '55P03':
+            from .report_evidence_delegated_origin import _fail
+            _fail('report_scope_busy', '该报告正在完成发送或撤销，请稍后重新查看状态', 409)
+        raise
+    if len(rows) > 1:
+        _deny()
+    matches = []
+    for row in rows:
+        manifest = row.data.get('manifest') if isinstance(row.data, dict) else None
+        if (row.idempotency_key == _key(allowance['draft_id'])
+                or isinstance(manifest, dict) and
+                (manifest.get('preview_id') == preview.id or manifest.get('draft_id') == allowance['draft_id'])):
+            matches.append(row)
+    if len(matches) > 1:
+        _deny()
+    record = matches[0] if matches else None
+    if record is None:
+        status, identity, expires_at = 'not_found', None, None
+    else:
+        record, _, expires = _checked(db, principal, record, preview_id=preview.id,
+            draft_id=allowance['draft_id'], map_job_id=allowance['job_id'], require_live=False)
+        manifest = record.data['manifest']
+        if manifest['allowance_preview_hash'] != allowance['allowance_preview_hash']:
+            _deny()
+        now = db.scalar(select(func.clock_timestamp()))
+        issued = _instant(manifest['issued_at'])
+        if issued > now or expires > _instant(allowance['expires_at']):
+            _deny()
+        identity, expires_at = record.id, manifest['expires_at']
+        status = 'revoked' if record.status == 'revoked' else ('expired' if now >= expires else 'active')
+    value = {'schema': 'report-scoped-activation-status-v1', 'workspace_id': principal.workspace_id,
+             'actor_id': principal.user_id, 'preview_id': preview.id, 'activation_id': identity,
+             'status': status, 'plan_status': summary['status'], 'expires_at': expires_at,
+             'execution_history': 'unknown', 'this_action_calls_model': False,
+             'user_confirmed_business': False, 'in_flight_may_continue': True}
+    return {**value, 'status_hash': digest(value)}
+
+
+@router.post('/report-evidence-delegated/activation/status')
+def activation_status(body: ActivationStatusRequest, request: Request, response: Response,
+                      p: legacy.P, db: legacy.DB):
+    result = status_tx(db, p, request, str(body.preview_id))
+    db.rollback()
+    response.headers['Cache-Control'] = 'private, no-store'
+    return result
 
 
 @router.post('/report-evidence-delegated/activation', status_code=201)

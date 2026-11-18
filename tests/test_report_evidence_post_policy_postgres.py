@@ -2,6 +2,7 @@
 import copy
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -67,10 +68,11 @@ def test_admin_can_preview_with_policy(reading_scene):
     assert response.json()['source_snapshot']['original']['reading']['blocks']
 
 
-def test_reduce_preview_cannot_bypass_policy(reading_scene):
+@pytest.mark.parametrize('route', ['preview', 'preview-v2'])
+def test_reduce_preview_cannot_bypass_policy(reading_scene, route):
     scene=reading_scene
     _set_operator(scene,policy=True)
-    path='/api/setup/report-evidence-readings/'+str(uuid4())+'/delegated-reduce/preview'
+    path='/api/setup/report-evidence-readings/'+str(uuid4())+'/delegated-reduce/'+route
     assert scene['client'].post(path,json={}).status_code==403
 
 

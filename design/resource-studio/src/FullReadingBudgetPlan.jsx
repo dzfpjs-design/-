@@ -1,6 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {json} from './runtime-api';
 import {digest, fullInt, fullSha, fullUUID, same, verifyFullDraft} from './report-full-reading-contract.mjs';
+import ScopedReportActivation from './ScopedReportActivation.jsx';
 
 const base='/setup/report-evidence-delegated/budget-plan/';
 const need=x=>{if(!x)throw Error('invalid');};
@@ -24,12 +25,13 @@ async function checked(item,account,row){
   return {...item,verified:expected===item.command_hash};
 }
 
-export default function FullReadingBudgetPlan({account,row,Btn='button',request=json}){
+export default function FullReadingBudgetPlan({account,row,Btn='button',request=json,onSessionInvalid}){
   const expected=account?.role==='admin'&&fullUUID.test(account?.user_id||'')&&fullUUID.test(account?.workspace_id||'')&&row?.actor_id===account.user_id&&row?.workspace_id===account.workspace_id&&row?.status==='failed'&&row?.extractions?.length===2;
   const scope=JSON.stringify([account?.role,account?.user_id,account?.workspace_id,row?.id,row?.revision,row?.view_hash]);
   const live=useRef({scope,seq:0,controller:null});if(live.current.scope!==scope){live.current.scope=scope;live.current.seq++;}
   const [view,setView]=useState(null),current=view?.scope===scope?view:null;
   useEffect(()=>()=>{live.current.seq++;live.current.controller?.abort();},[scope]);
+  function invalidate(){if(live.current.scope!==scope)return;live.current.seq++;live.current.controller?.abort();setView({scope,busy:false,invalid:true,items:[]});onSessionInvalid?.();}
   async function run(action,plan){
     if(!expected||current?.busy)return;
     const seq=++live.current.seq,c=new AbortController();live.current.controller?.abort();live.current.controller=c;
@@ -56,14 +58,15 @@ export default function FullReadingBudgetPlan({account,row,Btn='button',request=
       need(result.truncated ? items.length>0&&result.next_before_preview_id===items.at(-1).preview_id : result.next_before_preview_id===null);
       const combined=action==='more'?[...(current?.items||[]),...items]:items;need(new Set(combined.map(i=>i.preview_id)).size===combined.length);
       if(active())setView({scope,busy:false,items:combined,truncated:result.truncated,cursor:result.next_before_preview_id,checked:true,notice});
-    }catch(e){if(active())setView({scope,busy:false,items:[],checked:false,truncated:false,cursor:null,error:e?.status===401||e?.status===403?'权限已变化，内容已隐藏。':e?.message==='invalid'?'服务器记录与原报告无法核对，未继续操作。':'请求结果暂时无法确认。请重新查找已保存预览；重试保持原范围，不能据此判断服务器没有保存。'});}
+    }catch(e){if(active()){if([401,403].includes(e?.status)||e?.code==='SESSION_SCOPE_CHANGED'||/页面会话已变化/.test(e?.message||''))invalidate();else setView({scope,busy:false,items:[],checked:false,truncated:false,cursor:null,error:e?.message==='invalid'?'服务器记录与原报告无法核对，未继续操作。':'请求结果暂时无法确认。请重新查找已保存预览；重试保持原范围，不能据此判断服务器没有保存。'});}}
     finally{if(live.current.controller===c)live.current.controller=null;}
   }
   if(!expected)return null;
+  if(current?.invalid)return <section aria-label="报告分析额度预览"><p role="alert">当前账号权限已变化，私人内容已隐藏。</p></section>;
   return <section aria-label="报告分析额度预览"><h4>保存并找回分析额度预览</h4><p>预览保存在服务器，可在刷新或更换浏览器后找回；保存预览不会创建分析任务或调用模型。</p>
     <Btn type="button" disabled={current?.busy} onClick={()=>run('find')}>查找已保存预览</Btn>{current?.checked&&current.items.length===0&&<><p>没有找到已保存预览。若刚才请求超时，空列表不能证明请求未保存。</p><Btn type="button" disabled={current.busy} onClick={()=>run('create')}>保存当前范围的额度预览</Btn></>}
     {current?.notice&&<p role="status">{current.notice}</p>}{current?.busy&&<p role="status">正在核对服务器记录…</p>}{current?.error&&<p role="alert">{current.error}</p>}
     {current?.truncated&&<Btn type="button" disabled={current.busy} onClick={()=>run('more',current.cursor)}>查看更多已保存预览</Btn>}
-    {current?.items?.map(p=><article key={p.preview_id}><h5>{p.status==='started'?'已创建分析任务':p.status==='expired'?'预览已失效':'已保存额度预览'}</h5>{!p.verified?<p role="alert">该记录缺少可核对的来源或与当前报告不一致；保留原记录，不能从这里启动。</p>:<><p>Word 正文 {p.coverage.word_blocks} 段，OCR {p.coverage.selected_pages} 页。两种视图来自同一报告，内容重叠，不是独立证据。</p><p>计划最多 {p.max_calls} 次调用、{p.max_tokens.toLocaleString()} token。token 不是金额上限；费用未知，可能产生重复费用，后续汇总可能另计。</p><p>现有记录仅支持第二批未发送的条件性工程推断，缺少独立网络或供应商证明；依赖运行环境、账本完整和不存在其他外部发送的假设。</p><p>机器结果和识别的图片、表格含义均未经过人工确认，不自动应用业务配置。</p>{p.status==='started'?<p>任务已创建；调用状态与费用未知，请查看对应分析记录及供应商账单。</p>:<p>本预览未显示已创建任务；实际发送状态未知，需进一步核验。现有记录不能独立证明没有在途调用或费用。{p.can_start!==true||p.can_send!==true?'当前暂不能从这里启动分析。':''}</p>}{p.status==='expired'&&p.original_revision===row.revision&&<><p>可尝试按原范围续期，服务器会核验记录是否符合条件；若已有后继或结果未知，请先查找已保存预览。</p><Btn type="button" disabled={current.busy} onClick={()=>run('renew',p)}>尝试重新保存预览</Btn></>}{p.status==='saved'&&p.can_start===true&&p.can_send===true&&p.start_blocker===null&&p.original_revision===row.revision&&<Btn type="button" disabled={current.busy} onClick={()=>run('start',p)}>确认范围并开始分析</Btn>}</>}</article>)}
+    {current?.items?.map(p=><article key={p.preview_id}><h5>{p.status==='started'?'已创建分析任务':p.status==='expired'?'预览已失效':'已保存额度预览'}</h5>{!p.verified?<p role="alert">该记录缺少可核对的来源或与当前报告不一致；保留原记录，不能从这里启动。</p>:<><p>Word 正文 {p.coverage.word_blocks} 段，OCR {p.coverage.selected_pages} 页。两种视图来自同一报告，内容重叠，不是独立证据。</p><p>计划最多 {p.max_calls} 次调用、{p.max_tokens.toLocaleString()} token。token 不是金额上限；费用未知，可能产生重复费用，后续汇总可能另计。</p><p>现有记录仅支持第二批未发送的条件性工程推断，缺少独立网络或供应商证明；依赖运行环境、账本完整和不存在其他外部发送的假设。</p><p>机器结果和识别的图片、表格含义均未经过人工确认，不自动应用业务配置。</p><ScopedReportActivation account={account} plan={p} request={request} Btn={Btn} onChanged={()=>run('find')} onSessionInvalid={invalidate}/>{p.status==='started'?<p>任务已创建；调用状态与费用未知，请查看对应分析记录及供应商账单。</p>:<p>本预览未显示已创建任务；实际发送状态未知，需进一步核验。现有记录不能独立证明没有在途调用或费用。{p.can_start!==true||p.can_send!==true?'当前暂不能从这里启动分析。':''}</p>}{p.status==='expired'&&p.original_revision===row.revision&&<><p>可尝试按原范围续期，服务器会核验记录是否符合条件；若已有后继或结果未知，请先查找已保存预览。</p><Btn type="button" disabled={current.busy} onClick={()=>run('renew',p)}>尝试重新保存预览</Btn></>}{p.status==='saved'&&p.can_start===true&&p.can_send===true&&p.start_blocker===null&&p.original_revision===row.revision&&<Btn type="button" disabled={current.busy} onClick={()=>run('start',p)}>确认范围并开始分析</Btn>}</>}</article>)}
   </section>;
 }

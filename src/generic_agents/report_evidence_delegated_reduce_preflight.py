@@ -6,6 +6,7 @@ It is not an HTTP route and cannot enable the production dispatch gate.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,41 @@ from .security import Principal
 
 class ReducePreflightDenied(ValueError):
     pass
+
+
+def _receipt_binding(value, prepared, row, principal, command):
+    """Bind receipt fields to the verified reduction, without returning source."""
+    try:
+        reduction = prepared['reduction_preparation']
+        sha = lambda x: type(x) is str and re.fullmatch(r'[a-f0-9]{64}', x) is not None
+        if (type(value) is not dict or type(prepared) is not dict or type(reduction) is not dict
+                or value['preflight_hash'] != digest({k:v for k,v in value.items() if k != 'preflight_hash'})
+                or value['draft_id'] != row.id or value['workspace_id'] != principal.workspace_id
+                or value['actor_id'] != principal.user_id or value['revision'] != command.revision
+                or value['reduction_preview_hash'] != prepared['preview_hash']
+                or prepared['body'] != {'revision':command.revision, 'request_id':command.request_id}
+                or value['reduction_preparation_hash'] != digest(reduction)
+                or reduction['preparation_hash'] != digest({k:v for k,v in reduction.items() if k != 'preparation_hash'})
+                or reduction['map_plan_hash'] != row.data['preview']['map_preparation']['plan']['plan_hash']
+                or not all(sha(x) for x in (value['preflight_hash'], value['map_plan_hash'],
+                    value['reduction_preview_hash'], reduction['preparation_hash'],
+                    reduction['map_plan_hash'], reduction['map_inputs_hash']))):
+            raise ReducePreflightDenied()
+        # V1 preflight's map_plan_hash is the allowance manifest digest.  Keep
+        # that historic meaning there; the v2 binding separately names both
+        # the real map plan and the manifest to match the eventual receipt.
+        binding = {'schema':'delegated-reduce-receipt-binding-v1',
+            'workspace_id':principal.workspace_id, 'actor_id':principal.user_id, 'draft_id':row.id,
+            'revision':command.revision, 'request_id':command.request_id,
+            'preflight_hash':value['preflight_hash'], 'reduction_preview_hash':prepared['preview_hash'],
+            'map_plan_hash':reduction['map_plan_hash'], 'map_inputs_hash':reduction['map_inputs_hash'],
+            'reduction_preparation_hash':reduction['preparation_hash'],
+            'map_grant_manifest_hash':value['map_plan_hash']}
+        return {**binding, 'binding_hash':digest(binding)}
+    except ReducePreflightDenied:
+        raise
+    except (KeyError, TypeError, AttributeError, ValueError):
+        raise ReducePreflightDenied('汇总回执范围无法核对；未签发任何额度') from None
 
 
 def _valid_map_intent(actual, expected, manifest, permit_manifest):
@@ -43,7 +79,7 @@ def _valid_map_intent(actual, expected, manifest, permit_manifest):
     return base == expected and digest(base) == digest(expected)
 
 
-def preview(db: Session, principal: Principal, row, command, *, _rechecking=False):
+def preview(db: Session, principal: Principal, row, command, *, _rechecking=False, _with_receipt_binding=False):
     """Verify the completed original map plan before describing extra cost.
 
     The caller must discard this result when any source or DB state changes.
@@ -171,7 +207,10 @@ def preview(db: Session, principal: Principal, row, command, *, _rechecking=Fals
             'reduction_preparation_hash':digest(reduction), 'token_bound':token_bound,
             'additional_call_count':1, 'additional_cost':True, 'user_confirmed_business':False,
             'can_start':False, 'can_send':False}
-        return {**value, 'preflight_hash':digest(value)}
+        result = {**value, 'preflight_hash':digest(value)}
+        if _with_receipt_binding:
+            return result, _receipt_binding(result, prepared, row, principal, command)
+        return result
     except ReducePreflightDenied:
         raise
     except Exception:
