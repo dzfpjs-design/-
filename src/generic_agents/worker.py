@@ -137,12 +137,15 @@ def claim(job_id=None, kinds=None, *, workspace_id=None, _stop_event=None, _mqtt
         from .auto_evaluation_recovery_v360 import Control, rollout_enabled
         due = (Job.available_at == NOT_AVAILABLE if scoped_report else
                (Job.available_at <= func.clock_timestamp()) & (Job.kind != SCOPED_REPORT_KIND))
+        eligible = ((Job.status == 'queued') & (Job.attempts == 0)
+                    & Job.lease_token.is_(None) & Job.lease_until.is_(None)) if scoped_report else (
+            or_(Job.status == "queued", (Job.status == "running") &
+                or_(Job.lease_until.is_(None), Job.lease_until < func.clock_timestamp())))
         query = (select(Job).where(due, Job.kind != "login_limit",
             ~pending_predicate(),
             ~pending_goal_evaluation(),
             ~pending_goal_approval(),
-            or_(Job.status == "queued", (Job.status == "running") &
-                or_(Job.lease_until.is_(None), Job.lease_until < func.clock_timestamp())))
+            eligible)
             .order_by(Job.available_at).with_for_update(skip_locked=True).limit(1))
         if rollout_enabled():
             fenced_producer = select(Control.id).where(Control.workspace_id==Job.workspace_id,
@@ -192,6 +195,15 @@ def claim(job_id=None, kinds=None, *, workspace_id=None, _stop_event=None, _mqtt
         row = db.scalar(query)
         if not row or (_stop_event is not None and _stop_event.is_set()):
             return None
+        claim_proof=None
+        if scoped_report:
+            from .report_evidence_worker_isolation import first_claim_eligible
+            try:
+                claim_proof=first_claim_eligible(db,row)
+                if not claim_proof:
+                    db.rollback(); return None
+            except (HTTPException,KeyError,TypeError,ValueError,AttributeError):
+                db.rollback(); return None
         if rollout_enabled() and row.kind == 'append_goal_evaluation_v297':
             # claim has already locked the producer row; retain that lock
             # until commit so stop cannot race between this test and claim.
@@ -206,10 +218,46 @@ def claim(job_id=None, kinds=None, *, workspace_id=None, _stop_event=None, _mqtt
         row.data = {**row.data, "recovery_only": exhausted or continuation_recovery,
             "lease_recoveries": row.data.get("lease_recoveries", 0) + int(expired)}
         row.status = "running"; row.attempts += int(not exhausted); row.lease_token = uid()
+        if scoped_report:
+            # One immutable, single-job first-claim witness in the same DB
+            # transaction. A later counter reset cannot impersonate first use.
+            from .models import Audit
+            marker_id=uid()
+            payload={'schema':'fl-initial-claim-v1','job_id':row.id,
+                     'draft_id':row.data['report_draft_id'],'actor_id':row.data['actor_id']}
+            marker=Job(id=marker_id,workspace_id=row.workspace_id,kind='fl_initial_claim_v1',
+                status='internal',idempotency_key='fl-initial-claim-v1:'+row.id,data=payload)
+            claim_audit=Audit(workspace_id=row.workspace_id,actor_id=row.data['actor_id'],
+                object_id=marker_id,action='cloud.report_scope.initial_claim_v1',
+                data={'schema':'fl-initial-claim-audit-v1','job_id':row.id,
+                      'draft_id':row.data['report_draft_id'],'payload_hash':digest(payload)})
+            db.add_all([marker,claim_audit])
         # Keep elapsed-time arithmetic in PostgreSQL. Python ZoneInfo addition
         # resets fold=1 during a DST rollback and can put a fresh lease an hour
         # into the past, even though same-zone subtraction appears positive.
         row.lease_until = db.scalar(select(func.clock_timestamp() + timedelta(seconds=leases.LEASE_SECONDS)))
+        if scoped_report:
+            from copy import deepcopy
+            from sqlalchemy import inspect
+            from . import cloud_scoped_extra_reservation as scoped
+            db.flush()
+            transaction=db.get_transaction();checks=scoped._session_checks(db)
+            if transaction is None or transaction in checks:
+                db.rollback(); return None
+            own_snapshots=[(obj,{col.key:deepcopy(getattr(obj,col.key)) for col in inspect(obj).mapper.column_attrs})
+                           for obj in (row,marker,claim_audit)]
+            snapshots=[*claim_proof['snapshots'],*own_snapshots]
+            deadline=min(claim_proof['expires_at'],row.lease_until)
+            def check_scoped_claim(session):
+                if session.get_transaction() is not transaction or session.scalar(select(func.clock_timestamp()))>=deadline:
+                    raise ValueError('受控报告首次领取已过期，未提交')
+                for item,columns in snapshots:
+                    state=inspect(item)
+                    if (item in session.deleted or not state.persistent or state.deleted or state.detached
+                            or state.session is not session or state.expired_attributes
+                            or any(getattr(item,key)!=value for key,value in columns.items())):
+                        raise ValueError('受控报告首次领取依据已变化，未提交')
+            checks[transaction]=check_scoped_claim
         if _stop_event is not None and _stop_event.is_set():
             db.rollback()
             return None

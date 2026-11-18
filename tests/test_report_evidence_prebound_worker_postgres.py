@@ -270,6 +270,28 @@ def _fourteen_frozen_maps_and_reduce(long_reading_scene, monkeypatch, mode):
         assert db.get(Job, issue['permit_id']).data['used_call_id'] is None
         assert db.get(Job, issue['grant_id']).data['manifest']['user_confirmed_business'] is False
         assert db.scalar(select(func.count()).select_from(CloudCall)) == 15
+    if scoped_mode:
+        from generic_agents.worker import claim
+        # Even matching forged grant/permit hashes and audits cannot turn an
+        # arbitrary reduce scope into a first claim. Restore this synthetic
+        # corruption afterward to exercise the normal worker in the same run.
+        with Session(engine()) as db:
+            grant=db.get(Job,issue['grant_id']);permit=db.get(Job,issue['permit_id'])
+            ga=db.get(Audit,grant.data['audit_id']);pa=db.get(Audit,permit.data['audit_id'])
+            originals=[copy.deepcopy(x.data) for x in (grant,permit,ga,pa)]
+            gm={**grant.data['manifest'],'scope_hash':'0'*64};pm={**permit.data['manifest'],'scope_hash':'0'*64}
+            grant.data={**grant.data,'manifest':gm,'manifest_hash':digest(gm)}
+            permit.data={**permit.data,'manifest':pm,'manifest_hash':digest(pm)}
+            ga.data={**ga.data,'manifest_hash':grant.data['manifest_hash']}
+            pa.data={**pa.data,'manifest_hash':permit.data['manifest_hash']};db.commit()
+        assert claim(issue['job_id'],kinds=['read_report_scoped_v1'],workspace_id=p.workspace_id) is None
+        with Session(engine()) as db:
+            assert db.scalar(select(func.count()).select_from(Job).where(
+                Job.idempotency_key=='fl-initial-claim-v1:'+issue['job_id']))==0
+            grant=db.get(Job,issue['grant_id']);permit=db.get(Job,issue['permit_id'])
+            ga=db.get(Audit,grant.data['audit_id']);pa=db.get(Audit,permit.data['audit_id'])
+            for obj,data in zip((grant,permit,ga,pa),originals):obj.data=data
+            db.commit()
     if mode == 'reserved':
         from generic_agents.leases import attach
         from generic_agents.worker import claim
@@ -445,15 +467,15 @@ def test_expired_lease_cannot_dispatch_prebound_call(reading_scene, monkeypatch)
         assert len(db.get(Job, grant_id).data['consumed']) == 1
         before = db.scalar(select(func.count()).select_from(CloudCall))
     monkeypatch.setattr(transport, 'commit_transport_intent', original)
-    assert process_once(draft['job_id'],kinds=['read_report_scoped_v1'])
+    assert not process_once(draft['job_id'],kinds=['read_report_scoped_v1'])
     with Session(engine()) as db:
         row = db.get(SetupReportDraft, draft['id'])
-        assert row.status == 'response_unknown'
+        assert row.status == 'running'
         assert db.scalar(select(func.count()).select_from(CloudCall)) == before
     assert not [r for r in requests if isinstance(r, dict)]
 
 
-def test_killed_worker_recovers_persisted_wire_without_new_send(reading_scene, monkeypatch, tmp_path):
+def test_killed_worker_preserves_wire_without_reclaim_or_new_send(reading_scene, monkeypatch, tmp_path):
     from generic_agents import report_evidence_delegated_wire_v1 as delegated
     p, draft, grant_id, old = start_plan(reading_scene, monkeypatch)
     script = tmp_path / 'killed_worker.py'
@@ -515,18 +537,18 @@ process_once(sys.argv[1],kinds=['read_report_scoped_v1'],deliver=False,workspace
         db.commit()
     requests=[]
     install_http(monkeypatch, requests)
-    assert process_once(draft['job_id'], kinds=['read_report_scoped_v1'], deliver=False, workspace_id=p.workspace_id)
+    assert not process_once(draft['job_id'], kinds=['read_report_scoped_v1'], deliver=False, workspace_id=p.workspace_id)
     with Session(engine()) as db:
         row = db.get(SetupReportDraft, draft['id'])
-        assert row.status == 'response_unknown'
+        assert row.status == 'running'
         version = row.version
     response = reading_scene['client'].post('/api/setup/report-evidence-readings/' + draft['id'] + '/recover-saved',
         json={'revision': version, 'request_id': str(uuid4())})
-    assert response.status_code == 200, response.text
+    assert response.status_code == 409, response.text
     with Session(engine()) as db:
         row = db.get(SetupReportDraft, draft['id'])
-        assert row.data['maps'][0]['status'] == 'succeeded'
-        assert db.get(CloudCall, call_id).status == 'succeeded'
+        assert row.data['maps'][0]['journal'] is None
+        assert db.get(CloudCall, call_id).status == 'reserved'
         assert db.scalar(select(func.count()).select_from(CloudCall)) == before
         assert len(db.get(Job, grant_id).data['consumed']) == 1
     assert not requests

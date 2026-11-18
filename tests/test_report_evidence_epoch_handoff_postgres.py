@@ -64,6 +64,11 @@ def test_partial_recovery_requeues_same_job_without_changing_paid_records(prepar
         grant_before=copy.deepcopy(db.get(Job,gid).data)
         out=epoch.handoff_tx(db,principal,request,rid,command);db.commit()
         assert out['job_id']==jid and out['new_cloud_calls']==0 and out['replayed'] is False
+    # The handoff contract is persisted, but no separately authorized epoch
+    # claim path is released yet. It must never masquerade as a first claim.
+    from generic_agents.worker import claim
+    from generic_agents.report_evidence_worker_isolation import KIND
+    assert claim(job_id=jid,kinds=[KIND],workspace_id=principal.workspace_id) is None
     with Session(engine()) as db:
         replay=epoch.handoff_tx(db,principal,request,rid,command)
         assert replay['replayed'] is True and replay['epoch_id']==out['epoch_id']

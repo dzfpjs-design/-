@@ -162,7 +162,7 @@ def test_incomplete_or_invalid_results_remain_recoverable_evidence_without_repay
     assert sum(isinstance(item,dict) for item in requests)==1
 
 
-def test_real_worker_kill_after_wire_fsync_recovers_without_new_call(reading_scene,monkeypatch,tmp_path):
+def test_real_worker_kill_after_wire_fsync_preserves_without_reclaim(reading_scene,monkeypatch,tmp_path):
     from generic_agents import report_evidence_delegated_wire_v1 as delegated
     scene=reading_scene;monkeypatch.setattr(settings(),'cloud_daily_call_limit',20)
     _,old,created=start_delegated(scene,monkeypatch)
@@ -208,16 +208,18 @@ process_once(sys.argv[1],kinds=["read_report_scoped_v1"],deliver=False,workspace
         _,state=delegated.load(pipeline,row,stage['chunk_id']);assert state['ready'] and state['response_complete']
         before=db.scalar(select(func.count()).select_from(CloudCall))
         job=db.get(Job,created['job_id']);job.lease_until=db.scalar(select(func.clock_timestamp()))-timedelta(seconds=1);db.commit()
-    # The reclaimed worker must only record unknown state; it cannot send.
+    # An expired in-flight Job must not be reclaimed as a first attempt.
     requests=[];install_http(monkeypatch,requests)
-    assert process_once(created['job_id'],kinds=['read_report_scoped_v1'],deliver=False,workspace_id=scene['p'].workspace_id)
+    assert not process_once(created['job_id'],kinds=['read_report_scoped_v1'],deliver=False,workspace_id=scene['p'].workspace_id)
     assert not requests
     with Session(engine()) as db:
-        row=db.get(SetupReportDraft,created['id']);assert row.status=='response_unknown';version=row.version
+        row=db.get(SetupReportDraft,created['id']);assert row.status=='running';version=row.version
     response=scene['client'].post('/api/setup/report-evidence-readings/'+created['id']+'/recover-saved',
         json={'revision':version,'request_id':str(uuid4())})
-    assert response.status_code==200,response.text
+    # Separate no-send reconciliation of the expired running state has not
+    # been authorized; original bytes and accounting stay intact.
+    assert response.status_code==409,response.text
     with Session(engine()) as db:
-        row=db.get(SetupReportDraft,created['id']);assert row.data['maps'][0]['status']=='succeeded'
+        row=db.get(SetupReportDraft,created['id']);assert row.data['maps'][0]['journal'] is None
         assert db.scalar(select(func.count()).select_from(CloudCall))==before
     assert not requests
