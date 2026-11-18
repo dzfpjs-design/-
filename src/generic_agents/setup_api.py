@@ -547,6 +547,8 @@ from .report_evidence_delegated_reduce_start import router as report_evidence_de
 router.include_router(report_evidence_delegated_reduce_router)
 from .report_evidence_delegated_capture_view import router as report_evidence_delegated_capture_router
 router.include_router(report_evidence_delegated_capture_router)
+from .report_evidence_recovery_diagnostics import router as report_evidence_recovery_diagnostics_router
+router.include_router(report_evidence_recovery_diagnostics_router)
 
 # Explicit local review preserves the paid original and never dispatches a model.
 from .report_draft_partial_review import router as report_draft_partial_review_router
