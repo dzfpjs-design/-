@@ -606,6 +606,14 @@ def raw_stage_route(identity: UUID, stage: str, response: Response, p: ReadP, db
     return raw_view(db, p, str(identity), stage, revision)
 
 
+@router.get('/report-full-readings/{identity}/stages/{stage}/failed-candidate')
+def failed_stage_candidate_route(identity: UUID, stage: str, response: Response, p: ReadP, db: DB, revision: int = Query(..., ge=1)):
+    from .report_full_failed_candidate_view import failed_candidate_view
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return failed_candidate_view(db, p, str(identity), stage, revision)
+
+
 @router.get('/report-full-readings/{identity}/status')
 def status_route(identity: UUID, p: ReadP, db: DB):
     row = owned(db, p, identity)
