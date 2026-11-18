@@ -63,6 +63,7 @@ def test_preview_is_scoped_read_only_and_preserves_ledger(reading_scene, monkeyp
     assert value['scope']['workspace_id'] == scene['p'].workspace_id
     assert value['scope']['stage'] == 'extract-1'
     assert value['status'] == 'needs_review' and value['confirmed'] is False
+    assert value['algorithm_version'] == 'report-failed-candidate-quarantine-v1'
     assert value['can_apply'] is False and value['can_publish'] is False
     assert 'content' not in value and 'provider_wire_base64' not in str(value)
     assert scene['client'].get(route(row), params={'revision': row['revision'] + 1}).status_code == 409

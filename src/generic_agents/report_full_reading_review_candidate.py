@@ -7,6 +7,8 @@ from .report_full_reading_semantics import (
 )
 from .setup_object_proposals import unit_declared
 
+CANDIDATE_ALGORITHM_VERSION = 'report-failed-candidate-quarantine-v1'
+
 # Conservative work budgets for preview only. Exceeding either fails closed;
 # neither text nor evidence is shortened. The final semantic validation scans
 # the same citations again, and each unit guard may inspect the entire suffix

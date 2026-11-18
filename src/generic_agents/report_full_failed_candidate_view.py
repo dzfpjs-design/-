@@ -15,7 +15,7 @@ def _unavailable():
 
 def failed_candidate_view(db, principal, identity, stage_key, revision):
     from . import report_full_reading_pipeline as full
-    from .report_full_reading_review_candidate import CandidateBudgetExceeded, build_candidate
+    from .report_full_reading_review_candidate import CANDIDATE_ALGORITHM_VERSION, CandidateBudgetExceeded, build_candidate
 
     # This performs actor/workspace, revision, original checkpoint, paid ledger
     # and provider-wire checks in the caller's read-only snapshot.
@@ -39,6 +39,7 @@ def failed_candidate_view(db, principal, identity, stage_key, revision):
         built = build_candidate(value, source_index, context)
         result = {'schema': 'report-full-failed-candidate-preview-v1', 'scope': raw['scope'],
                   'candidate': built['candidate'], 'quarantine': built['quarantine'],
+                  'algorithm_version': CANDIDATE_ALGORITHM_VERSION,
                   'status': 'needs_review', 'confirmed': False, 'can_apply': False, 'can_publish': False}
         # Reject non-serializable, invalid-Unicode or excessive computed output.
         encoded = json.dumps(result, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode('utf-8')

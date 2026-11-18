@@ -1,6 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {json} from './runtime-api';
 import {digest} from './report-full-reading-contract.mjs';
+import FullReadingProvisional from './FullReadingProvisional';
 
 const SHA = /^[a-f0-9]{64}$/;
 const MAX_RESPONSE = 2 * 1024 * 1024;
@@ -59,7 +60,7 @@ async function checkedResult(value, expected, rawHash) {
           !text(r.target_type,100) || !citations(r.citations)) throw Error('shape');
     } else throw Error('shape');
   }
-  return {candidate,quarantine};
+  return {candidate,quarantine,preview:value};
 }
 
 function sourceMap(row,stage) {
@@ -122,6 +123,7 @@ export default function FullReadingMachineCandidate({account,row,stage,rawHash=n
     <p>本操作只读取已保存原回答形成的机器待核候选，不调用模型，不修改原回答，也不会确认、应用或发布。</p>
     <Btn type="button" disabled={current?.phase==='loading'} onClick={load}>{current?.phase==='loading'?'正在核对候选…':current?.phase==='error'?'重试生成机器待核候选':value?'重新读取机器待核候选':'生成机器待核候选'}</Btn>
     {current?.phase==='error' && <p role="alert">{current.message}</p>}
+    <FullReadingProvisional account={account} row={row} stage={stage} preview={value?.preview || null} Btn={Btn} request={request}/>
     {value && <div role="status"><h4>机器待核候选</h4>
       <p>本页仅为第 {stage.slice(-1)} 批抽取的候选，并非整份报告结果。以下均未人工确认，引用逐字匹配也不代表业务理解正确；有 {value.quarantine.length} 项需要重点核查。</p>
       {value.candidate.domain && <p>候选领域：{value.candidate.domain}</p>}

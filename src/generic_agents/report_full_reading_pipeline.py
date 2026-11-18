@@ -614,6 +614,27 @@ def failed_stage_candidate_route(identity: UUID, stage: str, response: Response,
     return failed_candidate_view(db, p, str(identity), stage, revision)
 
 
+from .report_full_provisional import SaveCommand as ProvisionalSaveCommand
+
+
+@router.post('/report-full-readings/{identity}/stages/{stage}/provisional')
+def save_provisional_route(identity: UUID, stage: str, body: ProvisionalSaveCommand, request: Request, p: P, db: DB):
+    from .report_full_provisional import save
+    return save(db, p, str(identity), stage, body, request=request)
+
+
+@router.get('/report-full-readings/{identity}/stages/{stage}/provisional')
+def discover_provisional_route(identity: UUID, stage: str, p: ReadP, db: DB):
+    from .report_full_provisional import discover
+    return discover(db, p, str(identity), stage)
+
+
+@router.get('/report-full-readings/{identity}/provisional-receipts/{request_id}')
+def read_provisional_route(identity: UUID, request_id: UUID, p: ReadP, db: DB):
+    from .report_full_provisional import read
+    return read(db, p, str(identity), str(request_id))
+
+
 @router.get('/report-full-readings/{identity}/status')
 def status_route(identity: UUID, p: ReadP, db: DB):
     row = owned(db, p, identity)
