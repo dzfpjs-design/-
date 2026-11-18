@@ -116,7 +116,8 @@ def handoff_tx(db,principal,request,draft_id,command):
             or not row.data.get('recovery_history')):_deny()
     old_job=_locked(db,select(Job).where(Job.workspace_id==principal.workspace_id,Job.id==row.data['job_id']))
     clock=db.scalar(select(func.clock_timestamp()))
-    if (not old_job or old_job.kind!=legacy.KIND or old_job.status!='failed'
+    from .report_evidence_worker_isolation import isolated
+    if (not isolated(old_job) or old_job.status!='failed'
             or (old_job.lease_until is not None and old_job.lease_until>clock)
             or old_job.data.get('actor_id')!=principal.user_id or old_job.data.get('report_draft_id')!=row.id):_deny()
     link=origin.verify_link(db,principal,row,require_current=True)
@@ -255,7 +256,8 @@ def handoff_tx(db,principal,request,draft_id,command):
     data.update(phase='map',error=None,error_code=None,
         resume_history=[*data['resume_history'],{'preview':resume,'receipt':receipt}])
     row.data=data;row.version=command.revision+1;row.status='queued';evidence._state_size(data)
-    old_job.status='queued';old_job.lease_token=None;old_job.lease_until=None;old_job.available_at=clock
+    from .report_evidence_worker_isolation import NOT_AVAILABLE
+    old_job.status='queued';old_job.lease_token=None;old_job.lease_until=None;old_job.available_at=NOT_AVAILABLE
     # This is an explicit, verified recovery epoch, not an automatic retry.
     # Preserve the prior counter in the immutable epoch before resetting it;
     # the ordinary worker otherwise forces recovery-only after three attempts.

@@ -152,7 +152,8 @@ def for_worker(db, principal, job, *, lock=False):
     """Resolve a map or reduce worker through its original linked report."""
     from . import report_evidence_delegated_origin as origin
     from . import report_evidence_pipeline as evidence
-    if (not job or job.workspace_id != principal.workspace_id or not isinstance(job.data, dict)
+    from .report_evidence_worker_isolation import isolated
+    if (not isolated(job) or job.workspace_id != principal.workspace_id or not isinstance(job.data, dict)
             or job.data.get('actor_id') != principal.user_id
             or not isinstance(job.data.get('report_draft_id'), str)):
         _deny()

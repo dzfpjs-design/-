@@ -109,7 +109,8 @@ def _check(db, principal, stage_id, call_id, messages, options, sink, *, require
     permit = locked(db, select(Job).where(Job.workspace_id == principal.workspace_id,
         Job.idempotency_key == scoped.permit_key(owner['job_id'], stage_id)))
     clock = db.scalar(select(func.clock_timestamp()))
-    if (not job or job.status != 'running' or job.kind != legacy.KIND or job.lease_token != owner['lease_token']
+    from .report_evidence_worker_isolation import isolated
+    if (not isolated(job) or job.status != 'running' or job.lease_token != owner['lease_token']
             or job.lease_until is None or job.lease_until.tzinfo is None or job.lease_until <= clock
             or type(job.data) is not dict or job.data.get('actor_id') != principal.user_id
             or type(job.data.get('report_draft_id')) is not str

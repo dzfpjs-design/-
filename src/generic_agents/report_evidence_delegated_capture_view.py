@@ -133,7 +133,9 @@ def _recovery_check(db, principal, row, requested_stage):
     if principal.role not in {'admin', 'operator'}:
         return {**result, 'status': 'blocked', 'blocker': 'role_not_authorized'}
     job = db.scalar(select(Job).where(Job.id == row.data['job_id'], Job.workspace_id == row.workspace_id))
-    if (not job or job.kind != 'read_report_draft' or job.status != 'failed' or job.lease_until is not None
+    from .report_evidence_worker_isolation import isolated
+    if (not job or job.kind != 'read_report_draft' and not isolated(job)
+            or job.status != 'failed' or job.lease_until is not None
             or not isinstance(job.data, dict) or job.data.get('actor_id') != row.actor_id
             or job.data.get('report_draft_id') != row.id):
         return {**result, 'status': 'blocked', 'blocker': 'original_job_unsettled'}

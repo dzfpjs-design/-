@@ -81,7 +81,7 @@ def test_fenced_worker_scoped_plan_multiple_stages(reading_scene, monkeypatch):
     p, draft, grant_id, _ = start_plan(reading_scene, monkeypatch)
     requests = []
     install_http(monkeypatch, requests)
-    assert process_once(draft['job_id'])
+    assert process_once(draft['job_id'],kinds=['read_report_scoped_v1'])
     with Session(engine()) as db:
         row = pipeline.owned(db, p, draft['id'])
         assert len(row.data['maps']) >= 2
@@ -163,7 +163,7 @@ def _fourteen_frozen_maps_and_reduce(long_reading_scene, monkeypatch, mode):
     draft, grant_id = result['result']['draft'], result['grant_id']
     requests = []
     install_http(monkeypatch, requests)
-    assert process_once(draft['job_id'])
+    assert process_once(draft['job_id'],kinds=['read_report_scoped_v1'])
     with Session(engine()) as db:
         row = pipeline.owned(db, p, draft['id'])
         grant = db.get(Job, grant_id)
@@ -185,7 +185,7 @@ def _fourteen_frozen_maps_and_reduce(long_reading_scene, monkeypatch, mode):
         assert value['token_bound'] > 0 and value['additional_cost'] is True
         assert value['can_start'] is value['can_send'] is value['user_confirmed_business'] is False
         assert value['source_hash'] == row.data['preview']['source_hash']
-    assert not process_once(draft['job_id'])
+    assert not process_once(draft['job_id'],kinds=['read_report_scoped_v1'])
     assert len(requests) == 14
     from generic_agents import report_evidence_delegated_reduce_start as reduce_start
     route='/api/setup/report-evidence-readings/'+draft['id']+'/delegated-reduce'
@@ -273,7 +273,7 @@ def _fourteen_frozen_maps_and_reduce(long_reading_scene, monkeypatch, mode):
     if mode == 'reserved':
         from generic_agents.leases import attach
         from generic_agents.worker import claim
-        leased=claim(issue['job_id'],kinds=['read_report_draft'],workspace_id=p.workspace_id)
+        leased=claim(issue['job_id'],kinds=['read_report_scoped_v1'],workspace_id=p.workspace_id)
         assert leased is not None
         with Session(engine(),expire_on_commit=False) as db:
             attach(db,*leased);db.info['worker_actor']=p
@@ -303,7 +303,7 @@ def _fourteen_frozen_maps_and_reduce(long_reading_scene, monkeypatch, mode):
                 raise ValueError('synthetic interruption after reduce wire fsync')
             return original(ctx,*args,**kwargs)
         monkeypatch.setattr(delegated,'response_context',interrupted)
-    assert process_once(issue['job_id'],kinds=['read_report_draft'],deliver=False,workspace_id=p.workspace_id)
+    assert process_once(issue['job_id'],kinds=['read_report_scoped_v1'],deliver=False,workspace_id=p.workspace_id)
     with Session(engine()) as db:
         row = pipeline.owned(db, p, draft['id'])
         call_id = pipeline._stage(row, 'reduce')['reserved_call_id']
@@ -356,9 +356,11 @@ def test_paid_wire_recovery_does_not_reserve_or_send_again(reading_scene, monkey
         monkeypatch.setattr(delegated, 'response_context', original)
         raise ValueError('synthetic crash after wire persistence')
     monkeypatch.setattr(delegated, 'response_context', interrupted)
-    assert process_once(draft['job_id'])
+    assert process_once(draft['job_id'],kinds=['read_report_scoped_v1'])
     with Session(engine()) as db:
         row = db.get(SetupReportDraft, draft['id'])
+        from generic_agents.report_evidence_worker_isolation import isolated
+        assert isolated(db.get(Job,draft['job_id']))
         assert row.status == 'response_unknown'
         version = row.version
         call_id = row.data['maps'][0]['reserved_call_id']
@@ -434,7 +436,7 @@ def test_expired_lease_cannot_dispatch_prebound_call(reading_scene, monkeypatch)
             other.commit()
         return original(db, principal, stage, call_id, messages, options, sink)
     monkeypatch.setattr(transport, 'commit_transport_intent', expire)
-    assert process_once(draft['job_id'])
+    assert process_once(draft['job_id'],kinds=['read_report_scoped_v1'])
     assert not [r for r in requests if isinstance(r, dict)]
     with Session(engine()) as db:
         row = db.get(SetupReportDraft, draft['id'])
@@ -443,7 +445,7 @@ def test_expired_lease_cannot_dispatch_prebound_call(reading_scene, monkeypatch)
         assert len(db.get(Job, grant_id).data['consumed']) == 1
         before = db.scalar(select(func.count()).select_from(CloudCall))
     monkeypatch.setattr(transport, 'commit_transport_intent', original)
-    assert process_once(draft['job_id'])
+    assert process_once(draft['job_id'],kinds=['read_report_scoped_v1'])
     with Session(engine()) as db:
         row = db.get(SetupReportDraft, draft['id'])
         assert row.status == 'response_unknown'
@@ -487,7 +489,7 @@ def traced(*args,**kwargs):
   import traceback;traceback.print_exc();raise
 pipeline.cloud_json=traced
 delegated.response_context=lambda *a,**kw:os.kill(os.getpid(),signal.SIGKILL)
-process_once(sys.argv[1],kinds=['read_report_draft'],deliver=False,workspace_id=sys.argv[2])
+process_once(sys.argv[1],kinds=['read_report_scoped_v1'],deliver=False,workspace_id=sys.argv[2])
 ''')
     env = os.environ.copy()
     env['GA_DATABASE_URL'] = engine().url.render_as_string(hide_password=False)
@@ -513,7 +515,7 @@ process_once(sys.argv[1],kinds=['read_report_draft'],deliver=False,workspace_id=
         db.commit()
     requests=[]
     install_http(monkeypatch, requests)
-    assert process_once(draft['job_id'], kinds=['read_report_draft'], deliver=False, workspace_id=p.workspace_id)
+    assert process_once(draft['job_id'], kinds=['read_report_scoped_v1'], deliver=False, workspace_id=p.workspace_id)
     with Session(engine()) as db:
         row = db.get(SetupReportDraft, draft['id'])
         assert row.status == 'response_unknown'

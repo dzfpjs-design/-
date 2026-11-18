@@ -198,7 +198,7 @@ def fail_target(db, p, job, reason):
     if job.kind in {'execute_full_semantic_graph_node','advance_full_semantic_graph','receive_full_semantic_graph_event','drain_full_semantic_graph_admissions'}:
         from .workflow_graph import fail_job
         return fail_job(db,p,job,reason)
-    if job.kind == 'read_report_draft':
+    if job.kind in {'read_report_draft','read_report_scoped_v1'}:
         from .report_reading_drafts import record_job_failure
         return record_job_failure(db, p, job, reason)
     if job.kind == 'generate_native_query_proposal':

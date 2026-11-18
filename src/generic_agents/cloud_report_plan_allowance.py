@@ -252,7 +252,8 @@ def issue_plan_tx(db, principal, request, draft_id, job_id, allowance_preview, t
         _deny()
     job = db.scalar(select(Job).where(Job.workspace_id == principal.workspace_id,
         Job.id == job_id).with_for_update().execution_options(populate_existing=True))
-    if (not job or job.kind != legacy.KIND or job.status != 'queued' or job.lease_token is not None
+    from .report_evidence_worker_isolation import isolated
+    if (not isolated(job) or job.status != 'queued' or job.lease_token is not None
             or job.lease_until is not None or not isinstance(job.data,dict)
             or job.data.get('actor_id') != principal.user_id or job.data.get('report_draft_id') != row.id
             or row.data['job_id'] != job.id or link['payload']['new_job_id'] != job.id):
@@ -339,7 +340,7 @@ def issue_plan_tx(db, principal, request, draft_id, job_id, allowance_preview, t
                 or row.status != 'queued' or row.request_id != expected_request_id
                 or row.version != expected_version or row.data != expected_row
                 or job.id != job_id or job.workspace_id != principal.workspace_id or job.status != 'queued'
-                or job.kind != legacy.KIND or job.idempotency_key != job_key
+                or not isolated(job) or job.idempotency_key != job_key
                 or job.lease_until is not None or job.lease_token is not None or job.data != expected_job
                 or grant.id != grant_id or audit.id != audit_id or grant.data != expected_grant or grant.kind != 'cloud_report_plan_allowance_v1'
                 or grant.status != 'internal' or grant.workspace_id != principal.workspace_id
@@ -436,7 +437,8 @@ def prepare_map_stage(db, principal, job, capability, permit_manifest):
     from . import report_evidence_pipeline as evidence
     from . import report_evidence_delegated_origin as origin
     from .gateway import prepare_cloud_json
-    if not fenced(db) or db.info.get('worker_actor') != principal or ownership(db).get('job_id') != job.id:
+    from .report_evidence_worker_isolation import isolated
+    if not isolated(job) or not fenced(db) or db.info.get('worker_actor') != principal or ownership(db).get('job_id') != job.id:
         _deny()
     rid=job.data.get('report_draft_id') if isinstance(job.data,dict) else None
     if type(rid) is not str or not rid:

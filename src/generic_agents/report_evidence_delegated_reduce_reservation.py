@@ -53,7 +53,8 @@ def prepare_reduce_stage(db, principal, job, capability, permit_manifest):
     from . import report_evidence_delegated_reduce_preflight as preflight
     from . import report_evidence_pipeline as evidence
     from .gateway import prepare_cloud_json
-    if (not fenced(db) or db.info.get('worker_actor')!=principal or ownership(db).get('job_id')!=job.id
+    from .report_evidence_worker_isolation import isolated
+    if (not isolated(job) or not fenced(db) or db.info.get('worker_actor')!=principal or ownership(db).get('job_id')!=job.id
             or not isinstance(job.data,dict) or not job.data.get('report_draft_id')):
         _deny()
     row=evidence.owned(db,principal,job.data['report_draft_id'],True)

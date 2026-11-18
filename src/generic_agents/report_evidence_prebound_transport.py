@@ -171,7 +171,8 @@ def _check(db, principal, stage_id, call_id, messages, options, sink, *, require
         _deny()
     job = _locked(db, select(Job).where(Job.workspace_id == principal.workspace_id, Job.id == own['job_id']))
     clock = db.scalar(select(func.clock_timestamp()))
-    if (not job or job.status != 'running' or job.kind != legacy.KIND or job.lease_token != own['lease_token']
+    from .report_evidence_worker_isolation import isolated
+    if (not isolated(job) or job.status != 'running' or job.lease_token != own['lease_token']
             or not isinstance(job.lease_until, datetime) or job.lease_until.tzinfo is None
             or job.lease_until <= clock or not isinstance(job.data, dict)
             or job.data.get('actor_id') != principal.user_id or not job.data.get('report_draft_id')):

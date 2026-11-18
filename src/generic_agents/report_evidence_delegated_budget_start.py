@@ -404,7 +404,8 @@ def start_tx(db, principal, request, command, *, preview_id, allowance_preview):
                                 preview_hash=value['preview_hash'],consent=True)
     row=SetupReportDraft(id=draft_id,workspace_id=principal.workspace_id,actor_id=principal.user_id,
                          request_id=command.reading.request_id,status='queued')
-    job=Job(id=job_id,workspace_id=principal.workspace_id,kind=legacy.KIND,
+    from .report_evidence_worker_isolation import KIND as SCOPED_KIND, NOT_AVAILABLE
+    job=Job(id=job_id,workspace_id=principal.workspace_id,kind=SCOPED_KIND,available_at=NOT_AVAILABLE,
             idempotency_key='report-evidence:'+row.request_id,
             data={'actor_id':principal.user_id,'report_draft_id':row.id})
     db.add(job);db.flush();row.data=evidence._new_data(principal,row.id,start,value,job.id)

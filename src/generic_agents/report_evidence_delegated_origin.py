@@ -306,7 +306,9 @@ def verify_link(db, p, row, *, lock=True, require_current=False):
     if len(audits) != 1 or audits[0].data != {'origin_hash': data['origin_hash'], 'request_id': row.request_id}:
         _fail('delegated_audit_invalid', '受托来源审计无法核对，未发送')
     initial_job = db.scalar(select(Job).where(Job.id == link['new_job_id'], Job.workspace_id == p.workspace_id))
-    if (not initial_job or initial_job.kind != legacy.KIND
+    from .report_evidence_worker_isolation import isolated
+    if (not initial_job or (initial_job.kind != legacy.KIND and not isolated(initial_job))
+            or require_current and not isolated(initial_job)
             or initial_job.idempotency_key != 'report-evidence:' + row.request_id
             or initial_job.data.get('actor_id') != p.user_id or initial_job.data.get('report_draft_id') != row.id):
         _fail('delegated_job_invalid', '受托初始任务与草案不一致，未发送')

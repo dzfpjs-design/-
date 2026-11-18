@@ -111,6 +111,16 @@ def actor(db, workspace_id, user_id):
 
 
 def claim(job_id=None, kinds=None, *, workspace_id=None, _stop_event=None, _mqtt_gateway_id=None):
+    from .report_evidence_worker_isolation import KIND as SCOPED_REPORT_KIND, NOT_AVAILABLE
+    scoped_report = bool(job_id is not None and tuple(kinds or ()) == (SCOPED_REPORT_KIND,))
+    if SCOPED_REPORT_KIND in (kinds or ()) and not scoped_report:
+        raise ValueError('受控报告处理须指定唯一任务编号及唯一任务类型')
+    if scoped_report:
+        try:
+            if not isinstance(job_id,str) or str(UUID(job_id)) != job_id:
+                raise ValueError()
+        except (ValueError,TypeError,AttributeError):
+            raise ValueError('受控报告须指定标准小写 UUID 任务编号') from None
     if workspace_id is not None:
         workspace_id = _workspace_uuid(workspace_id)
     if _mqtt_gateway_id is not None:
@@ -125,7 +135,9 @@ def claim(job_id=None, kinds=None, *, workspace_id=None, _stop_event=None, _mqtt
         from .workflow_goal_evaluation_barrier_v288 import pending_predicate as pending_goal_evaluation
         from .goal_approval_claim_barrier_v354 import pending_predicate as pending_goal_approval
         from .auto_evaluation_recovery_v360 import Control, rollout_enabled
-        query = (select(Job).where(Job.available_at <= func.clock_timestamp(), Job.kind != "login_limit",
+        due = (Job.available_at == NOT_AVAILABLE if scoped_report else
+               (Job.available_at <= func.clock_timestamp()) & (Job.kind != SCOPED_REPORT_KIND))
+        query = (select(Job).where(due, Job.kind != "login_limit",
             ~pending_predicate(),
             ~pending_goal_evaluation(),
             ~pending_goal_approval(),
@@ -589,7 +601,20 @@ def process_once(job_id=None, kinds=None, deliver=True, *, workspace_id=None, _s
                     result = read_saved_map_design(db, p, job)
                     if result['status'] in {'failed','response_unknown'}:
                         status, error = 'failed', '新方案未完成；原调用与回答保留，请核对原记录'
-                elif job.kind == 'read_report_draft':
+                elif job.kind in {'read_report_draft','read_report_scoped_v1'}:
+                    if job.kind == 'read_report_scoped_v1':
+                        from .report_evidence_worker_isolation import isolated
+                        if not isolated(job):
+                            raise ValueError('受控报告任务的隔离标记已变化')
+                        from .models import SetupReportDraft
+                        report=db.scalar(select(SetupReportDraft).where(
+                            SetupReportDraft.id==job.data.get('report_draft_id'),
+                            SetupReportDraft.workspace_id==job.workspace_id))
+                        if (not report or report.actor_id!=job.data.get('actor_id')
+                                or not report.request_id.startswith('fl_') or not isinstance(report.data,dict)
+                                or report.data.get('schema')!='report-evidence-draft-state-v1'
+                                or report.data.get('job_id')!=job.id):
+                            raise ValueError('受控任务与报告草稿的归属不一致')
                     from .report_reading_drafts import run as read_report_draft
                     draft_status = read_report_draft(db, p, job.data['report_draft_id'])
                     if draft_status in {'failed', 'response_unknown'}:
@@ -1523,7 +1548,11 @@ def run_setup_job(job_id):
         raise ValueError("单任务执行必须提供标准小写 UUID") from None
     print("配置资料处理器仅尝试指定任务一次；不运行全局调度", flush=True)
     try:
-        if not process_once(job_id=job_id, kinds=SETUP_KINDS, deliver=False):
+        from .report_evidence_worker_isolation import KIND as SCOPED_REPORT_KIND
+        worked=process_once(job_id=job_id,kinds=[SCOPED_REPORT_KIND],deliver=False)
+        if not worked:
+            worked=process_once(job_id=job_id,kinds=SETUP_KINDS,deliver=False)
+        if not worked:
             print("未领取指定任务：不存在、已终结、未到执行时间、租约有效或类型不支持；未领取其他任务", flush=True)
             return 3
         # process_once returning True means an attempt, including failed or lost

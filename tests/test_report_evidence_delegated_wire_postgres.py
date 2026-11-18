@@ -91,7 +91,7 @@ def install_http(monkeypatch, requests, mode='stop'):
 def test_real_worker_records_every_delegated_map_wire(reading_scene,monkeypatch):
     scene=reading_scene;monkeypatch.setattr(settings(),'cloud_daily_call_limit',20)
     old_provider,old,created=start_delegated(scene,monkeypatch);requests=[];install_http(monkeypatch,requests)
-    assert process_once(created['job_id'])
+    assert process_once(created['job_id'],kinds=['read_report_scoped_v1'])
     with Session(engine()) as db:
         row=pipeline.owned(db,scene['p'],created['id'])
         assert row.status=='awaiting_merge' and len(requests)==len(row.data['maps']), ([x for x in requests if isinstance(x,tuple)],row.data.get('error_code'))
@@ -125,7 +125,7 @@ def test_complete_wire_survives_callback_failure_and_free_recovery(reading_scene
             once['fail']=False;raise ValueError('synthetic interruption after durable HTTP')
         return original(*args,**kwargs)
     monkeypatch.setattr(delegated,'response_context',fail_once)
-    assert process_once(created['job_id'])
+    assert process_once(created['job_id'],kinds=['read_report_scoped_v1'])
     assert sum(isinstance(item,dict) for item in requests)==1
     with Session(engine()) as db:
         row=db.get(SetupReportDraft,created['id']);assert row.status=='response_unknown'
@@ -146,7 +146,7 @@ def test_incomplete_or_invalid_results_remain_recoverable_evidence_without_repay
     from generic_agents import report_evidence_delegated_wire_v1 as delegated
     scene=reading_scene;monkeypatch.setattr(settings(),'cloud_daily_call_limit',20)
     _,_,created=start_delegated(scene,monkeypatch);requests=[];install_http(monkeypatch,requests,mode)
-    assert process_once(created['job_id'])
+    assert process_once(created['job_id'],kinds=['read_report_scoped_v1'])
     with Session(engine()) as db:
         row=pipeline.owned(db,scene['p'],created['id']);assert row.status in {'failed','response_unknown'}
         stage=row.data['maps'][0];assert stage['status']!='succeeded'
@@ -194,7 +194,7 @@ def handler(request):
 gateway.httpx.Client=lambda **kw:original(transport=httpx.MockTransport(handler),**kw)
 def terminate(*args,**kwargs):os.kill(os.getpid(),signal.SIGKILL)
 delegated.response_context=terminate
-process_once(sys.argv[1],kinds=["read_report_draft"],deliver=False,workspace_id=sys.argv[2])
+process_once(sys.argv[1],kinds=["read_report_scoped_v1"],deliver=False,workspace_id=sys.argv[2])
 ''')
     env=os.environ.copy();env['GA_DATABASE_URL']=engine().url.render_as_string(hide_password=False)
     env['GA_STORAGE_DIR']=str(settings().storage_dir);env['DEEPSEEK_API_KEY']='synthetic-test-only'
@@ -210,7 +210,7 @@ process_once(sys.argv[1],kinds=["read_report_draft"],deliver=False,workspace_id=
         job=db.get(Job,created['job_id']);job.lease_until=db.scalar(select(func.clock_timestamp()))-timedelta(seconds=1);db.commit()
     # The reclaimed worker must only record unknown state; it cannot send.
     requests=[];install_http(monkeypatch,requests)
-    assert process_once(created['job_id'],kinds=['read_report_draft'],deliver=False,workspace_id=scene['p'].workspace_id)
+    assert process_once(created['job_id'],kinds=['read_report_scoped_v1'],deliver=False,workspace_id=scene['p'].workspace_id)
     assert not requests
     with Session(engine()) as db:
         row=db.get(SetupReportDraft,created['id']);assert row.status=='response_unknown';version=row.version

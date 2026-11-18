@@ -1678,7 +1678,9 @@ def record_job_failure(db, p, job, reason):
     # Legacy failure dispatch already holds this candidate. This path only
     # records saved outcomes; it must not acquire a workspace lock afterwards.
     row = owned(db, p, job.data['report_draft_id'], True)
-    if (job.kind != legacy.KIND or job.workspace_id != row.workspace_id or job.id != row.data['job_id']
+    from .report_evidence_worker_isolation import kind_for,isolated
+    if (job.kind != kind_for(row) or row.request_id.startswith('fl_') and not isolated(job)
+            or job.workspace_id != row.workspace_id or job.id != row.data['job_id']
             or job.data.get('actor_id') != row.actor_id):
         return  # A superseded/foreign Job cannot stop a later explicit resume.
     if row.status not in {'queued', 'running', 'response_unknown'}:
@@ -1699,7 +1701,9 @@ def _reclaimed_job(db, p, row):
     # previous executor merely raising LeaseLost.
     job = db.scalar(select(Job).where(Job.id == lease['job_id'], Job.workspace_id == p.workspace_id)
         .execution_options(populate_existing=True))
-    if (job is None or job.kind != legacy.KIND or job.id != row.data['job_id']
+    from .report_evidence_worker_isolation import kind_for,isolated
+    if (job is None or job.kind != kind_for(row) or row.request_id.startswith('fl_') and not isolated(job)
+            or job.id != row.data['job_id']
             or job.status != 'running' or job.lease_token != lease['lease_token']
             or type(job.data) is not dict or job.data.get('actor_id') != row.actor_id
             or job.data.get('report_draft_id') != row.id

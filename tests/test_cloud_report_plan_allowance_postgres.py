@@ -77,7 +77,8 @@ def prepare(scene, monkeypatch, db, *, deepseek=True):
         preview_hash=reading['preview_hash'],consent=True)
     row=SetupReportDraft(id=draft_id,workspace_id=p.workspace_id,actor_id=p.user_id,
         request_id=start_body.reading.request_id,status='queued')
-    job=Job(id=job_id,workspace_id=p.workspace_id,kind=legacy.KIND,
+    from generic_agents.report_evidence_worker_isolation import KIND as SCOPED_KIND, NOT_AVAILABLE
+    job=Job(id=job_id,workspace_id=p.workspace_id,kind=SCOPED_KIND,available_at=NOT_AVAILABLE,
         idempotency_key='report-evidence:'+row.request_id,
         data={'actor_id':p.user_id,'report_draft_id':row.id})
     db.add(job);db.flush();row.data=evidence._new_data(p,row.id,start,reading,job.id)

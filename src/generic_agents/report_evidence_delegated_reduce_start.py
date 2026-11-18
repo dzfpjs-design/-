@@ -201,7 +201,8 @@ def start_tx(db, principal, request, draft_id, command, approved_preflight_hash)
     session=db.scalar(select(AuthSession).where(AuthSession.id==principal.session_id).with_for_update(nowait=True))
     if not user or not user.active or not member or member.role!='admin' or not session or session.revoked:
         _deny()
-    job=Job(workspace_id=principal.workspace_id,kind=legacy.KIND,status='queued',
+    from .report_evidence_worker_isolation import KIND as SCOPED_KIND, NOT_AVAILABLE
+    job=Job(workspace_id=principal.workspace_id,kind=SCOPED_KIND,status='queued',available_at=NOT_AVAILABLE,
         idempotency_key='evidence-reduce:'+command.request_id,
         data={'actor_id':principal.user_id,'report_draft_id':row.id})
     db.add(job);db.flush()

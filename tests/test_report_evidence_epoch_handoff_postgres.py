@@ -69,6 +69,8 @@ def test_partial_recovery_requeues_same_job_without_changing_paid_records(prepar
         assert replay['replayed'] is True and replay['epoch_id']==out['epoch_id']
     with Session(engine()) as db:
         job=db.get(Job,jid);row=evidence.owned(db,principal,rid)
+        from generic_agents.report_evidence_worker_isolation import isolated
+        assert isolated(job)
         assert job.status=='queued' and job.lease_token is None and job.lease_until is None
         assert row.status=='queued' and row.data['job_id']==jid
         assert db.get(Job,gid).data==grant_before
