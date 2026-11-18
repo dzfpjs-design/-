@@ -54,7 +54,7 @@ async function environment(run){
   else if(path==='/api/setup/draft'&&method==='PUT'){const body=JSON.parse(options.body);assert.equal(body.revision,record.revision);draftWrites.push(clone(body));record={...record,revision:record.revision+1,configuration:clone(body.configuration)};result=clone(record);}
   else if(path==='/api/setup/materials'&&method==='POST'){assert.equal(options.body.get('file').name,queued.name);rows=[queued];result=clone(queued);}
   else if(path==='/api/setup/materials/'+queued.id+'/content')return new Response(bytes);
-  else if(path==='/api/setup/materials?limit=500'){listReads++;result=delayList?await delayList():clone(rows);}
+  else if(path==='/api/setup/materials?limit=500'){listReads++;result=delayList?await delayList():clone(rows);if(result instanceof Response)return result;}
   else if(path==='/api/setup/report-drafts/active')result={blocked:false,report_draft_active:false,legacy_understanding_active:false,own:[]};
   else if(path.startsWith('/api/setup/report-drafts/readings/')){
    const url=new URL(path,'http://synthetic.invalid'),version=Number(url.searchParams.get('version'));
@@ -123,4 +123,9 @@ test('actual material progress keeps full OCR coverage reasons in closed native 
  const inspect=expectedCount=>{const row=material();assert.ok(row);const detail=nodes(row).find(n=>n.type==='details'&&nodes(n).some(child=>child.type==='summary'&&text(child)==='查看未覆盖内容'));assert.ok(detail);assert.notEqual(detail.props.open,true);assert.equal(nodes(detail).find(n=>n.type==='p').props.children,reason);assert.equal(text(row).split(reason).length-1,1);assert.ok(nodes(row).some(n=>n.type==='p'&&text(n).includes(expectedCount)&&!text(n).includes(reason)));assert.match(text(row),/仍有内容待核对/);assert.match(text(row),/需要补充解析能力/);assert.equal(nodes(row).find(n=>n.props.className==='error').props.children,'原资料错误仍须显示');assert.match(text(row),/原资料警示保留/);assert.ok(nodes(row).some(n=>typeof n.props.onClick==='function'&&text(n)==='识别与核对图片文字'));assert.ok(nodes(row).some(n=>typeof n.props.onClick==='function'&&text(n)==='重试解析'));};
  inspect('Word内嵌图片引用：17处 · 已确认0处');assert.match(text(material()),/上传时解析：1571个文本块/);
  f.setRows([{...f.ready,name:'same-origin-copy.pdf',version:4,block_count:235,error:'原资料错误仍须显示',warnings:['原资料警示保留'],ocr:{...ocr,force_all_pages:true,total:235,confirmed:2}}]);await f.refresh();inspect('PDF全页文字核对：235页 · 已确认2页');assert.equal(f.draftWrites.length,writeCount);assert.equal(f.commits,commitCount);
+}));
+
+for(const [status,detail,expected] of [[403,'Role does not permit this operation','当前账号无权读取资料状态，请联系管理员或切换有权限的账号。'],[403,'其他权限策略尚未满足','其他权限策略尚未满足'],[500,'存储服务离线，请联系管理员','存储服务离线，请联系管理员'],[500,'Role does not permit this operation','Role does not permit this operation']])test('资料状态页面针对 '+status+' 保留准确诊断 '+detail,async()=>environment(async f=>{
+ await f.upload();const count=f.draftWrites.length;f.setListDelay(async()=>new Response(JSON.stringify({detail}),{status,headers:{'Content-Type':'application/json'}}));await f.refresh();const output=text(f.runtime.render());assert.match(output,/资料状态读取失败/);assert.ok(output.includes(expected));if(status===403&&detail==='Role does not permit this operation')assert.doesNotMatch(output,/Role does not permit this operation/);assert.equal(f.draftWrites.length,count);
+ f.setListDelay(null);await f.refresh();assert.doesNotMatch(text(f.runtime.render()),/资料状态读取失败/);
 }));

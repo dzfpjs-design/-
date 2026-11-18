@@ -3,6 +3,7 @@ import {json} from './runtime-api.js';
 import {BusinessFlowPlanningController,flowPlanningModels,flowPlanningStatus,flowPlanningHasSavedFlow,FLOW_PLANNING_PROFILES} from './business-flow-planning.mjs';
 import {createRetainedControllerLifecycle} from './retained-controller-lifecycle.mjs';
 import BusinessScopePlanV181 from './BusinessScopePlanV181.jsx';
+import CatalogueFlowQuestions from './CatalogueFlowQuestions.jsx';
 
 const Button=({children,...props})=><button type="button" {...props}>{children}</button>;
 const list=value=>Array.isArray(value)?value:[];
@@ -32,6 +33,7 @@ export default function BusinessFlowPlanning({account,row,models=[],prepareDraft
  {!available.length&&<p role="alert">尚未确认业务范围，不能开始生成。请先保存并确认当前配置版本的业务范围；这里不会自行把整份报告分类视为已完成。</p>}
  <label>已确认的业务范围<select aria-label="流程生成的已确认范围" value={form.plan_id} disabled={disabled||!!c.pending} onChange={event=>c.edit({plan_id:event.target.value})}><option value="">请选择已确认范围</option>{available.map((p,i)=><option key={p.id} value={p.id}>当前第 {p.revision} 版配置 · 已确认范围 {i+1}</option>)}</select></label>
  <label>本次生成哪项业务<select aria-label="本次生成的业务" value={form.scope_id} disabled={disabled||!!c.pending||!c.plan} onChange={event=>c.edit({scope_id:event.target.value})}><option value="">请选择业务名称</option>{c.scopes.map(s=><option key={s.scope_id} value={s.scope_id}>{s.name}</option>)}</select></label>
+ {c.plan&&form.scope_id&&<CatalogueFlowQuestions key={[scope,c.plan.id,c.plan.version,c.plan.plan_hash,form.scope_id].join(':')} controller={c} account={account} row={row} plan={c.plan} scopeId={form.scope_id} businessName={c.scopes.find(s=>s.scope_id===form.scope_id)?.name} Btn={Btn}/>}
  <label>已批准的流程生成模型<select aria-label="业务流程生成模型" value={form.model_id} disabled={disabled||!!c.pending} onChange={event=>c.edit({model_id:event.target.value})}><option value="">请选择</option>{choices.map(model=><option key={model.id} value={model.id}>{model.name||'已批准流程模型'} · {model.execution.provider==='deepseek'?'DeepSeek':'Qwen'} · {model.execution.model}</option>)}</select></label>{!choices.length&&<p>暂无明确支持本次流程生成的已启用并发布的云模型，请由管理员核对登记；已有流程仍可查看。</p>}
  {(Array.isArray(models)?models:[]).filter(model=>Object.hasOwn(FLOW_PLANNING_PROFILES,model?.generation_profile)&&typeof model.generation_blocked_reason==='string'&&model.generation_blocked_reason.length>0).map(model=><p role="status" key={model.id}>{model.name||'流程生成模型'}暂不可用于新生成：{model.generation_blocked_reason} 原活动与原费用记录保留，不会自动更换协议或重发。</p>)}
  {choices.find(model=>model.id===form.model_id)?.generation_profile==='flow-v190'&&<p>核对步骤所需资料来源。生成后仍须人工确认，未明确的资料来源继续保留待核问题。</p>}

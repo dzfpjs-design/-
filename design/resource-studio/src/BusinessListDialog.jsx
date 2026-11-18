@@ -16,7 +16,7 @@ export default function BusinessListDialog({workspace,onCommit,onSave,onApplied,
  {!canManage&&<p className="info">当前账号只读，可查看清单和原编辑稿。</p>}{!saveConnected&&<p className="info">保存核对入口暂不可用，本页仍可保留编辑稿。</p>}{notice&&<p role="status">{notice}</p>}
  {stale&&<div className="error" role="alert"><p>当前清单与编辑前不同，保存不会覆盖其他页面新增的业务。</p><p>编辑前：{editor.current.form.basis.names.join('、')||'空清单'}<br/>当前：{businessNames(workspace).join('、')||'空清单'}</p><Btn disabled={busy||!canManage} onClick={restart}>按当前清单重新核对，保留原稿</Btn></div>}
  <fieldset style={{border:0,padding:0,margin:0}} disabled={!canManage||busy||!editor.current}>{rows.map((row,i)=><div className="row business-edit-row" key={i}><Field label={'业务名称 '+(i+1)}><input value={row.name} onChange={event=>update(rows.map((value,index)=>index===i?{...value,name:event.target.value}:value))}/></Field><Btn onClick={()=>update(rows.filter((_,index)=>i!==index))}>移除</Btn></div>)}<Btn icon="Plus" onClick={()=>update([...rows,{name:''}])}>添加业务</Btn></fieldset>
- <p className="info">改名同步资源关联，保留原流程与规则草稿。移除业务后只退出当前清单，原规则和依据仍保留。{runtime?'业务、流程或规则变化后，须在第4步重新核对，以服务器当前状态为准；新增业务缺规则时仅人工发起、动作仅建议。':''}</p>
+ <p className="info">单独改名时同步资源关联和已保存的自动化说明，原流程、语音依据与历史版本保留；有已保存说明的业务暂不能直接移除。{runtime?'改名后须在第4步重新核对自动化范围，已发布的业务与任务不受影响。新增业务缺规则时仅人工发起、动作仅建议。':''}</p>
  {error&&<p className="error" role="alert">{error}</p>}{!editor.current&&<Btn onClick={retryRead}>重试读取编辑稿</Btn>}{busy&&<p role="status">正在保存并核对业务清单；原编辑稿保留…</p>}
  <div className="actions"><Btn onClick={close}>返回，保留编辑稿</Btn><Btn primary disabled={!canManage||busy||!editor.current||!!stale||!saveConnected} onClick={apply}>保存业务清单</Btn></div></div></Dialog>;
 }

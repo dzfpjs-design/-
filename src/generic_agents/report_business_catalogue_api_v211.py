@@ -1,5 +1,5 @@
 """Normal current-session API for complete, recoverable human catalogue work."""
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from .setup_api import P, DB
@@ -111,3 +111,26 @@ async def save(draft_id: str, request: Request, p: P, db: DB):
 @router.post('/drafts/{draft_id}/confirm')
 async def confirm(draft_id: str, request: Request, p: P, db: DB):
     return await write(draft_id, 'confirm', request, p, db)
+
+
+@router.get('/plans/{plan_id}/business-flow-questions')
+def flow_questions(plan_id: str, request: Request, response: Response, p: P, db: DB,
+                   scope_id: str = Query(min_length=1, max_length=128),
+                   offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=20)):
+    pagination(request, offset, limit)
+    if request.query_params.getlist('scope_id') != [scope_id]:
+        raise HTTPException(422, '请选择一个业务范围')
+    response.headers['Cache-Control'] = 'private, no-store'
+    return safe(store.flow_questions, db, p, identity(plan_id), scope_id, offset=offset, limit=limit)
+
+
+@router.get('/plans/{plan_id}/business-flow-question-evidence')
+def flow_question_evidence(plan_id: str, request: Request, response: Response, p: P, db: DB,
+                           scope_id: str = Query(min_length=1, max_length=128),
+                           question_key: str = Query(min_length=1, max_length=128),
+                           offset: int = Query(0, ge=0), limit: int = Query(10, ge=1, le=10)):
+    pagination(request, offset, limit)
+    if request.query_params.getlist('scope_id') != [scope_id] or request.query_params.getlist('question_key') != [question_key]:
+        raise HTTPException(422, '请选择一个业务范围及待核事项')
+    response.headers['Cache-Control'] = 'private, no-store'
+    return safe(store.flow_question_evidence, db, p, identity(plan_id), scope_id, question_key, offset=offset, limit=limit)

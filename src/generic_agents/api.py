@@ -59,6 +59,8 @@ from .setup_api import router as setup_router
 from . import setup_understanding  # Register proposal routes before including the router.
 from . import setup_recovery
 app.include_router(setup_router)
+from .docx_visible_text_v2_api import router as docx_visible_text_v2_router
+app.include_router(docx_visible_text_v2_router)
 from .mqtt_api import router as mqtt_router
 app.include_router(mqtt_router)
 from .managed_mqtt_grants import router as managed_mqtt_grants_router

@@ -5,7 +5,7 @@ import {setupSessionIdentity,sameSetupSession} from '../src/setup-session-contra
 
 const A={user_id:'60000000-0000-4000-8000-000000000001',workspace_id:'60000000-0000-4000-8000-000000000002',username:'synthetic-A',role:'operator'};
 const B={...A,user_id:'60000000-0000-4000-8000-000000000003',username:'synthetic-B'};
-const functions=['captureQuoteMemory','availableQuoteMemory','settleQuoteMemory','captureFullMemory','captureOCRMemory','detachSetupView','reauthenticate'].map(name=>actualFunction(name)).join('\n');
+const functions=['captureQuoteMemory','availableQuoteMemory','settleQuoteMemory','captureFullMemory','availableFullMemory','captureOCRMemory','detachSetupView','reauthenticate'].map(name=>actualFunction(name)).join('\n');
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 
 function fixture(){
@@ -14,7 +14,7 @@ function fixture(){
  refs.accountRef.current=A;refs.quoteCaptureWorking.current=()=>structuredClone(working);refs.guard.current=()=>false;refs.sync={current:{suspend(){state.suspended++;}}};refs.key={current:'synthetic-key'};refs.live={current:{}};refs.reviewLock={current:{error:''}};
  const deps={...refs,setFullMemoryVersion(update){state.fullMemoryVersion=typeof update==='function'?update(state.fullMemoryVersion||0):update;},setFullReading(value){state.fullReading=value;},setupSessionIdentity,sameSetupSession,captureReportMemory(){},requestOCRLeave:()=>true,clearSession(){state.clear++;},boot(){state.boot++;},configureMaterialBackend(){},pendingReview(){},busyReview(){},setAccount(v){if(v===null)state.hidden++;}};
  for(const name of ['setQuoteMemoryVersion','setOCRMemoryVersion','setReportDraft','setReportNotice','setOCRMemoryToken','setW','setMaterials','setOCRMaterial','setDocumentCopyMaterial','setMaterialRefreshing','setRecovery','setHistoryRows','setUnderstanding','setVoice','setWorkspaceInstance','setReviewStorageError','setDraftView','setReauth','setError'])deps[name]=()=>{};
- const actual=Function(...Object.keys(deps),functions+'\nreturn {captureQuoteMemory,availableQuoteMemory,settleQuoteMemory,detachSetupView,reauthenticate};')(...Object.values(deps));
+ const actual=Function(...Object.keys(deps),functions+'\nreturn {captureQuoteMemory,availableQuoteMemory,settleQuoteMemory,availableFullMemory,detachSetupView,reauthenticate};')(...Object.values(deps));
  return {refs,state,working,actual};
 }
 
@@ -28,6 +28,14 @@ test('actual forced detach hides the old actor and retains only owner-scoped quo
  const f=fixture();f.actual.detachSetupView();assert.equal(f.state.hidden,1);assert.equal(f.state.suspended,1);assert.equal(f.refs.quoteCaptureWorking.current,null);assert.equal(f.refs.accountRef.current,null);assert.equal(f.refs.quoteMemoryDrafts.current.length,1);assert.deepEqual(f.refs.quoteMemoryDrafts.current[0],f.working);
  f.refs.accountRef.current=B;assert.deepEqual(f.actual.availableQuoteMemory(),[]);f.actual.settleQuoteMemory(f.working.token);assert.equal(f.refs.quoteMemoryDrafts.current.length,1);
  f.refs.accountRef.current=A;assert.deepEqual(f.actual.availableQuoteMemory(),[f.working]);f.actual.settleQuoteMemory(f.working.token);assert.equal(f.refs.quoteMemoryDrafts.current.length,0);
+});
+test('forced detach captures an unsaved full-report form in owner-scoped memory',()=>{
+ const f=fixture(),draft={schema:'report-full-reading-working-v1',owner:'synthetic-full-owner',generation:4,scope:{actor_id:A.user_id,workspace_id:A.workspace_id},form:{note:'本机写入失败后的末字Z'}};
+ f.refs.fullCaptureWorking.current=()=>structuredClone(draft);
+ f.refs.bootEpoch.current++;f.actual.detachSetupView();
+ assert.equal(f.refs.fullCaptureWorking.current,null);assert.equal(f.refs.accountRef.current,null);assert.equal(f.refs.fullMemoryDrafts.current.length,1);
+ f.refs.accountRef.current=B;assert.deepEqual(f.actual.availableFullMemory(),[]);
+ f.refs.accountRef.current=A;assert.deepEqual(f.actual.availableFullMemory(),[draft]);
 });
 test('separate mount tokens preserve both unsaved quote forms and older captures cannot replace later input',()=>{
  const f=fixture();f.actual.captureQuoteMemory();f.working.generation=4;f.working.form.ranges.selection.end='更新末字';f.actual.captureQuoteMemory();f.working.generation=2;delete f.working.form.ranges.selection.end;f.actual.captureQuoteMemory();assert.equal(f.refs.quoteMemoryDrafts.current[0].generation,4);assert.equal(f.refs.quoteMemoryDrafts.current[0].form.ranges.selection.end,'更新末字');

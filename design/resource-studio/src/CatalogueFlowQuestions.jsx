@@ -1,0 +1,35 @@
+import React,{useEffect,useState} from 'react';
+import {digest,fullKeys,fullInt,fullSha,fullUUID,fullText} from './report-evidence-reading-contract.mjs';
+const root='/api/setup/report-business-catalogues/v211/plans/';
+const fields='schema,actor_id,workspace_id,producer_id,revision,plan_id,plan_version,plan_hash,scope_id';
+const need=ok=>{if(!ok)throw Error('已保存目录的版本或内容无法核对。');};
+const without=(v,k)=>{const r={...v};delete r[k];return r;};
+const catalogue=v=>fullKeys(v,'draft_id,version,document_hash')&&fullUUID.test(v.draft_id)&&fullInt(v.version,1)&&fullSha.test(v.document_hash);
+const sameCatalogue=(a,b)=>a&&b&&a.draft_id===b.draft_id&&a.version===b.version&&a.document_hash===b.document_hash;
+const question=q=>fullKeys(q,'key,kind,input_positions,candidate_business_keys,question,status,resolution')&&typeof q.key==='string'&&['ownership','missing_info'].includes(q.kind)&&Array.isArray(q.input_positions)&&q.input_positions.every(x=>fullInt(x))&&Array.isArray(q.candidate_business_keys)&&q.candidate_business_keys.every(x=>typeof x==='string')&&fullText(q.question,4000)&&['open','resolved'].includes(q.status)&&fullText(q.resolution,8000);
+function binding(v,a,r,p,s){return v.actor_id===a.user_id&&v.workspace_id===a.workspace_id&&v.producer_id===r.id&&v.revision===p.revision&&v.plan_id===p.id&&v.plan_version===p.version&&v.plan_hash===p.plan_hash&&v.scope_id===s&&v.sent_to_model===false&&v.source_confirmed===false;}
+async function verifyQuestions(v,a,r,p,s,offset,name){
+ need(fullKeys(v,fields+',business_name,status,catalogue,offset,limit,total,has_more,questions,sent_to_model,source_confirmed,context_hash')&&v.schema==='report-catalogue-flow-questions-v1'&&binding(v,a,r,p,s)&&v.business_name===name&&v.offset===offset&&v.limit===20&&typeof v.has_more==='boolean'&&Array.isArray(v.questions)&&v.questions.length<=20&&v.questions.every(question)&&fullSha.test(v.context_hash));
+ if(v.status==='no_catalogue')need(v.catalogue===null&&v.total===null&&!v.has_more&&v.questions.length===0);else need(v.status==='available'&&catalogue(v.catalogue)&&fullInt(v.total)&&v.has_more===(offset+20<v.total)&&v.questions.length===Math.max(0,Math.min(20,v.total-offset)));
+ need(await digest(without(v,'context_hash'))===v.context_hash);return v;
+}
+async function verifySources(v,a,r,p,s,ctx,q,offset){
+ need(fullKeys(v,fields+',catalogue,question_key,offset,limit,total,has_more,records,sent_to_model,source_confirmed,evidence_hash')&&v.schema==='report-catalogue-flow-question-evidence-v1'&&binding(v,a,r,p,s)&&sameCatalogue(v.catalogue,ctx.catalogue)&&v.question_key===q.key&&v.offset===offset&&v.limit===10&&v.total===q.input_positions.length&&v.has_more===(offset+10<v.total)&&Array.isArray(v.records)&&v.records.length===q.input_positions.slice(offset,offset+10).length&&fullSha.test(v.evidence_hash));
+ v.records.forEach((x,i)=>{need(fullKeys(x,'input_position,claim_hash,claim,source_spans')&&x.input_position===q.input_positions[offset+i]&&fullSha.test(x.claim_hash)&&fullKeys(x.claim,'statement,status,explanation')&&typeof x.claim.statement==='string'&&typeof x.claim.explanation==='string'&&typeof x.claim.status==='string'&&Array.isArray(x.source_spans));x.source_spans.forEach(y=>need(y&&typeof y.span_ref==='string'&&y.record&&typeof y.record.text==='string'&&typeof y.record.source_ref==='string'));});
+ need(await digest(without(v,'evidence_hash'))===v.evidence_hash);return v;
+}
+export default function CatalogueFlowQuestions({controller:c,account,row,plan,scopeId,businessName,Btn}){
+ const [state,setState]=useState({loading:true}),[page,setPage]=useState(0),[selected,setSelected]=useState(null),[sourcePage,setSourcePage]=useState(0),[source,setSource]=useState(null),[retry,setRetry]=useState(0);
+ useEffect(()=>{let live=true;const abort=new AbortController();setState({loading:true});setSelected(null);setSource(null);
+ const url=root+encodeURIComponent(plan.id)+'/business-flow-questions?'+new URLSearchParams({scope_id:scopeId,offset:String(page*20),limit:'20'});
+ (async()=>{try{const v=await c.http(url,{signal:abort.signal});await verifyQuestions(v,account,row,plan,scopeId,page*20,businessName);if(live)setState({value:v});}catch(e){if(live){if(c.denied)c.notify();setState({error:true});}}})();return()=>{live=false;abort.abort();};},[c,account.user_id,account.workspace_id,row.id,plan.id,plan.version,plan.plan_hash,scopeId,businessName,page,retry]);
+ useEffect(()=>{if(!selected||!state.value?.catalogue)return;let live=true;const abort=new AbortController();setSource({loading:true});
+ const url=root+encodeURIComponent(plan.id)+'/business-flow-question-evidence?'+new URLSearchParams({scope_id:scopeId,question_key:selected.key,offset:String(sourcePage*10),limit:'10'});
+ (async()=>{try{const v=await c.http(url,{signal:abort.signal});await verifySources(v,account,row,plan,scopeId,state.value,selected,sourcePage*10);if(live)setSource({value:v});}catch(e){if(live){if(c.denied)c.notify();setSource({error:true});}}})();return()=>{live=false;abort.abort();};},[c,account.user_id,account.workspace_id,row.id,plan.id,plan.version,plan.plan_hash,scopeId,state.value,selected,sourcePage,retry]);
+ const v=state.value;
+ return <section aria-label="本业务资料中的待核事项"><h4>本业务资料中的待核事项</h4><p>这些事项来自已保存的业务目录，仅供核对，不会自动加入本次模型发送内容，也不会自动采纳。其他业务的待核事项不影响本业务继续规划。</p>
+ {state.loading&&<p role="status">正在读取已保存的待核事项…</p>}{state.error&&<p role="alert">暂时无法核对目录，请重试；原目录仍保留，不能据此判断没有待核事项。<Btn onClick={()=>setRetry(x=>x+1)}>重新读取</Btn></p>}
+ {v?.status==='no_catalogue'&&<p>所选业务范围没有关联的已保存业务目录，无法判断是否存在待核事项。</p>}
+ {v?.status==='available'&&<>{v.total===0?<p>已保存目录中没有与本业务相关的待核事项；不代表资料已经核实无误。</p>:<><p>与本业务相关的事项共 {v.total} 项，含已处理事项。</p>{v.questions.map(q=><article key={q.key}><strong>{q.status==='open'?'待核':'已处理'}</strong><p>{q.question}</p>{q.resolution&&<p>处理说明：{q.resolution}</p>}<Btn onClick={()=>{setSourcePage(0);setSelected(q);}}>查看原文依据</Btn>{selected?.key===q.key&&<section aria-label="待核事项原文依据">{source?.loading&&<p role="status">正在读取原文依据…</p>}{source?.error&&<p role="alert">原文依据暂时无法核对，原记录仍保留。<Btn onClick={()=>setRetry(x=>x+1)}>重试读取</Btn></p>}{source?.value&&<>{source.value.records.length===0&&<p>该事项没有关联原文片段。</p>}{source.value.records.map(x=><article key={x.input_position}><p>{x.claim.statement}</p>{x.claim.explanation&&<p>{x.claim.explanation}</p>}{x.source_spans.map((y,i)=><blockquote key={i}><small>来源：{y.record.source_ref}</small><p style={{whiteSpace:'pre-wrap'}}>{y.record.text}</p></blockquote>)}</article>)}<Btn disabled={!sourcePage} onClick={()=>setSourcePage(x=>x-1)}>上一批依据</Btn><Btn disabled={!source.value.has_more} onClick={()=>setSourcePage(x=>x+1)}>下一批依据</Btn></>}</section>}</article>)}<Btn disabled={!page} onClick={()=>setPage(x=>x-1)}>上一页事项</Btn><Btn disabled={!v.has_more} onClick={()=>setPage(x=>x+1)}>下一页事项</Btn></>}</>}
+ </section>;
+}

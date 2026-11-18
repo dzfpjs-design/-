@@ -55,6 +55,26 @@ def read_docx(content: bytes) -> dict:
 
 def _read_docx_uncached(content: bytes) -> dict:
     """The original parser, with every normalization and coverage gate intact."""
+    return _read_docx_version(content, preserve_run_hyphens=False)
+
+
+def read_docx_visible_v2(content: bytes) -> dict:
+    """Build an independent text view; never replace a frozen v1 reading.
+
+    OOXML's non-breaking and discretionary hyphens have different semantics.
+    Preserve them as U+2011 and U+00AD respectively instead of guessing that a
+    non-breaking hyphen is a numeric minus or that a soft hyphen was displayed.
+    """
+    return read_docx_cached(content, policy=POLICY + ':run-hyphens-v2',
+        max_blocks=MAX_BLOCKS, max_characters=MAX_CHARACTERS,
+        parse=_read_docx_visible_v2_uncached)
+
+
+def _read_docx_visible_v2_uncached(content: bytes) -> dict:
+    return _read_docx_version(content, preserve_run_hyphens=True)
+
+
+def _read_docx_version(content: bytes, *, preserve_run_hyphens: bool) -> dict:
     normalized, receipt = normalize_docx(content, POLICY)
     source_hash = hashlib.sha256(content).hexdigest()
     normalized_hash = hashlib.sha256(normalized).hexdigest()
@@ -120,6 +140,10 @@ def _read_docx_uncached(content: bytes) -> dict:
                 owners[id(node)] = id(owner)
         elif tag in {NS + 'tab', NS + 'br', NS + 'cr'} and owner is not None and parent == NS + 'r':
             owner['pieces'].append('\t' if tag == NS + 'tab' else '\n')
+        elif preserve_run_hyphens and tag in {NS + 'noBreakHyphen', NS + 'softHyphen'}:
+            if owner is None or parent != NS + 'r' or len(node) or (node.text or '').strip():
+                raise ParseProblem('Word 特殊连字符的位置无法核对，未生成新文字视图')
+            owner['pieces'].append('\u2011' if tag == NS + 'noBreakHyphen' else '\u00ad')
         for child in node:
             walk(child, body_index, owner, tables, textbox_depth, branch, tag)
 
@@ -138,7 +162,8 @@ def _read_docx_uncached(content: bytes) -> dict:
         chars += len(text)
         if len(blocks) >= MAX_BLOCKS or chars > MAX_CHARACTERS:
             raise ParseProblem('正文段落或文字超过读取上限，未截断或生成部分草案')
-        blocks.append({'id': 'p' + str(len(blocks) + 1), 'text': text, 'kind': paragraph['kind'], 'location': paragraph['location']})
+        prefix = 'v2:p' if preserve_run_hyphens else 'p'
+        blocks.append({'id': prefix + str(len(blocks) + 1), 'text': text, 'kind': paragraph['kind'], 'location': paragraph['location']})
     if not blocks:
         raise ParseProblem('未找到可读取正文，不能生成待核业务草案')
     # Counts are XML occurrences, not claims about unique physical figures/pages.
@@ -176,7 +201,7 @@ def _read_docx_uncached(content: bytes) -> dict:
         'source_hidden_markers': sum(raw_tags[tag] for tag in _HIDDEN),
         'compatibility_alternate_content': tags['AlternateContent'],
     }
-    return {
+    result = {
         'schema': 'report-body-draft-source-v1', 'source_sha256': source_hash,
         'normalized_sha256': normalized_hash, 'revision_policy': POLICY,
         'hidden_content_policy': receipt['hidden_content_policy'], 'blocks': blocks,
@@ -196,3 +221,8 @@ def _read_docx_uncached(content: bytes) -> dict:
         ],
         'full_report_confirmed': False, 'can_apply': False,
     }
+    if preserve_run_hyphens:
+        result['schema'] = 'report-body-draft-source-v2'
+        result['text_policy'] = 'preserve-ooxml-run-hyphens-v2'
+        result['warnings'].append('新版本保留非断行连字符与可选连字符；其数值含义及实际显示仍需核对，旧视图不变。')
+    return result

@@ -716,3 +716,61 @@ def business_flow_source(db, p, draft_id, scope_id):
         'document_hash': row.document_hash, 'plan_id': plan.id, 'plan_version': plan.version,
         'plan_hash': reference['plan_hash'], 'scope_id': scope_id, 'business_name': business['name'],
         'source_snapshot_hash': origin['metadata']['source_snapshot_hash']}
+
+
+def _flow_question_context(db, p, plan_id, scope_id):
+    """Read actual saved human questions for a confirmed single-business plan."""
+    from . import report_catalogue_flow_context_v1 as flow_context
+    plans._iam(db, p); identity(plan_id)
+    need(type(scope_id) is str and 0 < len(scope_id) <= 128, '业务范围无法核对', 422)
+    _lock(db, p)
+    plan = plans.checked_plan(db, p, plan_id, confirmed=True)
+    scopes = [item for item in plan.data['ledger']['scopes'] if item['scope_id'] == scope_id]
+    need(len(scopes) == 1, '该业务不属于所选范围计划', 404)
+    rows, _, _ = _inventory(db, p)
+    matches = [row for row in rows.values() if row.data['plan_ref'] is not None
+               and row.data['plan_ref']['plan_id'] == plan_id]
+    need(len(matches) <= 1, '业务范围对应的目录记录不唯一，原资料保留')
+    base = {'schema':'report-catalogue-flow-questions-v1', 'actor_id':p.user_id,
+        'workspace_id':p.workspace_id, 'producer_id':plan.producer_id,
+        'revision':plan.revision, 'plan_id':plan.id, 'plan_version':plan.version,
+        'plan_hash':plan.data['plan']['plan_hash'], 'scope_id':scope_id,
+        'business_name':scopes[0]['name']}
+    if not matches:
+        return base, None, []
+    row = matches[0]
+    actual = _check_plan_ref(db, p, row.data['plan_ref'], row.data['document'], row.data['origin'])
+    need(actual.id == plan.id and actual.version == plan.version,
+         '业务目录与原范围计划不一致，原资料保留')
+    business = next((item for item in row.data['document']['businesses'] if item['key'] == scope_id), None)
+    need(business is not None and business['name'] == scopes[0]['name'], '业务目录与范围不一致')
+    return base, row, flow_context.relevant_questions(row.data['document'], scope_id)
+
+
+def flow_questions(db, p, plan_id, scope_id, *, offset=0, limit=20):
+    need(type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 20,
+         '待核事项分页参数不正确', 422)
+    base, row, questions = _flow_question_context(db, p, plan_id, scope_id)
+    result = {**base, 'status':'available' if row else 'no_catalogue',
+        'catalogue':None if row is None else {'draft_id':row.id,'version':row.version,
+            'document_hash':row.document_hash}, 'offset':offset,'limit':limit,
+        'total':len(questions) if row else None, 'has_more':offset + limit < len(questions),
+        'questions':copy.deepcopy(questions[offset:offset + limit]),
+        'sent_to_model':False, 'source_confirmed':False}
+    need(len(bytes_value(result)) <= 1024 * 1024, '待核事项本页超出显示容量，原记录未修改', 413)
+    return {**result, 'context_hash':digest(result)}
+
+
+def flow_question_evidence(db, p, plan_id, scope_id, question_key, *, offset=0, limit=10):
+    from . import report_catalogue_flow_context_v1 as flow_context
+    base, row, questions = _flow_question_context(db, p, plan_id, scope_id)
+    need(row is not None, '所选范围没有可核对的业务目录', 404)
+    matching = [q for q in questions if q['key'] == question_key]
+    need(len(matching) == 1, '该待核事项不属于当前业务', 404)
+    page = flow_context.question_evidence(row.data['origin']['projection'], matching[0], offset=offset, limit=limit)
+    result = {'schema':'report-catalogue-flow-question-evidence-v1',
+        **{key:base[key] for key in ('actor_id','workspace_id','producer_id','revision','plan_id','plan_version','plan_hash','scope_id')},
+        'catalogue':{'draft_id':row.id,'version':row.version,'document_hash':row.document_hash},
+        'question_key':question_key, **page, 'sent_to_model':False, 'source_confirmed':False}
+    need(len(bytes_value(result)) <= 1024 * 1024, '原文片段本页超出显示容量，原记录未修改', 413)
+    return {**result, 'evidence_hash':digest(result)}

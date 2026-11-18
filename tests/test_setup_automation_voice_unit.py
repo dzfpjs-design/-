@@ -32,6 +32,23 @@ class AutomationVoiceTest(unittest.TestCase):
             with self.assertRaises(HTTPException):setup_api.validate_configuration({**base,'automationInstructions':value})
 
 class AutomationInstructionIdentityTest(unittest.TestCase):
+    def test_explicit_one_to_one_rename_preserves_note_history_and_voice(self):
+        from generic_agents.setup_automation_instruction_guard import protect_automation_instruction_transition as guard
+        old={'businesses':['巡护','灾害'],'businessAliases':{},'automationInstructions':{'巡护':'原说明','灾害':'其他说明'},
+             'voiceInputs':[{'business':'巡护','request_id':'voice-receipt'}]}
+        new={**old,'businesses':['林区巡护','灾害'],'businessAliases':{'林区巡护':'巡护'},
+             'automationInstructions':{'巡护':'原说明','林区巡护':'原说明','灾害':'其他说明'}}
+        guard(old,new,explicit_rename={'from':'巡护','to':'林区巡护'})
+        for bad in [
+            {**new,'automationInstructions':{'巡护':'原说明','林区巡护':'篡改','灾害':'其他说明'}},
+            {**new,'automationInstructions':{'林区巡护':'原说明','灾害':'其他说明'}},
+            {**new,'voiceInputs':[]},
+            {**new,'businesses':['林区巡护']},
+            {**new,'businessAliases':{'林区巡护':'灾害'}},
+        ]:
+            with self.assertRaises(HTTPException):guard(old,bad,explicit_rename={'from':'巡护','to':'林区巡护'})
+        with self.assertRaises(HTTPException):guard(old,new)
+
     def test_name_changes_and_orphan_reuse_are_blocked_until_explicitly_cleared(self):
         from generic_agents.setup_automation_instruction_guard import protect_automation_instruction_transition as guard
         original={'businesses':['巡护','灾害'],'businessAliases':{},'automationInstructions':{'巡护':'已保存要求'}}

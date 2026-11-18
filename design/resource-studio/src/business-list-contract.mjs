@@ -14,7 +14,7 @@ export function businessListMessage(error){if(error?.name==='TypeError'||error?.
 export async function applyBusinessListEditor(editor,workspace,rows,{onCommit,onSave,onApplied,onClose}){
  const submitted=storeBusinessListRows(editor,rows);
  if(!businessListBasisMatches(workspace,editor.form))throw Error('当前业务清单已与编辑前不同。原输入已恢复并保留，请对照当前清单后重新核对；不会覆盖其他页面新增的业务。');
- const next=changeBusinesses(workspace,rows);if(!await onCommit(next))return {applied:false,message:'业务清单尚未提交，编辑稿已保留；请处理顶部保存提示后重试。'};
+ const next=changeBusinesses(workspace,rows,{allowProtectedManualRename:true});if(!onSave)delete next._businessRenameIntent;if(!await onCommit(next))return {applied:false,message:'业务清单尚未提交，编辑稿已保留；请处理顶部保存提示后重试。'};
  if(onSave){const saved=await onSave(next);if(!saved?.configuration||JSON.stringify(businessListBasis(saved.configuration))!==JSON.stringify(businessListBasis(next)))throw Error('服务器当前业务清单与本次保存不同，原编辑稿保留，请重新核对。');}
  const original=submitted;await resolveDraftRecovery(editor.storage,editor.tabStorage,editor.key,original,{revision:1,configuration:{}},false);
  if(editor.original){const current=readDraftRecord(editor.storage,draftOutboxKey(editor.key,editor.original.draft_owner));if(current?.pending&&current.draft_generation===editor.original.draft_generation)try{await resolveDraftRecovery(editor.storage,editor.tabStorage,editor.key,editor.original,{revision:1,configuration:{}},false);}catch{}}

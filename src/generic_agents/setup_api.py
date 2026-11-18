@@ -143,13 +143,18 @@ class SaveDraft(Contract):
 @router.put('/draft')
 def save_draft(body: SaveDraft, p: P, db: DB):
     require(p, 'admin', 'operator')
-    validate_configuration(body.configuration)
+    submitted = copy.deepcopy(body.configuration)
+    has_rename = '_businessRenameIntent' in submitted
+    rename_intent = submitted.pop('_businessRenameIntent', None)
+    if has_rename and rename_intent is None:
+        raise HTTPException(409, '业务改名范围无法核对，原配置保留。')
+    validate_configuration(submitted)
     row = draft(db, p, True); check_version(row, body.revision)
     from .setup_automation import synchronize_reviews
     from .setup_automation_instruction_guard import protect_automation_instruction_transition
-    protect_automation_instruction_transition(row.data,body.configuration)
-    proposed=synchronize_reviews(row.data,body.configuration)
-    validate_voice_references(db,p,body.configuration)
+    protect_automation_instruction_transition(row.data,submitted,explicit_rename=rename_intent)
+    proposed=synchronize_reviews(row.data,submitted)
+    validate_voice_references(db,p,submitted)
     materials = proposed.get('materials', [])
     if not isinstance(materials, list):
         raise HTTPException(422, '资料清单格式不完整')
