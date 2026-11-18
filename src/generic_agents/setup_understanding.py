@@ -579,7 +579,10 @@ def available_models(p: P, db: DB):
 @router.post('/understanding/preview')
 def preview_request(body: PreviewRequest, p: P, db: DB):
     require(p,'admin','operator')
-    payload=prepare(db,p,body); db.commit()
+    payload=prepare(db,p,body)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    guard_new_paid_sources(db,p,payload['materials'])
+    db.commit()
     # Server UUID mapping is frozen locally, never part of cloud or user preview.
     return {k:v for k,v in payload.items() if k!='edit_handles'}
 
@@ -628,6 +631,8 @@ def request_analysis(body: StartRequest, p: P, db: DB):
             db.commit();return view(original)
     from .report_reading_drafts import guard_report_draft_pending
     guard_report_draft_pending(db,p)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    guard_new_paid_sources(db,p,payload['materials'])
     active=db.scalar(select(SetupAnalysis.id).where(SetupAnalysis.workspace_id==p.workspace_id,
         SetupAnalysis.status.in_(['queued','running'])))
     if active: raise HTTPException(409,'已有理解任务在处理，请先查看或取消')
@@ -911,6 +916,8 @@ def run(db,p,analysis_id):
                 if 'value' not in cached:raise ModelBlocked('已付费原响应已保留，但不是有效JSON；请核对后明确重试，不自动重复调用')
                 value,receipt=cached['value'],cached['receipt']
             else:
+                from .report_unresolved_overlap import guard_new_paid_sources
+                guard_new_paid_sources(db,p,req['materials'])
                 row.status='running';row.version+=1;row.data={**row.data,'inflight':index,'error':None}
                 checkpoint(db)
             # No hidden document, filename, account or connector config is added to the cloud input.
@@ -1219,6 +1226,8 @@ def retry_analysis(object_id:str,body:AnalysisAction,p:P,db:DB):
         enqueue(db,p,row);audit(db,p,'setup.understanding.local_retry',row.id,{'cloud_call':False})
         db.commit();return view(row)
     # Explicit retry authorizes a possibly charged call whose response was not saved.
+    from .report_unresolved_overlap import guard_new_paid_sources
+    guard_new_paid_sources(db,p,row.data['request']['materials'])
     raw=row.data.get('raw_response')
     row.version+=1;row.data={**row.data,'inflight':None,'error':None,
         'raw_response':None,'prior_responses':[*row.data.get('prior_responses',[]),raw] if raw else row.data.get('prior_responses',[])}

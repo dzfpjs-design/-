@@ -604,6 +604,8 @@ def preview_followup(actor_id: UUID, analysis_id: UUID, result_hash: str, body: 
         draft_conflict(db, p, row, 'revision_conflict', '草稿已变化；请保留输入并核对最新保存版本')
     value = copy.deepcopy(row.data['value'])
     payload, old_body, answers = build_payload(db, p, source, row.version, value, body.revision, body.request_id)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    guard_new_paid_sources(db,p,payload['materials'])
     snapshot = {'request_id': str(body.request_id), 'source': copy.deepcopy(source), 'draft_revision': row.version,
         'value_hash': row.data['value_hash'], 'value': value, 'cloud_answers': answers, 'preview': payload, 'body': old_body}
     followup = SetupClarificationFollowup(id=uid(), workspace_id=p.workspace_id, actor_id=p.user_id,
@@ -671,6 +673,8 @@ def start_followup(actor_id: UUID, analysis_id: UUID, result_hash: str, request_
         fail('preview_changed', '配置、原资料、模型或发送投影已变化；请另行明确核对新预览，原快照保留')
     from .report_reading_drafts import guard_report_draft_pending
     guard_report_draft_pending(db, p)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    guard_new_paid_sources(db,p,preview['materials'])
     active = db.scalar(select(SetupAnalysis.id).where(SetupAnalysis.workspace_id == p.workspace_id,
                                                    SetupAnalysis.status.in_(['queued', 'running'])))
     if active:

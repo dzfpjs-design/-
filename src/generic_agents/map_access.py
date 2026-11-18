@@ -81,7 +81,42 @@ def route_guard(request:Request,db=Depends(session)):
     # configured_cap business check. Other paths keep the fail-closed guard.
     instance_public=bool(re.fullmatch(r'/api/public-observations/[0-9a-fA-F-]{36}/(?:snapshot|tiles/\d{4}-\d{2}-\d{2}/\d+/\d+/\d+)',path))
     protected=protected or (request.method in {'GET','HEAD'} and path.startswith('/api/') and not path.startswith('/api/instance-observations/') and not instance_public and any(token in path.lower() for token in ('content','original','preview','export','image','evidence','download','mask','artifact','file','blob','binary','raster','tile','thumbnail','snapshot','attachment','stream','/rgb','/audio/','/response')))
+    # These setup actions return or manipulate full frozen report sources.
+    # The raw-evidence GET policy must apply to their POST/PUT paths too;
+    # otherwise a downgraded operator can read the same source via preview.
+    report_evidence_roots = ('/api/setup/report-evidence-readings', '/api/setup/report-evidence-delegated')
+    protected = protected or (request.method in {'POST', 'PUT', 'PATCH', 'DELETE'} and
+        any(path == root or path.startswith(root + '/') for root in report_evidence_roots))
+    # Older report APIs also return frozen source text in previews, readings,
+    # draft replies and receipt replays. Protect those exact response shapes,
+    # without changing unrelated status, listing or configuration routes.
+    uuid_part = r'[0-9a-fA-F-]{32,36}'
+    full_root = '/api/setup/report-full-readings'
+    draft_root = '/api/setup/report-drafts'
+    full_item = re.escape(full_root) + '/' + uuid_part
+    draft_item = re.escape(draft_root) + '/' + uuid_part
+    raw_get = (
+        re.fullmatch(full_item, path) or
+        re.fullmatch(re.escape(full_root) + r'/by-request/[^/]+', path) or
+        re.fullmatch(full_item + r'/stages/[^/]+/(?:raw|failed-candidate|provisional)', path) or
+        re.fullmatch(full_item + r'/(?:provisional|merge|review|recovery)-receipts/[^/]+', path) or
+        re.fullmatch(draft_item, path) or
+        re.fullmatch(re.escape(draft_root) + r'/(?:by-request|readings)/[^/]+', path) or
+        re.fullmatch(draft_item + r'/review-receipts/[^/]+', path))
+    raw_post = (
+        path in {full_root, full_root + '/preview', draft_root, draft_root + '/preview'} or
+        re.fullmatch(full_item + r'/(?:merge|merge-preview|recover-saved)', path) or
+        re.fullmatch(full_item + r'/stages/[^/]+/provisional', path))
+    raw_put = re.fullmatch(full_item + r'/review', path) or re.fullmatch(draft_item + r'/review', path)
+    protected = protected or bool((request.method in {'GET', 'HEAD'} and raw_get) or
+        (request.method == 'POST' and raw_post) or (request.method == 'PUT' and raw_put))
     if protected:
+        if (request.method in {'GET', 'HEAD'} and
+                (path == '/api/setup/report-evidence-readings' or
+                 path.startswith('/api/setup/report-evidence-readings/') or
+                 path == full_root or path.startswith(full_root + '/'))):
+            from .db import begin_private_read_snapshot
+            begin_private_read_snapshot(db)
         from .security import authenticated
         require_config(db,authenticated(request,db))
 

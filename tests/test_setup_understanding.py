@@ -145,9 +145,9 @@ def test_inflight_first_batch_without_response_blocks_automatic_replay(client,mo
         analysis=db.get(SetupAnalysis,row['id']);analysis.data={**analysis.data,'inflight':0};db.commit()
     process(row);record=client.get('/api/setup/understanding/'+row['id']).json()
     assert record['status']=='failed' and not calls and '可能已计费' in record['error']
-    retry=client.post('/api/setup/understanding/'+row['id']+'/retry',json={'version':record['version']});assert retry.status_code==200
-    with Session(engine()) as db:job=db.get(Job,retry.json().get('job_id')) if retry.json().get('job_id') else db.scalar(select(Job).where(Job.data['analysis_id'].astext==row['id'],Job.status=='queued'))
-    assert process_once(job.id,deliver=False);assert len(calls)==1
+    retry=client.post('/api/setup/understanding/'+row['id']+'/retry',json={'version':record['version']})
+    assert retry.status_code==409 and retry.json()['detail']['code']=='unresolved_report_source'
+    assert not calls
 
 
 def test_material_change_after_preview_rejects_consent_and_retry(client,monkeypatch):

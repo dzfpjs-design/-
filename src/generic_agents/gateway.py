@@ -596,7 +596,8 @@ def _cloud_native_report(capability, messages, schema, principal, key, *, on_res
 def cloud_json(capability, messages, schema, principal=None, *, on_reserved=None, on_response=None,
                full_report=False, evidence_stage=None, dispatch_identity=None,
                evidence_catalogue=_EVIDENCE_CATALOGUE_UNSET, allocation_evidence=_ALLOCATION_EVIDENCE_UNSET,
-               output_token_limit=None, full_report_completion_guard=False):
+               output_token_limit=None, full_report_completion_guard=False, delegated_evidence_wire_guard=False,
+               delegated_prebound=None):
     from .cloud_dispatch_v130 import dispatch_scope
     # An untracked nested legacy call masks any parent attempt. No callback,
     # request, reservation or settlement contract is changed for old callers.
@@ -625,6 +626,10 @@ def cloud_json(capability, messages, schema, principal=None, *, on_reserved=None
                 extra['output_token_limit'] = output_token_limit
             if full_report_completion_guard:
                 extra['full_report_completion_guard'] = full_report_completion_guard
+            if delegated_evidence_wire_guard is not False:
+                extra['delegated_evidence_wire_guard'] = delegated_evidence_wire_guard
+            if delegated_prebound is not None:
+                extra['delegated_prebound'] = delegated_prebound
             return _cloud_json(capability, messages, schema, principal,
                 on_reserved=on_reserved, on_response=on_response,
                 full_report=full_report, evidence_stage=evidence_stage, **extra)
@@ -641,10 +646,29 @@ def cloud_json(capability, messages, schema, principal=None, *, on_reserved=None
 def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=None, on_response=None,
                 full_report=False, evidence_stage=None, evidence_catalogue=_EVIDENCE_CATALOGUE_UNSET,
                 allocation_evidence=_ALLOCATION_EVIDENCE_UNSET, output_token_limit=None,
-                full_report_completion_guard=False):
+                full_report_completion_guard=False, delegated_evidence_wire_guard=False, delegated_prebound=None):
     if (type(full_report_completion_guard) is not bool or full_report_completion_guard and
             (full_report is not True or evidence_stage is not None or not callable(on_reserved) or not callable(on_response))):
         raise ModelBlocked('全文完成性检查需要独立原答保存和预算回执，未预留或发送')
+    if (type(delegated_evidence_wire_guard) is not bool or delegated_evidence_wire_guard and
+            (full_report is not True or full_report_completion_guard or evidence_stage not in ('map-v3', 'reduce-v2')
+             or principal is None or not callable(on_reserved) or not callable(on_response))):
+        raise ModelBlocked('受托证据原包捕获需要独立阶段、身份和持久回执，未预留或发送')
+    if delegated_evidence_wire_guard:
+        from .report_evidence_delegated_dispatch_gate import ready
+        from .report_evidence_prebound_gateway import PreboundGatewayCall
+        if type(delegated_prebound) is not PreboundGatewayCall or evidence_stage not in {'map-v3','reduce-v2'}:
+            raise ModelBlocked('受托证据尚未接通或缺少原任务绑定的定向预留；未新增调用')
+        if not ready():
+            # Rechecked under a row lock by the actual transport-intent
+            # transaction. This preliminary check cannot authorize a send.
+            from . import report_evidence_scoped_activation as scope
+            from .leases import ownership
+            from .models import Job
+            bound_db=delegated_prebound._db
+            scope.for_worker(bound_db,principal,bound_db.get(Job,ownership(bound_db).get('job_id')),lock=False)
+    elif delegated_prebound is not None:
+        raise ModelBlocked('定向预留不能用于其他模型调用；未发送')
     _server_catalogue_guard(evidence_stage, evidence_catalogue)
     _server_allocation_guard(evidence_stage, allocation_evidence)
     if output_token_limit is not None and evidence_stage != 'business-reasoning-v197':
@@ -804,9 +828,32 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
             raise ModelBlocked("请求超过单次输入上限，请缩小范围")
         # Legacy callers retain their original message/options/reservation contract.
         token_bound = text_bytes + len(json.dumps(schema).encode()) + max_tokens + 512 + image_count * 8192
-    call_id = reserve_tracked(reserve, principal, capability, token_bound, digest(request_messages))
+    # A delegated stage has already atomically reserved its own budget and
+    # bound its stage/call under the worker lease. Never reserve it again.
+    call_id = (delegated_prebound.call_id if delegated_prebound is not None else
+               reserve_tracked(reserve, principal, capability, token_bound, digest(request_messages)))
+    delegated_sink = None
     try:
-        if on_reserved is not None:
+        if delegated_prebound is not None:
+            if on_reserved(call_id) is not None:
+                raise ModelBlocked('受托原调用回调范围不一致；未发送')
+            handoff = delegated_prebound.acquire(principal, capability.id, request_messages, request_options)
+            delegated_sink = handoff['sink']
+            request_messages, request_options = handoff['messages'], handoff['options']
+            from . import report_evidence_http_capture_v1 as delegated_capture
+            from .report_evidence_delegated_wire_v1 import DELIVERY
+            ctx = delegated_sink.context; binding = ctx['binding']
+            expected = {'request_hash': digest({**request_options, 'messages': request_messages}),
+                'endpoint': endpoint, 'delivery': DELIVERY, 'schema_proof_hash': digest(schema),
+                'profile_hash': digest(policy), 'token_bound': token_bound,
+                'max_bytes': delegated_capture.REDUCE_LIMIT if evidence_stage == 'reduce-v2' else delegated_capture.MAP_LIMIT}
+            if (any(ctx.get(k) != v for k, v in expected.items())
+                    or binding['reserved_call_id'] != call_id or binding['actor_id'] != principal.user_id
+                    or binding['workspace_id'] != principal.workspace_id
+                    or binding['messages_hash'] != digest(request_messages)
+                    or (binding['stage'] == 'reduce') != (evidence_stage == 'reduce-v2')):
+                raise ModelBlocked('受托证据捕获与冻结调用不一致；原调用保留')
+        elif on_reserved is not None:
             # 由实际网关冻结即将发送的参数，授权回调只能对照，不能自行铸造证明。
             from sqlalchemy.orm import Session
             from .db import engine
@@ -817,14 +864,53 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
                 if full_report:
                     call.data={**call.data,'input_policy_hash':digest({'single_batch':True,**policy})}
                 ledger_db.commit()
-            try:on_reserved(call_id)
+            try:
+                reserved_result = on_reserved(call_id)
+                if delegated_evidence_wire_guard:
+                    from . import report_evidence_http_capture_v1 as delegated_capture
+                    from .report_evidence_delegated_wire_v1 import DELIVERY
+                    if not isinstance(reserved_result, delegated_capture.NativeHttpCapture):
+                        raise ModelBlocked('受托证据缺少独立原包捕获，未发送')
+                    delegated_sink = reserved_result
+                    ctx = delegated_sink.context; binding = ctx['binding']
+                    expected = {'request_hash': digest({**request_options, 'messages': request_messages}),
+                        'endpoint': endpoint, 'delivery': DELIVERY, 'schema_proof_hash': digest(schema),
+                        'profile_hash': digest(policy), 'token_bound': token_bound,
+                        'max_bytes': delegated_capture.REDUCE_LIMIT if evidence_stage == 'reduce-v2' else delegated_capture.MAP_LIMIT}
+                    if (any(ctx.get(k) != v for k, v in expected.items())
+                            or binding['reserved_call_id'] != call_id or binding['actor_id'] != principal.user_id
+                            or binding['workspace_id'] != principal.workspace_id
+                            or binding['messages_hash'] != digest(request_messages)
+                            or (binding['stage'] == 'reduce') != (evidence_stage == 'reduce-v2')):
+                        raise ModelBlocked('受托证据捕获与冻结调用不一致，未发送')
             except Exception:
                 # 回调拒绝或租约失效时尚未发送HTTP；保留真实预算记录并结束该预留。
                 finish(call_id)
                 raise
         with httpx.Client(timeout=timeout, follow_redirects=False, trust_env=False) as client:
             before_transport()
-            if full_report_completion_guard:
+            if delegated_evidence_wire_guard:
+                from . import report_evidence_http_capture_v1 as delegated_capture
+                delegated_sink.mark_request_started(); started = time.monotonic()
+                with client.stream('POST', endpoint, headers={'Authorization': 'Bearer ' + key,
+                        'Accept-Encoding': 'identity'}, json={**request_options, 'messages': request_messages}) as response:
+                    delegated_sink.begin_response(response.status_code, response.headers.get('content-encoding'),
+                                                   response.headers.get('x-request-id'))
+                    for transport_chunk in response.iter_raw():
+                        for offset in range(0, len(transport_chunk), 16384):
+                            delegated_sink.append(transport_chunk[offset:offset + 16384])
+                        if time.monotonic() - started > timeout:
+                            raise TimeoutError('delegated_evidence_total_deadline')
+                    if time.monotonic() - started > timeout:
+                        raise TimeoutError('delegated_evidence_total_deadline')
+                    capture_state = delegated_sink.finish(eof=True)
+                if not capture_state['ready'] or not capture_state['content_encoding_safe']:
+                    raise ModelBlocked('原 HTTP 回答未完整结束或编码不支持；原记录保留')
+                wire = delegated_capture.read_body(delegated_sink._root, delegated_sink.context,
+                                                    capture_state['capture_hash'])
+                status_code = capture_state['http_status']
+                response_headers = {'x-request-id': capture_state['request_id']}
+            elif full_report_completion_guard:
                 wire = None; wire_status = 'complete'; chunks = bytearray()
                 with client.stream('POST', endpoint, headers={"Authorization": "Bearer " + key,
                         'Accept-Encoding':'identity'}, json={**request_options,"messages":request_messages}) as response:
@@ -848,7 +934,11 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
         if status_code != 200:
             raise ModelBlocked(f"云模型请求失败（HTTP {status_code}），未自动切换模型")
         try:
-            result = json.loads(wire) if full_report_completion_guard and wire is not None else (None if full_report_completion_guard else response.json())
+            if delegated_evidence_wire_guard:
+                from .report_evidence_journal import _loads as strict_evidence_json
+                result = strict_evidence_json(wire)
+            else:
+                result = json.loads(wire) if full_report_completion_guard and wire is not None else (None if full_report_completion_guard else response.json())
         except (ValueError,RecursionError):
             if not full_report_completion_guard: raise
             result = None
@@ -890,7 +980,12 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
             # normalization. Existing consumers retain their original boundary.
             try:on_response(content, copy.deepcopy(response_receipt) if evidence_stage is not None or full_report_completion_guard else response_receipt)
             except BaseException:
-                if full_report_completion_guard:
+                if delegated_prebound is not None:
+                    # The paid wire and its original call remain available for
+                    # explicit recovery. An uncertain outcome is not settled
+                    # by the legacy wrapper or made eligible for a retry.
+                    pass
+                elif full_report_completion_guard:
                     # The wire is persisted by the callback, never copied into
                     # the generic budget receipt or exception log.
                     budget_receipt={k:v for k,v in response_receipt.items() if k!='_full_report_wire_base64'}
@@ -926,17 +1021,22 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
             receipt.update(completion_guard=response_receipt['completion_guard'],
                 finish_reason=response_receipt['finish_reason'],response_choice_count=response_receipt['response_choice_count'],
                 response_body_status=response_receipt['response_body_status'])
-        finish(call_id, receipt, "succeeded")
+        if delegated_prebound is None:
+            finish(call_id, receipt, "succeeded")
         return value, receipt
     except ModelBlocked:
-        if full_report_completion_guard and isinstance(locals().get('response_receipt'),dict):
+        if delegated_prebound is not None:
+            pass
+        elif full_report_completion_guard and isinstance(locals().get('response_receipt'),dict):
             saved_receipt={k:v for k,v in response_receipt.items() if k!='_full_report_wire_base64'}
             if type(saved_receipt.get('usage')) is not dict: saved_receipt['usage']={}
             finish(call_id,saved_receipt)
         else: finish(call_id, locals().get('response_receipt') if evidence_stage is not None else None)
         raise
     except (httpx.HTTPError, ValueError, TypeError, KeyError, HTTPException) as error:
-        if full_report_completion_guard and isinstance(locals().get('response_receipt'),dict):
+        if delegated_prebound is not None:
+            pass
+        elif full_report_completion_guard and isinstance(locals().get('response_receipt'),dict):
             saved_receipt={k:v for k,v in response_receipt.items() if k!='_full_report_wire_base64'}
             if type(saved_receipt.get('usage')) is not dict: saved_receipt['usage']={}
             finish(call_id,saved_receipt)
@@ -948,6 +1048,13 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
                   else "云模型输出不符合已发布契约，可核查后重试" if isinstance(error, HTTPException)
                   else "云模型响应不是有效的结构化结果，可重试")
         raise ModelBlocked(reason) from error
+    finally:
+        if delegated_sink is not None:
+            try:
+                delegated_sink.abort('interrupted')
+            except (ValueError, OSError):
+                pass
+            delegated_sink.close()
 
 
 def invoke(db, p, capability_id, agent_role, inputs, key, *, approval=None):

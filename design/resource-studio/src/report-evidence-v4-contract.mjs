@@ -10,7 +10,7 @@ const need=(ok,message='本次读取的发送范围、交付版本或原回答�
 const size=value=>new TextEncoder().encode(stableStringify(value)).length;
 const domain='report-evidence-platform-ids-v1';
 export const evidenceV4=preview=>preview?.map_preparation?.generation_contract?.schema==='report-evidence-map-generation-v4';
-export const evidenceV4ReduceBlocked='此读取方式当前只保存逐组事实与原文依据，尚不支持汇总业务草案；不会自动更换方式或新增调用。';
+export const evidenceV4ReduceBlocked='各资料组的模型提取结果已保存，仍需核对。此读取方式尚不支持汇总业务草案；不会自动更换方式或新增调用。';
 export function evidenceSentBytes(summary,preview){const key=evidenceV4(preview)?'prepared_request_bytes':'prepared_messages_bytes';need(fullInt(summary?.[key]));return summary[key];}
 export function evidenceV4Policy(cap){
  const e=cap?.execution,o=e?.report_evidence_output;

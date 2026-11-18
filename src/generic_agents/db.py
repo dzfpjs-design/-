@@ -37,6 +37,20 @@ def session():
             raise
 
 
+def begin_private_read_snapshot(db):
+    """Start or reuse this transaction's private, consistent read snapshot.
+
+    A global read guard may need to authenticate before the endpoint-specific
+    dependency runs. Both must use the same snapshot, and neither may attempt
+    to change transaction mode after its first SELECT.
+    """
+    transaction = db.get_transaction()
+    if transaction is not None and db.info.get('private_read_snapshot') is transaction:
+        return
+    db.execute(text('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'))
+    db.info['private_read_snapshot'] = db.get_transaction()
+
+
 def migrate():
     """Initial non-destructive schema install; future changes require explicit migration."""
     # Register the additive 104th table without importing API/worker modules.

@@ -194,12 +194,43 @@ def guard_existing_paid(db, p):
     guard_report_draft_pending(db, p)
     rows = db.scalars(select(SetupAnalysis).where(SetupAnalysis.workspace_id == p.workspace_id,
                                                   SetupAnalysis.status.in_(['queued', 'running', 'failed']))).all()
-    if any(legacy_pending(row) for row in rows):
+    if any(legacy_pending(row, db) for row in rows):
         fail('understanding_pending', '原资料理解仍在处理或调用结果未知，请先核对原记录；未新增付费请求')
 
 
-def legacy_pending(row):
-    return row.status in {'queued', 'running'} or row.data.get('inflight') is not None and not row.data.get('raw_response')
+def legacy_pending(row, db):
+    if row.status in {'queued', 'running'}:
+        return True
+    inflight = row.data.get('inflight')
+    if inflight is None:
+        return False
+    raw = row.data.get('raw_response')
+    if (not isinstance(raw, dict) or raw.get('batch') != inflight
+            or raw.get('hash') != digest({k: v for k, v in raw.items() if k != 'hash'})
+            or not isinstance(raw.get('receipt'), dict)):
+        return True
+    # Legacy v1 did not freeze dispatch metadata strongly enough to establish
+    # that a saved receipt belongs to the current batch. Keep it unresolved.
+    req = row.data.get('request', {}); dispatch = row.data.get('dispatch_checkpoint', {})
+    receipt = raw['receipt']; call_id = receipt.get('call_id')
+    if (req.get('contract_version') not in {2, 3, 4, 5, 6} or not isinstance(call_id, str)
+            or dispatch.get('batch') != inflight
+            or dispatch.get('options_hash') != digest(req.get('generation_contract', {}).get('dispatch_options'))
+            or (inflight == 0 and dispatch.get('messages_hash') != req.get('first_dispatch_messages_hash'))
+            or (req.get('contract_version') in {3, 4, 5, 6}
+                and (receipt.get('provider') != req.get('provider') or receipt.get('model') != req.get('model')))):
+        return True
+    call = db.scalar(select(CloudCall).where(CloudCall.id == call_id,
+        CloudCall.workspace_id == row.workspace_id))
+    if (not call or call.status not in {'succeeded', 'failed'} or call.capability_id != req.get('model_id')
+            or not isinstance(call.data, dict) or not isinstance(call.data.get('receipt'), dict)
+            or call.data.get('actor_id') != row.data.get('consent', {}).get('actor_id')
+            or call.data.get('request_hash') != dispatch.get('messages_hash')
+            or call.data.get('dispatch_options_hash') != dispatch.get('options_hash')
+            or any(call.data['receipt'].get(k) != receipt.get(k)
+                for k in ('call_id', 'provider', 'model', 'usage', 'request_id'))):
+        return True
+    return False
 
 
 def project_source(source):
@@ -563,6 +594,8 @@ def preview_draft(body: PreviewCommand, p: P, db: DB):
     if by_nonce(db, p, body.request_id) is not None:
         fail('nonce_exists', '本次草案启动编号已有原记录，请从原编号恢复')
     value = make_preview(db, p, body)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    guard_new_paid_sources(db, p, value['body']['material_refs'])
     db.rollback()
     return value
 
@@ -579,6 +612,8 @@ def start_draft(body: StartCommand, p: P, db: DB):
         return replay_start(row, p, body)
     guard_existing_paid(db, p)
     payload = make_preview(db, p, PreviewCommand.model_validate({k: v for k, v in body.model_dump(mode='json').items() if k not in {'preview_hash', 'consent'}}))
+    from .report_unresolved_overlap import guard_new_paid_sources
+    guard_new_paid_sources(db, p, payload['body']['material_refs'])
     if payload['preview_hash'] != body.preview_hash:
         fail('preview_changed', '正文、配置或模型发送范围已变化，请重新核对预览')
     row = SetupReportDraft(id=uid(), workspace_id=p.workspace_id, actor_id=p.user_id, request_id=body.request_id,
@@ -619,7 +654,7 @@ def get_active(p: P, db: DB):
         SetupReportDraft.status.in_(ACTIVE))).all()
     legacy = db.scalars(select(SetupAnalysis).where(SetupAnalysis.workspace_id == p.workspace_id,
         SetupAnalysis.status.in_(['queued', 'running', 'failed']))).all()
-    legacy_active = any(legacy_pending(row) for row in legacy)
+    legacy_active = any(legacy_pending(row, db) for row in legacy)
     return {'blocked': bool(native) or legacy_active, 'report_draft_active': bool(native),
         'legacy_understanding_active': legacy_active,
         'own': [{'id': row.id, 'request_id': row.request_id, 'status': row.status}
@@ -695,6 +730,8 @@ def settle_raw(db, row, raw):
 
 def fresh_for_dispatch(db, p, row):
     check_row(row, p)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    guard_new_paid_sources(db, p, row.data['preview']['body']['material_refs'], current_draft_id=row.id)
     if row.data['preview']['generation_contract']['version'] != 'report-reading-generation-v2':
         fail('legacy_contract_read_only', '旧版原授权只供恢复，不能迁移为新任务或自动重发；请重新核对新预览')
     # Authorization uses a frozen complete body. A reserved call must not be

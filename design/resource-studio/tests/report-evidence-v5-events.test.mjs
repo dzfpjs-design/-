@@ -1,3 +1,4 @@
+import {listV2} from './report-evidence-list-test-helper.mjs';
 // Actual component handlers with public synthetic server DTOs/test doubles.
 // Root runs these; they do not establish live API, model quality or browser UX.
 import test from 'node:test';import assert from 'node:assert/strict';
@@ -14,7 +15,7 @@ async function ready(ui,predicate){for(let i=0;i<100;i++){await ui.flush();const
 async function environment(run,kind='reduced'){
  const f=await fixture(),row=copy(f[kind]),storage=memory(),tab=tabFor(f.account),calls=[],control={row,hold:false},prior={window:globalThis.window,localStorage:globalThis.localStorage,sessionStorage:globalThis.sessionStorage};globalThis.window={addEventListener(){},removeEventListener(){}};globalThis.localStorage=storage;globalThis.sessionStorage=tab;
  const list=await reseal({schema:'report-evidence-reading-list-v1',actor_id:f.account.user_id,workspace_id:f.account.workspace_id,items:[]},'list_hash'),props={account:f.account,material:{id:f.preview.body.selection.original_ref.id,version:f.preview.body.selection.original_ref.version,hash:f.preview.body.selection.original_ref.hash,name:'新空库合成报告.docx'},initialDraftID:row.id,Dialog:({children})=>children,Btn:({children})=>children,prepareDraft:async()=>{assert.fail('Opening or reviewing a saved candidate must not save configuration');},onClose(){},storage,tabStorage:tab,locks:{request:async(_n,_o,fn)=>fn()},request:async(path,options={})=>{
-  calls.push({path,...options});if(path==='/me')return f.account;if(path==='/setup/understanding/models')return [{id:f.preview.body.model_id,name:'合成已登记模型',model:f.preview.model}];if(path===base)return list;if(path===base+'/'+row.id)return control.row;
+  calls.push({path,...options});if(path==='/me')return f.account;if(path==='/setup/understanding/models')return [{id:f.preview.body.model_id,name:'合成已登记模型',model:f.preview.model}];if(path===base+'/list-v2')return listV2(list);if(path===base+'/'+row.id)return control.row;
   if(path.includes('/review-receipts/')){if(control.reply&&path.endsWith(control.reply.receipt.request_id))return control.reply;throw missing();}
   if(path.endsWith('/review')&&options.method==='PUT'){
    const body=JSON.parse(options.body);control.body=body;if(control.hold)await new Promise(resolve=>{control.release=resolve;});

@@ -13,7 +13,7 @@ import {CLAIM_READING_DRAFTS,claimArrayPreview,claimArrayUsesObjectReview,checkC
 const evidenceNative=preview=>legacyEvidenceNative(preview)||claimArrayPreview(preview);
 export {copy, same, digest, fullUUID, fullSha, fullKeys, fullInt, fullText, fullScope, fullWritable};
 
-export const evidenceNonce=/^fe_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const evidenceNonce=/^(?:fe_|fl_)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const evidenceReductionNonce=/^fer_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const evidenceResumeNonce=/^fes_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const evidenceSpan=/^[wo]:p[1-9]\d*\/s[1-9]\d*$/;
@@ -258,6 +258,10 @@ async function stageCheck(s,account,row,catalog,compact=false,reduce=false){
   need(fullKeys(s,keys)&&stageStates.includes(s.status)&&(s.reserved_call_id===null||fullUUID.test(s.reserved_call_id))&&(s.result_hash===null||fullSha.test(s.result_hash))&&(s.result_count===null||fullInt(s.result_count))&&typeof s.raw_response_saved==='boolean'&&(s.receipt===null||typeof s.receipt==='object')&&(s.error===null||typeof s.error==='string')&&(s.error_code===null||typeof s.error_code==='string'));
   if(s.journal!==null)await journalCheck(s.journal,account,row,s);
   if(s.receipt!==null)need(s.receipt.call_id===s.reserved_call_id&&s.receipt.provider===row.preview.provider&&s.receipt.model===row.preview.model&&s.receipt.usage&&typeof s.receipt.usage==='object'&&!Array.isArray(s.receipt.usage)&&(s.receipt.request_id===null||typeof s.receipt.request_id==='string'));
+  if(s.receipt!==null&&row.request_id?.startsWith('fl_')){
+    const r=s.receipt,allowed=new Set(['prompt_tokens','completion_tokens','total_tokens','prompt_cache_hit_tokens','prompt_cache_miss_tokens']);
+    need(fullKeys(r,'provider,model,usage,request_id,call_id,evidence_profile,finish_reason,response_choice_count')&&r.request_id===null&&Object.entries(r.usage).every(([key,value])=>allowed.has(key)&&Number.isSafeInteger(value)&&value>=0)&&[null,'stop','length','content_filter','tool_calls','function_call'].includes(r.finish_reason)&&(r.response_choice_count===null||Number.isSafeInteger(r.response_choice_count)&&r.response_choice_count>=0));
+  }
   if(evidenceV4(row.preview)&&s.receipt!==null)checkEvidenceV4Receipt(s.receipt,row.preview);
   if(evidenceV5(row.preview)&&s.receipt!==null)checkEvidenceV5Receipt(s.receipt,row.preview,reduce);
   if(claimArrayPreview(row.preview)&&s.receipt!==null)checkClaimArrayReceipt(s.receipt,row.preview,reduce);

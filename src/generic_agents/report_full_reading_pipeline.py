@@ -112,7 +112,8 @@ def checked_hash(value, key):
 
 
 def read_principal(request: Request, response: Response, db: DB):
-    db.execute(text('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'))
+    from .db import begin_private_read_snapshot
+    begin_private_read_snapshot(db)
     return legacy.private_principal(request, response, db)
 
 
@@ -541,7 +542,11 @@ def preview_route(body: PreviewCommand, p: P, db: DB):
     require(p, 'admin', 'operator')
     if legacy.by_nonce(db, p, body.request_id):
         fail('nonce_exists', '此全文读取编号已有记录，请先从原编号恢复')
-    result = make_preview(db, p, body); db.rollback(); return result
+    result = make_preview(db, p, body)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    selection = result['body']['selection']
+    guard_new_paid_sources(db, p, [selection['original_ref'], selection['copy_ref']])
+    db.rollback(); return result
 
 
 @router.post('/report-full-readings', status_code=202)
@@ -556,6 +561,9 @@ def start_route(body: StartCommand, p: P, db: DB):
     legacy.guard_existing_paid(db, p)
     command = PreviewCommand.model_validate({k: v for k, v in body.model_dump(mode='json').items() if k not in {'preview_hash', 'consent'}})
     value = make_preview(db, p, command)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    selection = value['body']['selection']
+    guard_new_paid_sources(db, p, [selection['original_ref'], selection['copy_ref']])
     if value['preview_hash'] != body.preview_hash:
         fail('preview_changed', '完整来源、配置、模型或预算已变化，请重新预览')
     if not value['can_start']:
@@ -689,7 +697,7 @@ def merge_start_route(identity: UUID, body: MergeCommand, p: P, db: DB):
         SetupReportDraft.id != row.id, SetupReportDraft.status.in_(legacy.ACTIVE)).limit(1))
     old_rows = db.scalars(select(SetupAnalysis).where(SetupAnalysis.workspace_id == p.workspace_id,
         SetupAnalysis.status.in_(['queued', 'running', 'failed']))).all()
-    if other or any(legacy.legacy_pending(item) for item in old_rows):
+    if other or any(legacy.legacy_pending(item, db) for item in old_rows):
         fail('understanding_pending', '工作区还有另一原调用待处理或结果未知；本稿抽取保留，未新增合并调用')
     cap = legacy.old().model(db, p, row.data['preview']['body']['model_id'])
     preview = merge_preview(row, p, MergePreviewCommand(revision=body.revision, request_id=body.request_id), cap)
@@ -850,6 +858,10 @@ def _expected(row, key):
 def _fresh_cap(db, p, row, key):
     check_row(row, p); require(p, 'admin', 'operator')
     preview = row.data['preview']; cap = legacy.old().model(db, p, preview['body']['model_id'])
+    if key != 'merge':
+        from .report_unresolved_overlap import guard_new_paid_sources
+        selection = preview['body']['selection']
+        guard_new_paid_sources(db, p, [selection['original_ref'], selection['copy_ref']], current_draft_id=row.id)
     if (cap.content_hash != preview['model_hash']
             or generation(cap, messages_version=preview['generation_contract']['messages_version']) != preview['generation_contract']):
         fail('full_model_changed', '原模型配置已变化，原回答保留；未发送')

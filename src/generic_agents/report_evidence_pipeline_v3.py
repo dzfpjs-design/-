@@ -32,6 +32,9 @@ def check_response(pipeline, row, key, response, descriptor):
             or type(receipt.get('response_choice_count')) is not int or receipt['response_choice_count'] != 1
             or descriptor['wire_bytes'] > MAX_WIRE_VALUE_BYTES):
         raise ValueError('Original V3 response is incomplete or differs from its frozen output profile')
+    if getattr(row, 'request_id', '').startswith('fl_'):
+        from .report_evidence_delegated_wire_v1 import verify_saved_response
+        verify_saved_response(pipeline, row, key, response, descriptor)
 
 
 def map_input(pipeline, row, key, catalog):

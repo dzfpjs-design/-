@@ -48,9 +48,9 @@ PRIVACY_VERSION = 'evidence-privacy-v1'
 MAX_STATE_BYTES = 8 * 1024 * 1024
 MAX_PREVIEW_BYTES = 5 * 1024 * 1024
 DB, P, ReadP = legacy.DB, legacy.P, full.ReadP
-FE = r'^fe_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
-FER = FE.replace('fe_', 'fer_')
-FES = FE.replace('fe_', 'fes_')
+FE = r'^(?:fe_|fl_)[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+FER = r'^fer_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+FES = r'^fes_[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
 PREVIEW_KEYS = {'schema', 'actor_id', 'workspace_id', 'body', 'configuration_hash', 'published_model_hash',
     'preparation_cap', 'provider', 'model', 'source_snapshot', 'source_hash', 'projection_hash', 'map_preparation',
     'input_summary', 'can_start', 'start_blocker', 'can_apply', 'can_publish', 'preview_hash'}
@@ -487,7 +487,9 @@ def _check_reduce_preview(value, row, p, catalog, maps):
             or value['actor_id'] != p.user_id or value['workspace_id'] != p.workspace_id or value['draft_id'] != row.id
             or value['published_model_hash'] != row.data['preview']['published_model_hash']
             or type(value['can_start']) is not bool or value['can_apply'] is not False or value['can_publish'] is not False
-            or value['start_blocker'] != (None if value['can_start'] else '归并预算不足；原声明已保存，本次只预览。')):
+            or value['start_blocker'] not in ([None] if value['can_start'] else
+                ['归并预算不足；原声明已保存，本次只预览。'] + (['汇总尚未提供独立额度授权；原声明已保存，本次只预览。']
+                    if row.request_id.startswith('fl_') else []))):
         raise ValueError('Reduction preview differs')
     ReducePreviewCommand.model_validate(value['body'])
     if _family(row.data['preview']).applies(row.data['preview']):
@@ -519,7 +521,9 @@ def _check_resume_preview(value, row, p):
             or value['original_preview_hash'] != original['preview_hash'] or value['source_hash'] != original['source_hash']
             or value['published_model_hash'] != original['published_model_hash'] or type(value['can_start']) is not bool
             or value['can_apply'] is not False or value['can_publish'] is not False
-            or value['start_blocker'] != (None if value['can_start'] else '剩余资料读取预算不足；已保存回答不变，本次只预览。')):
+            or value['start_blocker'] not in ([None] if value['can_start'] else
+                ['剩余资料读取预算不足；已保存回答不变，本次只预览。'] + (['原定向额度尚不能安全交接给新任务；已保存回答不变，本次只预览。']
+                    if row.request_id.startswith('fl_') else []))):
         raise ValueError('Resume preview differs')
     ResumePreviewCommand.model_validate(value['body'])
     chunks = original['map_preparation']['plan']['chunks']; ids = [chunk['chunk_id'] for chunk in chunks]
@@ -637,7 +641,11 @@ def owned(db, p, identity, lock=False):
         SetupReportDraft.workspace_id == p.workspace_id, SetupReportDraft.actor_id == p.user_id)
     if lock:
         query = query.with_for_update().execution_options(populate_existing=True)
-    return check_row(db.scalar(query), p)
+    row = check_row(db.scalar(query), p)
+    if row.request_id.startswith('fl_'):
+        from .report_evidence_delegated_origin import verify_link
+        verify_link(db, p, row, lock=lock)
+    return row
 
 
 def _stage_view(row, key, result=None):
@@ -645,6 +653,25 @@ def _stage_view(row, key, result=None):
     if descriptor and descriptor['consumable']:
         receipt = _journal_for(row, key).read_response(_stage_journal_root(row, key),
             journal_binding(row, key, stage['reserved_call_id']), descriptor)['receipt']
+        if row.request_id.startswith('fl_'):
+            # Provider headers and arbitrary usage fields are untrusted response
+            # bytes.  They can echo credentials, so the private UI receives only
+            # a small numeric usage projection.  The ledger and immutable journal
+            # retain the exact receipt for all server-side integrity checks.
+            usage = receipt.get('usage')
+            allowed = ('prompt_tokens', 'completion_tokens', 'total_tokens',
+                       'prompt_cache_hit_tokens', 'prompt_cache_miss_tokens')
+            safe_usage = ({name: usage[name] for name in allowed
+                           if type(usage.get(name)) is int and 0 <= usage[name] <= 2**53 - 1}
+                          if isinstance(usage, dict) else {})
+            finish = receipt.get('finish_reason')
+            count = receipt.get('response_choice_count')
+            receipt = {'provider': receipt.get('provider'), 'model': receipt.get('model'),
+                       'usage': safe_usage, 'request_id': None, 'call_id': receipt.get('call_id'),
+                       'evidence_profile': copy.deepcopy(receipt.get('evidence_profile')),
+                       'finish_reason': finish if type(finish) is str and finish in
+                       {'stop', 'length', 'content_filter', 'tool_calls', 'function_call'} else None,
+                       'response_choice_count': count if type(count) is int and 0 <= count <= 2**53 - 1 else None}
     value = {field: copy.deepcopy(stage[field]) for field in
         ('status', 'reserved_call_id', 'result_hash', 'result_count', 'error', 'error_code')}
     value.update(journal=descriptor, raw_response_saved=descriptor is not None, receipt=receipt)
@@ -827,6 +854,16 @@ def _recover_native(db, p, row, command):
 
 def _fresh_cap(db, p, row, *, map_source=False):
     require(p, 'admin', 'operator')
+    linked_original_id = None
+    if row.request_id.startswith('fl_'):
+        from .report_evidence_delegated_origin import verify_link
+        origin = verify_link(db, p, row, require_current=True)
+        linked_original_id = origin['payload']['basis']['original_draft_id']
+    if map_source:
+        from .report_unresolved_overlap import guard_new_paid_sources
+        selection = row.data['preview']['body']['selection']
+        guard_new_paid_sources(db, p, [selection['original_ref'], selection['copy_ref']],
+            linked_original_id=linked_original_id, current_draft_id=row.id)
     _require_current_map(row.data['preview'])
     preview = row.data['preview']; cap = legacy.old().model(db, p, preview['body']['model_id'])
     if (cap.content_hash != preview['published_model_hash'] or preparation_cap(cap,
@@ -871,7 +908,7 @@ def _other_paid(db, p, identity):
         SetupReportDraft.id != identity, SetupReportDraft.status.in_(legacy.ACTIVE)).limit(1))
     old = db.scalars(select(SetupAnalysis).where(SetupAnalysis.workspace_id == p.workspace_id,
         SetupAnalysis.status.in_(['queued', 'running', 'failed']))).all()
-    if other or any(legacy.legacy_pending(row) for row in old):
+    if other or any(legacy.legacy_pending(row, db) for row in old):
         fail('understanding_pending', '工作区还有原调用待处理或结果未知；未新增付费任务')
 
 
@@ -891,7 +928,8 @@ def reduce_preview(row, p, body, *, can_start=True):
     return seal({'schema': 'report-evidence-reduce-preview-v1', 'actor_id': p.user_id, 'workspace_id': p.workspace_id,
         'draft_id': row.id, 'body': body.model_dump(mode='json'), 'published_model_hash': preview['published_model_hash'],
         'reduction_preparation': prepared, 'can_start': can_start,
-        'start_blocker': None if can_start else '归并预算不足；原声明已保存，本次只预览。',
+        'start_blocker': None if can_start else ('汇总尚未提供独立额度授权；原声明已保存，本次只预览。'
+            if row.request_id.startswith('fl_') else '归并预算不足；原声明已保存，本次只预览。'),
         'can_apply': False, 'can_publish': False}, 'preview_hash')
 
 
@@ -933,7 +971,8 @@ def resume_preview(row, p, body, *, can_start=True):
         'input_summary': {'call_count': len(remaining),
             'token_bound': sum(chunk['input_summary']['token_bound'] for chunk in remaining),
             byte_field: sum(chunk['input_summary'][byte_field] for chunk in remaining)},
-        'can_start': can_start, 'start_blocker': None if can_start else '剩余资料读取预算不足；已保存回答不变，本次只预览。',
+        'can_start': can_start, 'start_blocker': None if can_start else ('原定向额度尚不能安全交接给新任务；已保存回答不变，本次只预览。'
+            if row.request_id.startswith('fl_') else '剩余资料读取预算不足；已保存回答不变，本次只预览。'),
         'can_apply': False, 'can_publish': False}, 'preview_hash')
     _check_resume_preview(value, row, p)
     return value
@@ -942,13 +981,21 @@ def resume_preview(row, p, body, *, can_start=True):
 @router.post('/report-evidence-readings/preview')
 def preview_route(body: PreviewCommand, p: P, db: DB):
     require(p, 'admin', 'operator')
+    if body.request_id.startswith('fl_'):
+        fail('delegated_start_required', '受托读取须使用带来源关联的专用入口')
     if legacy.by_nonce(db, p, body.request_id):
         fail('nonce_exists', '此编号已有原记录，请先按原编号恢复')
-    value = make_preview(db, p, body); db.rollback(); return value
+    value = make_preview(db, p, body)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    selection = value['body']['selection']
+    guard_new_paid_sources(db, p, [selection['original_ref'], selection['copy_ref']])
+    db.rollback(); return value
 
 
 @router.post('/report-evidence-readings', status_code=202)
 def start_route(body: StartCommand, p: P, db: DB):
+    if body.request_id.startswith('fl_'):
+        fail('delegated_start_required', '受托读取须使用带来源关联的专用入口')
     prior = legacy.by_nonce(db, p, body.request_id)
     if prior is not None:
         return replay_start(prior, p, body)
@@ -960,6 +1007,9 @@ def start_route(body: StartCommand, p: P, db: DB):
     command = PreviewCommand.model_validate({key: value for key, value in body.model_dump(mode='json').items()
         if key not in {'preview_hash', 'consent'}})
     value = make_preview(db, p, command)
+    from .report_unresolved_overlap import guard_new_paid_sources
+    selection = value['body']['selection']
+    guard_new_paid_sources(db, p, [selection['original_ref'], selection['copy_ref']])
     if value['preview_hash'] != body.preview_hash:
         fail('preview_changed', '读取任务、完整范围、模型、配置或预算已变化，请重新核对预览；旧记录仍可读取')
     _require_current_map(value)
@@ -974,22 +1024,66 @@ def start_route(body: StartCommand, p: P, db: DB):
     db.commit(); return replay_start(row, p, body)
 
 
-@router.get('/report-evidence-readings')
-def list_route(p: ReadP, db: DB):
+# Only known, record-local integrity failures are quarantined. Authentication,
+# permission, database, and unexpected failures continue to fail the request.
+_LIST_INTEGRITY_ERRORS = frozenset({
+    'evidence_state_integrity', 'delegated_origin_missing', 'delegated_origin_invalid',
+    'delegated_audit_invalid', 'delegated_job_invalid', 'delegated_original_changed',
+    'delegated_original_job_changed', 'delegated_original_ledger_changed',
+    'delegated_candidate_changed', 'full_state_integrity', 'full_provisional_integrity',
+    'not_found',
+})
+
+
+def _list_checked(db, p):
     rows = db.scalars(select(SetupReportDraft).where(SetupReportDraft.workspace_id == p.workspace_id,
         SetupReportDraft.actor_id == p.user_id, SetupReportDraft.data['schema'].as_string() == STATE)
         .order_by(SetupReportDraft.created_at.desc(), SetupReportDraft.id.desc()).limit(101)).all()
     if len(rows) > 100:
         fail('evidence_list_capacity', '草案超过列表容量，记录保留；请按原编号恢复', 413)
-    return seal({'schema': 'report-evidence-reading-list-v1', 'actor_id': p.user_id, 'workspace_id': p.workspace_id,
+    good, quarantined = [], 0
+    for row in rows:
+        try:
+            check_row(row, p)
+            if row.request_id.startswith('fl_'):
+                from .report_evidence_delegated_origin import verify_link
+                verify_link(db, p, row, lock=False)
+        except HTTPException as error:
+            detail = error.detail
+            if (error.status_code not in (404, 409) or not isinstance(detail, dict)
+                    or detail.get('code') not in _LIST_INTEGRITY_ERRORS):
+                raise
+            quarantined += 1
+            continue
+        good.append(row)
+    result = seal({'schema': 'report-evidence-reading-list-v1', 'actor_id': p.user_id, 'workspace_id': p.workspace_id,
         'items': [{'id': row.id, 'request_id': row.request_id, 'status': row.status, 'revision': row.version,
             'material_refs': row.data['preview']['body']['material_refs'], 'name': row.data['preview']['source_snapshot']['original']['name'],
-            'created_at': row.created_at.isoformat(), 'can_apply': False, 'can_publish': False} for row in rows]}, 'list_hash')
+            'created_at': row.created_at.isoformat(), 'can_apply': False, 'can_publish': False} for row in good]}, 'list_hash')
+    return result, quarantined
+
+
+@router.get('/report-evidence-readings')
+def list_route(p: ReadP, db: DB):
+    result, _ = _list_checked(db, p)
+    return result
+
+
+@router.get('/report-evidence-readings/list-v2')
+def list_v2_route(p: ReadP, db: DB):
+    # One scoped snapshot gives the UI the original exact v1 DTO and a count;
+    # no quarantined identifiers, source, request, or action links are exposed.
+    result, quarantined = _list_checked(db, p)
+    return seal({'schema': 'report-evidence-reading-list-v2', 'actor_id': p.user_id,
+        'workspace_id': p.workspace_id, 'list': result, 'quarantined_count': quarantined}, 'list_v2_hash')
 
 
 @router.get('/report-evidence-readings/by-request/{request_id}')
 def by_request_route(request_id: str, p: ReadP, db: DB):
     row = check_row(legacy.by_nonce(db, p, request_id), p)
+    if row.request_id.startswith('fl_'):
+        from .report_evidence_delegated_origin import verify_link
+        verify_link(db, p, row, lock=False)
     return {'draft': draft_view(row, p), 'receipt': copy.deepcopy(row.data['start_receipt'])}
 
 
@@ -1012,8 +1106,8 @@ def status_route(identity: UUID, p: ReadP, db: DB):
 def reduce_preview_route(identity: UUID, body: ReducePreviewCommand, p: P, db: DB):
     require(p, 'admin', 'operator'); row = owned(db, p, identity)
     _fresh_cap(db, p, row)
-    value = reduce_preview(row, p, body); summary = value['reduction_preparation']['input_summary']
-    if not budget_available(db, p, summary['token_bound'], 1):
+    value = reduce_preview(row, p, body, can_start=not row.request_id.startswith('fl_')); summary = value['reduction_preparation']['input_summary']
+    if value['can_start'] and not budget_available(db, p, summary['token_bound'], 1):
         value = reduce_preview(row, p, body, can_start=False)
     db.rollback(); return value
 
@@ -1025,6 +1119,8 @@ def reduce_start_route(identity: UUID, body: ReduceCommand, p: P, db: DB):
         if prior['request_id'] != body.request_id or prior['command_hash'] != command_hash(p, body, kind='report_evidence_reduce', draft_id=row.id):
             fail('nonce_conflict', '本稿已有汇总请求，请恢复原号；不会重发')
         return {'draft': draft_view(row, p), 'receipt': copy.deepcopy(prior)}
+    if row.request_id.startswith('fl_'):
+        fail('delegated_reduce_authorization_unavailable', '本次汇总尚无独立额度授权；原分段保留，未创建任务或发送。')
     require(p, 'admin', 'operator'); legacy.workspace_draft(db, p); row = owned(db, p, identity, True)
     if row.data['reduction']['start_receipt']:
         return reduce_start_route(identity, body, p, db)
@@ -1116,6 +1212,9 @@ def recover_saved_route(identity: UUID, body: RecoveryCommand, p: P, db: DB):
     require(p, 'admin', 'operator')
     if row.status not in {'failed', 'response_unknown'} or row.version != body.revision:
         fail('evidence_recovery_conflict', '仅可免费恢复当前中断稿的原回答，状态或版本已变化')
+    if row.request_id.startswith('fl_'):
+        from .report_evidence_delegated_recovery_v1 import recover
+        return recover(sys.modules[__name__], db, p, row, body)
     if _family(row.data['preview']).native(row.data['preview']):
         return _recover_native(db, p, row, body)
     keys = (['reduce'] if row.data['reduction']['preview'] else
@@ -1217,8 +1316,8 @@ def capture_body_route(identity: UUID, stage: str, capture_hash: str, p: ReadP, 
 def resume_preview_route(identity: UUID, body: ResumePreviewCommand, p: P, db: DB):
     require(p, 'admin', 'operator'); legacy.workspace_draft(db, p); row = owned(db, p, identity, True)
     _other_paid(db, p, row.id); _fresh_cap(db, p, row, map_source=True)
-    value = resume_preview(row, p, body); summary = value['input_summary']
-    if not budget_available(db, p, summary['token_bound'], summary['call_count']):
+    value = resume_preview(row, p, body, can_start=not row.request_id.startswith('fl_')); summary = value['input_summary']
+    if value['can_start'] and not budget_available(db, p, summary['token_bound'], summary['call_count']):
         value = resume_preview(row, p, body, can_start=False)
     db.rollback(); return value
 
@@ -1231,6 +1330,8 @@ def resume_route(identity: UUID, body: ResumeCommand, p: P, db: DB):
         if prior['receipt']['command_hash'] != command_hash(p, body, kind='report_evidence_resume', draft_id=row.id):
             fail('nonce_conflict', '原继续编号已用于另一请求；不会排新付费任务')
         return {'draft': draft_view(row, p), 'receipt': copy.deepcopy(prior['receipt'])}
+    if row.request_id.startswith('fl_'):
+        fail('delegated_resume_handoff_unavailable', '原定向额度尚不能安全交接给新任务；已保存结果保留，未创建任务或发送。')
     require(p, 'admin', 'operator'); legacy.workspace_draft(db, p); row = owned(db, p, identity, True)
     if any(entry['receipt']['request_id'] == body.request_id for entry in row.data['resume_history']):
         return resume_route(identity, body, p, db)
@@ -1290,8 +1391,8 @@ def _expected(row, key):
         'provider': preview['provider'], 'model': preview['model']}
 
 
-def _call_guard(db, p, row, key, call_id):
-    call = scoped(db, CloudCall, call_id, p, True); expected = _expected(row, key)
+def _call_guard(db, p, row, key, call_id, *, lock=True):
+    call = scoped(db, CloudCall, call_id, p, lock); expected = _expected(row, key)
     if (call.capability_id != expected['capability_id'] or call.reserved_tokens != _authorized(row, key)['input_summary']['token_bound']
             or any(call.data.get(field) != expected[field] for field in ('actor_id', 'request_hash', 'dispatch_options_hash'))
             or call.data.get('input_policy_hash') != digest(_spec(row, key)['input_policy'])):
@@ -1312,6 +1413,15 @@ def _settle(db, p, row, key, receipt, valid):
     settle_paid_response(db, call_id, legacy.safe_paid_receipt(receipt), _expected(row, key), 'succeeded' if valid else 'failed')
 
 
+def _delegated_reduce_usage_valid(row, key, receipt):
+    if not row.request_id.startswith('fl_') or key != 'reduce':
+        return True
+    usage = receipt.get('usage') if isinstance(receipt, dict) else None
+    total = usage.get('total_tokens') if isinstance(usage, dict) else None
+    bound = _authorized(row, key)['input_summary']['token_bound']
+    return type(total) is int and 0 <= total <= bound
+
+
 def _schema_valid(row, key, descriptor):
     from .services import validate
     try:
@@ -1326,6 +1436,8 @@ def _schema_valid(row, key, descriptor):
             response = v4.parsed_response(sys.modules[__name__], row, key, loaded, descriptor)
         else:
             response = journal.parse_response(_journal_root(), journal_binding(row, key, _stage(row, key)['reserved_call_id']), descriptor)
+        if not _delegated_reduce_usage_valid(row,key,response['receipt']):
+            return False
         if v3.applies(row.data['preview']):
             v3.check_response(sys.modules[__name__], row, key, response, descriptor)
         validate(_spec(row, key)['output_schema'], response['value'])
@@ -1339,6 +1451,8 @@ def _consume(db, p, row, key):
     if descriptor is None:
         fail('evidence_saved_response_incomplete', '原调用尚无完整已保存回答，原编号保留；不会自动重付')
     response = _parsed(row, key); _settle(db, p, row, key, response['receipt'], _schema_valid(row, key, descriptor))
+    if not _delegated_reduce_usage_valid(row,key,response['receipt']):
+        fail('delegated_reduce_usage_unverified', '汇总原答与费用回执已保留，但用量缺失或超出授权上限；未采用，不会自动重发。')
     preview = row.data['preview']; catalog = _catalog(preview)
     bounded = _family(preview).applies(preview); strict = v4.applies(preview); modern = bounded or strict or v3.applies(preview)
     if key == 'reduce':
@@ -1390,6 +1504,16 @@ def _run_stage(db, p, row, key):
         _consume(db, p, row, key); return
     if stage['reserved_call_id'] or stage['inflight']:
         fail('evidence_response_unknown', '原阶段可能已发送但尚无完整回答；原编号保留，禁止自动重付')
+    if row.request_id.startswith('fl_'):
+        from .report_evidence_delegated_dispatch_gate import ready
+        if not ready():
+            from . import report_evidence_scoped_activation as scope
+            from .leases import fenced,ownership
+            from sqlalchemy.orm import Session
+            if not isinstance(db,Session) or not fenced(db):
+                fail('delegated_dispatch_not_ready', '分段读取的定向派发尚未接通；没有预留或发送。')
+            job=db.get(Job,ownership(db).get('job_id'))
+            scope.for_worker(db,p,job,lock=False)
     cap = _fresh_cap(db, p, row, map_source=key != 'reduce'); request = _request(row, key); spec = _spec(row, key)
     schema = legacy.canonical_schema(spec['output_schema'])
     if _family(row.data['preview']).applies(row.data['preview']):
@@ -1419,22 +1543,56 @@ def _run_stage(db, p, row, key):
         actual, _, images = prepare_cloud_json(cap, request['messages'][1:], schema)
         if images or actual != request['messages'] or digest(actual) != _authorized(row, key)['messages_hash']:
             fail('evidence_dispatch_changed', '实际已发布模型改变了冻结消息或来源，未发送')
-    row.status = 'running'; _replace_stage(row, key, {**stage, 'status': 'running', 'inflight': True})
-    identity = row.id; known_binding = None; native_context = None
     native = _family(row.data['preview']).native(row.data['preview'])
+    delegated_wire = row.request_id.startswith('fl_')
+    if delegated_wire and (native or not v3.applies(row.data['preview'])):
+        fail('evidence_delegated_wire_unsupported', '受托汇总或读取尚无匹配的定向额度与原包协议；未发送')
+    row.status = 'running'; _replace_stage(row, key, {**stage, 'status': 'running', 'inflight': True})
+    identity = row.id; known_binding = None; native_context = None; delegated_context = None
     native_provider, native_model = row.data['preview']['provider'], row.data['preview']['model']
     native_policy = copy.deepcopy(spec['input_policy']); native_policy.pop('single_batch', None)
     response_journal, response_root = _journal_for(row, key), _stage_journal_root(row, key)
     checkpoint(db)
 
+    prebound = None
+    if delegated_wire:
+        from .cloud_scoped_extra_reservation import ScopedReservationDenied, permit_key, reserve_scoped_tx
+        from .leases import ownership
+        from .report_evidence_prebound_gateway import PreboundGatewayCall
+        worker_job = ownership(db).get('job_id')
+        try:
+            permit = db.scalar(select(Job).where(Job.workspace_id == p.workspace_id,
+                Job.idempotency_key == permit_key(worker_job, key)))
+            if permit is None:
+                raise ScopedReservationDenied('受托阶段缺少定向额度；没有新增调用')
+            call_id = reserve_scoped_tx(db, p, permit.id, cap.id,
+                _authorized(row, key)['input_summary']['token_bound'],
+                digest(actual), digest(spec['dispatch_options']))
+            checkpoint(db)
+        except ScopedReservationDenied:
+            # The reservation transaction did not commit. Restore only this
+            # artificial inflight marker; no CloudCall or permit is fabricated.
+            db.rollback()
+            current = owned(db, p, identity, True); pending = _stage(current, key)
+            if pending['inflight'] is True and pending['reserved_call_id'] is None and pending['journal'] is None:
+                _replace_stage(current, key, {**pending, 'inflight': False})
+                checkpoint(db)
+            fail('evidence_scoped_budget_denied', '该阶段定向额度或任务状态无法核对；没有新增调用')
+        prebound = PreboundGatewayCall(db, p, cap.id, key, call_id)
+
     def reserved(call_id):
-        nonlocal known_binding, native_context
+        nonlocal known_binding, native_context, delegated_context
         try:
             db.expire_all(); legacy.workspace_draft(db, p); current = owned(db, p, identity, True)
             call = _call_guard(db, p, current, key, call_id)
             if call.status != 'reserved':
                 fail('evidence_reservation_changed', '真实调用不是新预留；未发送')
-            _replace_stage(current, key, {**_stage(current, key), 'reserved_call_id': call_id})
+            if delegated_wire:
+                if (_stage(current, key)['reserved_call_id'] != call_id
+                        or _stage(current, key)['inflight'] is not True):
+                    fail('evidence_reservation_changed', '原阶段与定向调用不一致；未发送')
+            else:
+                _replace_stage(current, key, {**_stage(current, key), 'reserved_call_id': call_id})
             known_binding = journal_binding(current, key, call_id)
             checkpoint(db)
             # A real reservation is no longer an unstarted stage even if this
@@ -1446,6 +1604,12 @@ def _run_stage(db, p, row, key):
                 from . import report_evidence_http_capture_v1 as capture
                 native_context = bridge.context(sys.modules[__name__], current, key)
                 return capture.prepare(bridge.root(), native_context)
+            if delegated_wire:
+                from . import report_evidence_delegated_wire_v1 as delegated_bridge
+                delegated_context = delegated_bridge.context(sys.modules[__name__], current, key)
+                # The dedicated prebound gateway creates the sink only after
+                # rechecking the committed reservation and actual messages.
+                return None
         except BaseException:
             # The gateway independently finishes a refused reservation before
             # returning to run(). Release our CloudCall lock first; the earlier
@@ -1465,6 +1629,12 @@ def _run_stage(db, p, row, key):
                 raise ValueError('Native callback differs from durable capture')
             descriptor = bridge.write_missing_journal(response_journal, response_root, known_binding, content, receipt)
         else:
+            if delegated_wire:
+                from . import report_evidence_delegated_wire_v1 as delegated_bridge
+                original, original_receipt, _ = delegated_bridge.response_context(
+                    delegated_context, native_provider, native_model, native_policy)
+                if content != original or receipt != original_receipt:
+                    raise ValueError('受托回调与耐久原 HTTP 回答不一致')
             descriptor = response_journal.write_response(response_root, known_binding, content, receipt)
         actor = db.info.pop('worker_actor', None)
         try:
@@ -1481,6 +1651,9 @@ def _run_stage(db, p, row, key):
                 db.info['worker_actor'] = actor
 
     profile_options = {'evidence_stage': spec['evidence_stage']} if v3.applies(row.data['preview']) or v4.applies(row.data['preview']) or _family(row.data['preview']).applies(row.data['preview']) else {}
+    if delegated_wire:
+        profile_options['delegated_evidence_wire_guard'] = True
+        profile_options['delegated_prebound'] = prebound
     returned, _ = cloud_json(cap, request['messages'][1:], schema, p, full_report=True,
         on_reserved=reserved, on_response=received, **profile_options)
     row = owned(db, p, identity, True); original = _parsed(row, key)

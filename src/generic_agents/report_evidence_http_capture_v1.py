@@ -105,6 +105,9 @@ def _context(value):
     elif value['delivery'] == 'deepseek-public-business-flow-native-v193':
         known_transport = (binding['stage'] == 'reduce'
             and value['endpoint'] == 'https://api.deepseek.com/chat/completions')
+    elif value['delivery'] == 'deepseek-delegated-evidence-json-v1':
+        known_transport = (value['endpoint'] == 'https://api.deepseek.com/chat/completions'
+            and (binding['stage'] == 'reduce' or re.fullmatch(r'map-(?:[1-9]|1[0-9]|2[0-4])', binding['stage'])))
     _need(known_transport
         and all(type(value[key]) is str and _HASH.fullmatch(value[key])
             for key in ('request_hash', 'schema_proof_hash', 'profile_hash'))

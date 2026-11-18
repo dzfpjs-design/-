@@ -1,12 +1,15 @@
 """Transaction primitive for a single scoped extra cloud reservation.
 
 This module is deliberately NOT wired into a gateway, a worker, or an API.
-No production task adapter is registered.  It cannot authorize a model call
-until a reviewed server-side adapter independently verifies the actual task,
-frozen stage, prepared messages and options.  It never commits or sends HTTP.
+One internal delegated-evidence adapter verifies the task, frozen stage,
+prepared messages and options. It never commits or sends HTTP; a separate
+reviewed gateway and worker integration is required before any model call.
 
 Trust boundary: this detects mismatched or separately altered permit/audit
 records; it does not defend against a database owner who rewrites both.
+The ORM commit/flush checks assume trusted in-process transaction code: direct
+SQL that bypasses the ORM identity map, or later engine-level commit listeners
+that write after validation, require separate database-enforced controls.
 """
 from __future__ import annotations
 
@@ -57,9 +60,15 @@ def _instant(value):
 
 
 def _task_adapter(scope_kind):
-    # Intentionally closed. A later reviewed, task-specific server adapter
-    # must verify authoritative stage/source and recompute actual prepared
-    # messages and options; a request body cannot register an adapter.
+    # This internal adapter is bound to an already authenticated, versioned
+    # report plan. Merely selecting this scope cannot create a grant, obtain a
+    # lease, access credentials, or send HTTP.
+    if scope_kind == 'delegated-evidence-map-v1':
+        from .cloud_report_plan_allowance import prepare_map_stage
+        return prepare_map_stage
+    if scope_kind == 'delegated-evidence-reduce-v1':
+        from .report_evidence_delegated_reduce_reservation import prepare_reduce_stage
+        return prepare_reduce_stage
     return None
 
 
@@ -89,7 +98,9 @@ def _session_checks(db):
         if (not isinstance(state, dict) or state.get('witness') is not _SESSION_WITNESS
                 or not isinstance(state.get('checks'), dict)
                 or not callable(state.get('before')) or not callable(state.get('after'))
+                or not callable(state.get('post_flush'))
                 or not event.contains(db, 'before_commit', state.get('before'))
+                or not event.contains(db, 'after_flush_postexec', state.get('post_flush'))
                 or not event.contains(db, 'after_transaction_end', state.get('after'))):
             _deny()
         return state['checks']
@@ -102,10 +113,19 @@ def _session_checks(db):
         # Nested flush transactions are different objects. Only the owning
         # outer transaction can remove its pending private verification data.
         checks.pop(transaction, None)
+    def after_flush_postexec(session, _flush_context):
+        # before_commit listeners installed after our first check can still
+        # mutate ORM objects. Recheck the same immutable transaction snapshot
+        # after SQLAlchemy executes each flush, before COMMIT can proceed.
+        check = checks.get(session.get_transaction())
+        if check is not None:
+            check(session)
     event.listen(db, 'before_commit', before_commit)
+    event.listen(db, 'after_flush_postexec', after_flush_postexec)
     event.listen(db, 'after_transaction_end', after_transaction_end)
     db.info[_SESSION_KEY] = {'witness':_SESSION_WITNESS, 'checks':checks,
-                             'before':before_commit, 'after':after_transaction_end}
+                             'before':before_commit, 'after':after_transaction_end,
+                             'post_flush':after_flush_postexec}
     return checks
 
 
@@ -206,7 +226,12 @@ def reserve_scoped_tx(db, principal, permit_id, capability_id, token_bound,
         _deny()
     adapter = _task_adapter(manifest['scope_kind'])
     original_job_data = deepcopy(job.data)
-    if (not callable(adapter) or adapter(db, principal, job, capability, deepcopy(manifest)) is not True
+    decision = adapter(db, principal, job, capability, deepcopy(manifest)) if callable(adapter) else None
+    from .cloud_report_plan_allowance import _MapBinding
+    from .report_evidence_delegated_reduce_reservation import _Binding as _ReduceBinding
+    binding = decision if ((manifest['scope_kind']=='delegated-evidence-map-v1' and type(decision) is _MapBinding)
+        or (manifest['scope_kind']=='delegated-evidence-reduce-v1' and type(decision) is _ReduceBinding)) else None
+    if (not callable(adapter) or (decision is not True and binding is None)
             or db.get_transaction() is not transaction or not transaction.is_active
             or digest(manifest) != data['manifest_hash'] or job.data != original_job_data):
         _deny()
@@ -249,6 +274,8 @@ def reserve_scoped_tx(db, principal, permit_id, capability_id, token_bound,
     db.add(dispatch)
     budget.data = {**budget.data, 'tokens':budget.data['tokens'] + token_bound, 'calls':budget.data['calls'] + 1}
     permit.data = {**data, 'used_call_id':call.id}
+    if binding is not None:
+        binding.bind(db, call)
     db.flush()
     expected_permit, expected_budget = deepcopy(permit.data), deepcopy(budget.data)
     expected_dispatch, expected_call = deepcopy(dispatch.data), deepcopy(call.data)
@@ -290,7 +317,8 @@ def reserve_scoped_tx(db, principal, permit_id, capability_id, token_bound,
                     or call.capability_id != capability.id or call.reserved_tokens != token_bound
                     or call.charged_tokens != token_bound or any(not u.active for u in users)
                     or any(m.workspace_id != principal.workspace_id for m in memberships)
-                    or {m.user_id:m.role for m in memberships} != roles):
+                    or {m.user_id:m.role for m in memberships} != roles
+                    or (binding is not None and binding.check(session) is not True)):
                 _deny()
 
     checks[transaction] = check_at_commit
