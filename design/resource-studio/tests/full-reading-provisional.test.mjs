@@ -121,11 +121,11 @@ test('不同浏览器相同保存意图使用同一编号，乱序回执不会�
  assert.equal(localStorage.length,0);
 }));
 
-test('读取原号未发现不能换号，明确重试仅使用相同编号',async()=>withDOM(async({render,click})=>{
+test('读取原号未发现不能换号，明确重试仅使用相同编号',async()=>withDOM(async({render,click,waitFor})=>{
  let offline=true;const s=fakeServer(),request=async(path,o={})=>{if(o.method==='POST'&&offline)throw Error('transport lost');return s.request(path,o);};
- await render(props({request}));await click('保存此机器候选');assert.match(document.body.textContent,/原保存编号尚待核对/);
- const stored=JSON.parse(localStorage.getItem(localStorage.key(0)));await click('只核对原保存回执');assert.match(document.body.textContent,/不证明原请求不会稍后提交/);
- offline=false;await click('按原编号重试保存');assert.equal(s.posts.length,1);assert.equal(s.posts[0].request_id,stored.body.request_id);
+ await render(props({request}));await click('保存此机器候选');await waitFor(()=>document.body.textContent.includes('原保存编号尚待核对'));assert.match(document.body.textContent,/原保存编号尚待核对/);
+ const stored=JSON.parse(localStorage.getItem(localStorage.key(0)));await click('只核对原保存回执');await waitFor(()=>document.body.textContent.includes('不证明原请求不会稍后提交'));assert.match(document.body.textContent,/不证明原请求不会稍后提交/);
+ offline=false;await click('按原编号重试保存');await waitFor(()=>s.posts.length===1);assert.equal(s.posts.length,1);assert.equal(s.posts[0].request_id,stored.body.request_id);
 }));
 
 test('本机存储不可用时不提交',async()=>withDOM(async({render,click,waitFor})=>{
