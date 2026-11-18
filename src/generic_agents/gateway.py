@@ -4,6 +4,7 @@ import copy
 import socket
 import ipaddress
 import time
+import base64
 from urllib.parse import urlparse,parse_qsl
 import httpx
 from fastapi import HTTPException
@@ -26,6 +27,11 @@ class CloudNotSent(ModelBlocked):
     def __init__(self, reason, proof):
         super().__init__(reason)
         self.dispatch_proof = copy.deepcopy(proof)
+
+
+# Hard wire cap for the explicit full-reading response guard. Oversized or
+# compressed bodies are not decoded or accepted and are never called complete.
+MAX_FULL_READING_WIRE_BYTES = 1024 * 1024
 
 
 _BUSINESS_OUTCOME_IDENTITY = ('input_hash', 'role', 'capability_hash', 'approval',
@@ -590,7 +596,7 @@ def _cloud_native_report(capability, messages, schema, principal, key, *, on_res
 def cloud_json(capability, messages, schema, principal=None, *, on_reserved=None, on_response=None,
                full_report=False, evidence_stage=None, dispatch_identity=None,
                evidence_catalogue=_EVIDENCE_CATALOGUE_UNSET, allocation_evidence=_ALLOCATION_EVIDENCE_UNSET,
-               output_token_limit=None):
+               output_token_limit=None, full_report_completion_guard=False):
     from .cloud_dispatch_v130 import dispatch_scope
     # An untracked nested legacy call masks any parent attempt. No callback,
     # request, reservation or settlement contract is changed for old callers.
@@ -617,6 +623,8 @@ def cloud_json(capability, messages, schema, principal=None, *, on_reserved=None
                 extra['allocation_evidence'] = allocation_evidence
             if output_token_limit is not None:
                 extra['output_token_limit'] = output_token_limit
+            if full_report_completion_guard:
+                extra['full_report_completion_guard'] = full_report_completion_guard
             return _cloud_json(capability, messages, schema, principal,
                 on_reserved=on_reserved, on_response=on_response,
                 full_report=full_report, evidence_stage=evidence_stage, **extra)
@@ -632,7 +640,11 @@ def cloud_json(capability, messages, schema, principal=None, *, on_reserved=None
 
 def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=None, on_response=None,
                 full_report=False, evidence_stage=None, evidence_catalogue=_EVIDENCE_CATALOGUE_UNSET,
-                allocation_evidence=_ALLOCATION_EVIDENCE_UNSET, output_token_limit=None):
+                allocation_evidence=_ALLOCATION_EVIDENCE_UNSET, output_token_limit=None,
+                full_report_completion_guard=False):
+    if (type(full_report_completion_guard) is not bool or full_report_completion_guard and
+            (full_report is not True or evidence_stage is not None or not callable(on_reserved) or not callable(on_response))):
+        raise ModelBlocked('全文完成性检查需要独立原答保存和预算回执，未预留或发送')
     _server_catalogue_guard(evidence_stage, evidence_catalogue)
     _server_allocation_guard(evidence_stage, allocation_evidence)
     if output_token_limit is not None and evidence_stage != 'business-reasoning-v197':
@@ -812,16 +824,39 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
                 raise
         with httpx.Client(timeout=timeout, follow_redirects=False, trust_env=False) as client:
             before_transport()
-            response = client.post(endpoint, headers={"Authorization": "Bearer " + key}, json={
-                **request_options,"messages":request_messages})
-        if response.status_code != 200:
-            raise ModelBlocked(f"云模型请求失败（HTTP {response.status_code}），未自动切换模型")
-        result = response.json()
+            if full_report_completion_guard:
+                wire = None; wire_status = 'complete'; chunks = bytearray()
+                with client.stream('POST', endpoint, headers={"Authorization": "Bearer " + key,
+                        'Accept-Encoding':'identity'}, json={**request_options,"messages":request_messages}) as response:
+                    encoding = response.headers.get('content-encoding','').strip().lower()
+                    if encoding not in ('','identity'):
+                        wire_status = 'unsupported_encoding'
+                    else:
+                        for chunk in response.iter_raw():
+                            if len(chunks) + len(chunk) > MAX_FULL_READING_WIRE_BYTES:
+                                wire_status = 'oversize'
+                                break
+                            chunks.extend(chunk)
+                        if wire_status == 'complete': wire = bytes(chunks)
+                    status_code = response.status_code
+                    response_headers = dict(response.headers)
+            else:
+                response = client.post(endpoint, headers={"Authorization": "Bearer " + key}, json={
+                    **request_options,"messages":request_messages})
+                status_code = response.status_code
+                response_headers = response.headers
+        if status_code != 200:
+            raise ModelBlocked(f"云模型请求失败（HTTP {status_code}），未自动切换模型")
+        try:
+            result = json.loads(wire) if full_report_completion_guard and wire is not None else (None if full_report_completion_guard else response.json())
+        except (ValueError,RecursionError):
+            if not full_report_completion_guard: raise
+            result = None
         if evidence_stage is not None and type(result) is not dict:
             raise ValueError('证据调用缺少结构化响应')
         # 新候选流程需要在语法损坏时仍保存真实关联调用与供应商用量。
         response_receipt = {"provider": execution["provider"], "model": execution["model"],
-            "usage": result.get("usage", {}), "request_id": response.headers.get("x-request-id"), "call_id": call_id}
+            "usage": result.get("usage", {}) if type(result) is dict else {}, "request_id": response_headers.get("x-request-id"), "call_id": call_id}
         if evidence_stage is not None:
             response_receipt.update(evidence_profile=dict(policy), finish_reason=None,
                 response_choice_count=None)
@@ -835,14 +870,33 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
             # None explicitly means no readable content. Never invent a wire
             # string, and still settle the real receipt if durability refuses it.
             content = message.get('content') if type(message) is dict else None
+        elif full_report_completion_guard:
+            # Keep the actual response bytes in the private paid checkpoint;
+            # even malformed JSON / multiple choices must not lose the answer.
+            choices = result.get('choices') if type(result) is dict else None
+            count = len(choices) if type(choices) is list else None
+            first = choices[0] if type(choices) is list and choices else None
+            message = first.get('message') if type(first) is dict else None
+            finish_reason = first.get('finish_reason') if type(first) is dict else None
+            response_receipt.update(completion_guard='full-report-completion-v1',
+                finish_reason=finish_reason,response_choice_count=count,
+                response_body_status=wire_status,
+                _full_report_wire_base64=base64.b64encode(wire).decode('ascii') if wire is not None else None)
+            content = message.get('content') if type(message) is dict else None
         else:
             content = result["choices"][0]["message"]["content"]
         if on_response is not None:
             # Opt-in consumers persist the paid wire answer before JSON/schema
             # normalization. Existing consumers retain their original boundary.
-            try:on_response(content, copy.deepcopy(response_receipt) if evidence_stage is not None else response_receipt)
+            try:on_response(content, copy.deepcopy(response_receipt) if evidence_stage is not None or full_report_completion_guard else response_receipt)
             except BaseException:
-                finish(call_id,response_receipt)
+                if full_report_completion_guard:
+                    # The wire is persisted by the callback, never copied into
+                    # the generic budget receipt or exception log.
+                    budget_receipt={k:v for k,v in response_receipt.items() if k!='_full_report_wire_base64'}
+                    if type(budget_receipt.get('usage')) is not dict: budget_receipt['usage']={}
+                    finish(call_id,budget_receipt)
+                else: finish(call_id,response_receipt)
                 raise
         if evidence_stage is not None:
             from .cloud_evidence_profiles import MAX_RESPONSE_BYTES
@@ -858,19 +912,35 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
                 raise ModelBlocked('证据原回答包含无效Unicode，原记录保留；未采用或自动重发') from None
             if response_bytes > MAX_RESPONSE_BYTES:
                 raise ModelBlocked('证据原回答超过安全读取容量，完整原答与费用保留；未截断或自动重发')
+        if full_report_completion_guard and (response_receipt['response_choice_count'] != 1
+                or response_receipt['finish_reason'] != 'stop' or type(content) is not str or wire_status != 'complete'):
+            raise ModelBlocked('全文回答未明确完整结束；已保存的原答和可核对用量保留，未采用或自动重发')
         value = json.loads(content)
         validate(schema, value)
         receipt = {"provider": execution["provider"], "model": execution["model"],
-                   "usage": result.get("usage", {}), "request_id": response.headers.get("x-request-id"), "call_id": call_id}
+                   "usage": result.get("usage", {}), "request_id": response_headers.get("x-request-id"), "call_id": call_id}
         if evidence_stage is not None:
             receipt.update(evidence_profile=dict(policy), finish_reason=response_receipt['finish_reason'],
                 response_choice_count=response_receipt['response_choice_count'])
+        elif full_report_completion_guard:
+            receipt.update(completion_guard=response_receipt['completion_guard'],
+                finish_reason=response_receipt['finish_reason'],response_choice_count=response_receipt['response_choice_count'],
+                response_body_status=response_receipt['response_body_status'])
         finish(call_id, receipt, "succeeded")
         return value, receipt
     except ModelBlocked:
-        finish(call_id, locals().get('response_receipt') if evidence_stage is not None else None); raise
+        if full_report_completion_guard and isinstance(locals().get('response_receipt'),dict):
+            saved_receipt={k:v for k,v in response_receipt.items() if k!='_full_report_wire_base64'}
+            if type(saved_receipt.get('usage')) is not dict: saved_receipt['usage']={}
+            finish(call_id,saved_receipt)
+        else: finish(call_id, locals().get('response_receipt') if evidence_stage is not None else None)
+        raise
     except (httpx.HTTPError, ValueError, TypeError, KeyError, HTTPException) as error:
-        finish(call_id, locals().get('response_receipt') if evidence_stage is not None or on_reserved is not None else None)
+        if full_report_completion_guard and isinstance(locals().get('response_receipt'),dict):
+            saved_receipt={k:v for k,v in response_receipt.items() if k!='_full_report_wire_base64'}
+            if type(saved_receipt.get('usage')) is not dict: saved_receipt['usage']={}
+            finish(call_id,saved_receipt)
+        else: finish(call_id, locals().get('response_receipt') if evidence_stage is not None or on_reserved is not None else None)
         if evidence_stage is not None:
             raise ModelBlocked('证据调用未产生可接受的完整结果；原调用与费用记录保留，未自动重发') from error
         reason = ("云模型请求超时，未接受任何规划结果，可重试" if isinstance(error, httpx.TimeoutException)

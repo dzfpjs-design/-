@@ -7,6 +7,7 @@ production settlement. Budgets are opened only inside each test fixture.
 Root alone executes; the author has not run this file.
 """
 import copy
+import base64
 import json
 from pathlib import Path
 from uuid import uuid4
@@ -138,8 +139,27 @@ class SyntheticProvider:
             value = {'result': value, 'reconciliation': reconciliation}
             if self.mode == 'bad_merge': value['reconciliation'] = value['reconciliation'][1:]
         receipt = {'call_id': call_id, 'provider': cap.data['execution']['provider'], 'model': cap.data['execution']['model'],
-                   'usage': {'total_tokens': 20}, 'request_id': 'synthetic-only-' + str(uuid4())}
-        callbacks['on_response'](json.dumps(value, ensure_ascii=False), receipt)
+                   'usage': {'total_tokens': 20}, 'request_id': 'synthetic-only-' + str(uuid4()),
+                   'completion_guard': 'full-report-completion-v1', 'response_choice_count': 1,
+                   'finish_reason': 'stop', 'response_body_status': 'complete'}
+        if self.mode == 'truncated': receipt['finish_reason'] = 'length'
+        if self.mode == 'missing_finish': receipt.pop('finish_reason')
+        if self.mode == 'multiple_choices': receipt['response_choice_count'] = 2
+        unavailable_mode=self.mode.removesuffix('_after_raw')
+        if unavailable_mode in ('oversize','unsupported_encoding'):
+            receipt.update(response_body_status=unavailable_mode,usage={},finish_reason=None,response_choice_count=None)
+            callbacks['on_response'](None,receipt)
+            if self.mode.endswith('_after_raw'):raise LeaseLost('synthetic interruption after unavailable response checkpoint')
+            return copy.deepcopy(value),receipt
+        if self.mode == 'legacy_missing':
+            for key in ('completion_guard','finish_reason','response_choice_count','response_body_status'): receipt.pop(key)
+        content=json.dumps(value,ensure_ascii=False)
+        first={'message':{'content':content}}
+        if 'finish_reason' in receipt:first['finish_reason']=receipt['finish_reason']
+        choices=[first]+([{'finish_reason':'stop','message':{'content':'{}'}}] if self.mode=='multiple_choices' else [])
+        wire=json.dumps({'usage':receipt['usage'],'choices':choices},ensure_ascii=False).encode()
+        if self.mode != 'legacy_missing': receipt['_full_report_wire_base64']=base64.b64encode(wire).decode()
+        callbacks['on_response'](content, receipt)
         if self.mode == 'after_raw': raise LeaseLost('synthetic lease interruption after durable response checkpoint')
         return copy.deepcopy(value), receipt
 
@@ -303,6 +323,75 @@ def test_paid_raw_checkpoint_is_consumed_on_new_session_without_another_provider
         assert (call.status, call.charged_tokens, call.data) == fee_before
     assert get(scene, identity)['status'] == 'awaiting_merge'
     assert len(provider.calls) == 1 and counts()[CloudCall.__tablename__] == 1
+
+
+@pytest.mark.parametrize('mode',['truncated','missing_finish','multiple_choices','legacy_missing'])
+def test_incomplete_schema_valid_paid_answer_never_recovers_or_replays(reading_scene, monkeypatch,mode):
+    scene=reading_scene;provider=SyntheticProvider(scene,monkeypatch,mode=mode)
+    _,_,accepted=start(scene);assert process_once(accepted['draft']['job_id'])
+    identity=accepted['draft']['id'];failed=get(scene,identity)
+    assert failed['status']=='failed' and failed['extractions'][0]['raw_response_saved']
+    assert failed['extractions'][0]['status']=='failed' and failed['model_result'] is None
+    with Session(engine()) as db:
+        row=pipeline.owned(db,scene['p'],identity);raw=copy.deepcopy(row.data['extractions'][0]['raw_response'])
+        call=db.get(CloudCall,provider.calls[0]);fee=(call.status,call.charged_tokens,copy.deepcopy(call.data))
+    assert 'value' in raw and raw['receipt']['usage']['total_tokens']==20
+    assert fee[0]=='failed' and fee[1]==20
+    response=scene['client'].post(BASE+'/'+identity+'/recover-saved',json={'revision':failed['revision'],'request_id':str(uuid4())})
+    assert response.status_code==422 and response.json()['detail']['code']=='full_completion_unverified'
+    again=get(scene,identity)
+    assert again['status']=='failed' and again['extractions'][0]['status']=='failed' and again['model_result'] is None
+    with Session(engine()) as db:
+        row=pipeline.owned(db,scene['p'],identity);assert row.data['extractions'][0]['raw_response']==raw
+        call=db.get(CloudCall,provider.calls[0]);assert (call.status,call.charged_tokens,call.data)==fee
+    assert len(provider.calls)==1 and counts()[CloudCall.__tablename__]==1
+
+
+@pytest.mark.parametrize('mode',['oversize','unsupported_encoding'])
+def test_unavailable_wire_truthfully_reports_unknown_original_and_usage(reading_scene,monkeypatch,mode):
+    scene=reading_scene;provider=SyntheticProvider(scene,monkeypatch,mode=mode)
+    _,_,accepted=start(scene);assert process_once(accepted['draft']['job_id'])
+    identity=accepted['draft']['id'];failed=get(scene,identity)
+    assert failed['status']=='failed' and failed['error_code']=='full_response_body_unavailable'
+    assert '完整原答未保存' in failed['error'] and '真实用量无法核对' in failed['error']
+    assert failed['extractions'][0]['raw_response_saved'] is False
+    with Session(engine()) as db:
+        row=pipeline.owned(db,scene['p'],identity);stage=row.data['extractions'][0];raw=stage['raw_response']
+        assert raw['receipt']['response_body_status']==mode and 'provider_wire_base64' not in raw
+        call=db.get(CloudCall,provider.calls[0]);assert call.status=='failed' and call.charged_tokens==call.reserved_tokens
+    response=scene['client'].post(BASE+'/'+identity+'/recover-saved',json={'revision':failed['revision'],'request_id':str(uuid4())})
+    assert response.status_code==422 and response.json()['detail']['code']=='full_completion_unverified'
+    assert len(provider.calls)==1
+
+
+@pytest.mark.parametrize('mode',['oversize','unsupported_encoding'])
+def test_unavailable_wire_remains_truthful_if_worker_loses_lease_after_checkpoint(reading_scene,monkeypatch,mode):
+    scene=reading_scene;provider=SyntheticProvider(scene,monkeypatch,mode=mode+'_after_raw')
+    _,_,accepted=start(scene);job=accepted['draft']['job_id'];assert process_once(job)
+    identity=accepted['draft']['id'];stopped=get(scene,identity)
+    assert stopped['extractions'][0]['raw_response_saved'] is False
+    with Session(engine()) as db:
+        pipeline.record_job_failure(db,scene['p'],db.get(Job,job),'synthetic worker interruption');db.commit()
+    failed=get(scene,identity)
+    assert failed['status']=='failed' and failed['error_code']=='full_response_body_unavailable'
+    assert '完整原答未保存' in failed['error'] and '真实用量无法核对' in failed['error']
+    assert len(provider.calls)==1 and counts()[CloudCall.__tablename__]==1
+
+
+def test_legacy_success_remains_readable_but_cannot_launch_unverified_merge(reading_scene,monkeypatch):
+    scene=reading_scene;provider=SyntheticProvider(scene,monkeypatch)
+    _,_,accepted=start(scene);done=finish_extract(scene,accepted);identity=done['id']
+    with Session(engine()) as db:
+        row=pipeline.owned(db,scene['p'],identity,True);stage=copy.deepcopy(row.data['extractions'][0]);raw=stage['raw_response']
+        raw.pop('provider_wire_base64',None)
+        for key in ('completion_guard','finish_reason','response_choice_count','response_body_status'):raw['receipt'].pop(key,None)
+        raw['hash']=digest({k:v for k,v in raw.items() if k!='hash'})
+        pipeline._replace_stage(row,stage['batch_id'],stage);db.commit()
+    old=get(scene,identity)
+    assert old['status']=='awaiting_merge' and old['extractions'][0]['status']=='succeeded'
+    result=scene['client'].post(BASE+'/'+identity+'/merge-preview',json={'revision':old['revision'],'request_id':'fm_'+str(uuid4())})
+    assert result.status_code==409 and result.json()['detail']['code']=='full_completion_unverified'
+    assert len(provider.calls)==1 and counts()[CloudCall.__tablename__]==1
 
 
 def test_missing_merge_input_is_visible_failure_with_saved_raw_and_fee(reading_scene, monkeypatch):

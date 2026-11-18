@@ -4,6 +4,7 @@ No v1/v2 record is upgraded. Every paid stage has its own immutable messages,
 reservation and raw checkpoint. Reading a preview never calls a provider.
 """
 import copy
+import base64
 import json
 import time
 from typing import Annotated, Literal
@@ -436,10 +437,17 @@ def owned(db, p, identity, lock=False):
     return check_row(db.scalar(query), p)
 
 
+def _response_saved(stage):
+    raw=stage.get('raw_response') or {}
+    receipt=raw.get('receipt') or {}
+    # Legacy answers lack this field; retain their historical read semantics.
+    return bool(raw) and receipt.get('response_body_status','complete') == 'complete'
+
+
 def _stage_view(stage):
     return {'status': stage['status'], 'result_hash': stage.get('result_hash'),
         'receipt': copy.deepcopy((stage.get('raw_response') or {}).get('receipt')),
-        'raw_response_saved': bool(stage.get('raw_response')), 'error_code': stage.get('error_code'), 'error': stage.get('error')}
+        'raw_response_saved': _response_saved(stage), 'error_code': stage.get('error_code'), 'error': stage.get('error')}
 
 
 def draft_view(row, p):
@@ -451,7 +459,7 @@ def draft_view(row, p):
         'extractions': [{'batch_id': s['batch_id'], **_stage_view(s)} for s in data['extractions']],
         'merge': {key: copy.deepcopy(data['merge'].get(key)) for key in ('status', 'preview', 'start_receipt', 'reconciliation')}
             | {'receipt': copy.deepcopy((data['merge'].get('raw_response') or {}).get('receipt')),
-               'raw_response_saved': bool(data['merge'].get('raw_response'))},
+               'raw_response_saved': _response_saved(data['merge'])},
         'model_result': copy.deepcopy(data.get('model_result')), 'model_result_hash': data.get('model_result_hash'),
         'review_value': copy.deepcopy(data['review_value']), 'review_history': copy.deepcopy(data['review_history']),
         'recovery_history': copy.deepcopy(data['recovery_history']),
@@ -487,6 +495,8 @@ def _merge_payload(row):
 def merge_preview(row, p, body, cap, *, can_start=True):
     if row.version != body.revision or row.status != 'awaiting_merge' or any(s['status'] != 'succeeded' for s in row.data['extractions']):
         fail('full_merge_not_ready', '抽取尚未全部保存，或草案版本已变化；请读回原记录')
+    if any(not _complete_response(s.get('raw_response')) for s in row.data['extractions']):
+        fail('full_completion_unverified', '历史抽取缺少完整结束证明；原结果保留，不能据此发起新的合并调用')
     preview = row.data['preview']; spec = preview['generation_contract']
     if cap.content_hash != preview['model_hash'] or generation(cap, messages_version=spec['messages_version']) != spec:
         fail('full_model_changed', '原模型配置已变化，已保存抽取保留；未发送合并')
@@ -729,7 +739,12 @@ def recover_saved_route(identity: UUID, body: RecoveryCommand, p: P, db: DB):
     try:
         for key in keys:
             _consume(db, p, row, key)
-    except (ValueError, HTTPException):
+    except HTTPException as error:
+        db.rollback()
+        if isinstance(error.detail,dict) and error.detail.get('code')=='full_completion_unverified':
+            fail('full_completion_unverified', '原回答被截断或缺少完整结束证明；已保存记录保留，请人工核对，未采用或重发', 422)
+        fail('full_saved_response_invalid', '已保存原答仍未通过结构、引用或合并核对；原内容和费用回执保留，没有调用模型', 422)
+    except ValueError:
         db.rollback()
         fail('full_saved_response_invalid', '已保存原答仍未通过结构、引用或合并核对；原内容和费用回执保留，没有调用模型', 422)
     if keys != ['merge']:
@@ -793,6 +808,8 @@ def _fresh_cap(db, p, row, key):
     # A merge sends only the already saved extraction results. It does not
     # silently read newer page text or change the authorized original view.
     if key == 'merge':
+        if any(not _complete_response(s.get('raw_response')) for s in row.data['extractions']):
+            fail('full_completion_unverified', '历史抽取缺少完整结束证明；原结果保留，未发送新的合并请求')
         for ref in (preview['body']['selection']['original_ref'], preview['body']['selection']['copy_ref']):
             material = scoped(db, SetupMaterial, ref['id'], p)
             if material.archived or material.version != ref['version'] or material.sha256 != ref['hash']:
@@ -809,6 +826,34 @@ def _fresh_cap(db, p, row, key):
     return cap
 
 
+def _complete_response(raw):
+    if not isinstance(raw,dict) or not isinstance(raw.get('receipt'),dict):
+        return False
+    receipt = raw['receipt']
+    if not (receipt.get('completion_guard') == 'full-report-completion-v1'
+            and type(receipt.get('response_choice_count')) is int and receipt['response_choice_count'] == 1
+            and receipt.get('finish_reason') == 'stop' and receipt.get('response_body_status') == 'complete'
+            and type(raw.get('content')) is str and type(raw.get('provider_wire_base64')) is str):
+        return False
+    try:
+        from .gateway import MAX_FULL_READING_WIRE_BYTES
+        if len(raw['provider_wire_base64']) > ((MAX_FULL_READING_WIRE_BYTES+2)//3)*4: return False
+        wire=base64.b64decode(raw['provider_wire_base64'],validate=True)
+        if len(wire)>MAX_FULL_READING_WIRE_BYTES: return False
+        response=json.loads(wire)
+        choices=response.get('choices') if type(response) is dict else None
+        if (type(choices) is not list or len(choices)!=1 or type(choices[0]) is not dict
+                or choices[0].get('finish_reason')!='stop'
+                or type(choices[0].get('message')) is not dict
+                or choices[0]['message'].get('content')!=raw['content']
+                or response.get('usage',{})!=receipt.get('usage',{})):
+            return False
+        value=json.loads(raw['content'],parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
+        return value==raw.get('value')
+    except (ValueError,TypeError,RecursionError,UnicodeError):
+        return False
+
+
 def _settle(db, row, key, raw):
     from .cloud_budget import settle_paid_response
     from .services import validate
@@ -818,7 +863,7 @@ def _settle(db, row, key, raw):
     valid = False
     if 'value' in raw:
         try:
-            validate(spec['merge_schema'] if key == 'merge' else spec['output_schema'], raw['value']); valid = True
+            validate(spec['merge_schema'] if key == 'merge' else spec['output_schema'], raw['value']); valid = _complete_response(raw)
         except HTTPException:
             pass
     settle_paid_response(db, raw['receipt']['call_id'], raw['receipt'], _expected(row, key), 'succeeded' if valid else 'failed')
@@ -829,6 +874,8 @@ def _consume(db, p, row, key):
     if not raw:
         fail('full_paid_response_missing', '原阶段没有已保存回答，不会自动重复调用')
     _settle(db, row, key, raw)
+    if not _complete_response(raw):
+        fail('full_completion_unverified', '原付费回答未证明完整结束；已保存记录保留，不能自动采用或重发', 422)
     if 'value' not in raw:
         fail('full_response_invalid', '原付费回答不是有效候选JSON；原内容与回执已保存，不会自动重付', 422)
     preview = row.data['preview']; context = preview['batches'][0]['payload']['context']
@@ -882,7 +929,14 @@ def _run_stage(db, p, row, key):
             current = owned(db, p, identity, True)
             if _stage(current, key).get('raw_response'):
                 fail('full_paid_response_conflict', '此阶段原回答已保存，不能替换')
-            raw = legacy.paid_raw(content, {**receipt, 'duration_ms': round((time.monotonic() - started) * 1000)})
+            saved_receipt = copy.deepcopy(receipt)
+            wire = saved_receipt.pop('_full_report_wire_base64', None)
+            raw = legacy.paid_raw(content if type(content) is str else None,
+                                  {**saved_receipt, 'duration_ms': round((time.monotonic() - started) * 1000)})
+            if wire is not None:
+                if type(wire) is not str: fail('full_paid_response_invalid', '原响应无法安全保存，未重发')
+                raw = {**raw, 'provider_wire_base64':wire}
+                raw['hash'] = digest({k:v for k,v in raw.items() if k!='hash'})
             _replace_stage(current, key, {**_stage(current, key), 'raw_response': raw})
             _settle(db, current, key, raw); checkpoint(db)
         except BaseException:
@@ -893,7 +947,7 @@ def _run_stage(db, p, row, key):
 
     result, _ = cloud_json(cap, messages(spec, authorized['payload'], merge=key == 'merge'),
         legacy.canonical_schema(spec['merge_schema'] if key == 'merge' else spec['output_schema']), p, full_report=True,
-        on_reserved=reserved, on_response=received)
+        on_reserved=reserved, on_response=received, full_report_completion_guard=True)
     row = owned(db, p, identity, True)
     if (_stage(row, key).get('raw_response') or {}).get('value') != result:
         fail('full_paid_response_missing', '阶段原回答尚未持久保存，可能已计费；不会自动重付')
@@ -917,9 +971,13 @@ def record_job_failure(db, p, job, reason):
         (s['batch_id'] for s in row.data['extractions'] if s['status'] != 'succeeded'), row.data['extractions'][-1]['batch_id'])
     stage = _stage(row, key); unknown = bool(stage.get('reserved_call_id')) and not stage.get('raw_response')
     row.status = 'response_unknown' if unknown else 'failed'
+    body_status = ((stage.get('raw_response') or {}).get('receipt') or {}).get('response_body_status')
+    body_unavailable = body_status in ('oversize','unsupported_encoding')
     _replace_stage(row, key, {**stage, 'status': row.status}, phase=row.status,
-        error_code='full_response_unknown' if unknown else 'full_worker_stopped',
-        error='原阶段可能已发送，原编号保留，禁止自动重付。' if unknown else '后台任务已停止；全部已保存抽取、原回答与人工稿均保留。')
+        error_code='full_response_unknown' if unknown else 'full_response_body_unavailable' if body_unavailable else 'full_worker_stopped',
+        error='原阶段可能已发送，原编号保留，禁止自动重付。' if unknown else
+              '云响应超出安全接收上限或采用不支持的编码；完整原答未保存，真实用量无法核对。已保留原调用和预算，不会自动重发。' if body_unavailable else
+              '后台任务已停止；全部已保存抽取、原回答与人工稿均保留。')
     audit(db, p, 'setup.report_full_reading.stopped', row.id, {'stage': key, 'response_unknown': unknown})
 
 
@@ -949,6 +1007,9 @@ def run(db, p, identity):
         row.status = 'response_unknown' if unknown else 'failed'
         detail = legacy.local_failure_detail(error)
         code, reason = detail if detail else ('full_candidate_invalid', '阶段结构、引用或合并去向未通过核对；原回答与费用回执保留，不会自动重付。')
+        body_status = ((stage.get('raw_response') or {}).get('receipt') or {}).get('response_body_status')
+        if body_status in ('oversize','unsupported_encoding'):
+            code, reason = ('full_response_body_unavailable', '云响应超出安全接收上限或采用不支持的编码；完整原答未保存，真实用量无法核对。已保留原调用和预算，不会自动重发。')
         if unknown:
             code, reason = 'full_response_unknown', '原阶段可能已发送，尚无已保存回答；原编号保留，禁止自动重付。'
         _replace_stage(row, key, {**stage, 'status': row.status, 'error_code': code, 'error': reason[:1000]},

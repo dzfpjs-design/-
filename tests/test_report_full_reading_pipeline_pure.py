@@ -1,5 +1,7 @@
 """Full reading preview boundaries; pure synthetic sources, no paid IO."""
 import copy
+import base64
+import json
 import socket
 import subprocess
 from types import SimpleNamespace as NS
@@ -232,12 +234,25 @@ def test_merge_prepares_frozen_task_version_after_all_extractions(version):
         'objects': [], 'relationships': [], 'businesses': [], 'questions': ['资料含义仍待人工核对。']}
     for stage in row.data['extractions']:
         call = str(uuid4())
-        raw = pipeline.seal({'value': copy.deepcopy(result), 'receipt': {'call_id': call}}, 'hash')
+        content=json.dumps(result,ensure_ascii=False)
+        receipt={'call_id':call,'completion_guard':'full-report-completion-v1','response_choice_count':1,
+                 'finish_reason':'stop','response_body_status':'complete','usage':{'total_tokens':7}}
+        response={'usage':receipt['usage'],'choices':[{'finish_reason':'stop','message':{'content':content}}]}
+        raw = pipeline.seal({'value': copy.deepcopy(result),'content':content,'receipt':receipt,
+            'provider_wire_base64':base64.b64encode(json.dumps(response,ensure_ascii=False).encode()).decode()}, 'hash')
         stage.update(status='succeeded', result=copy.deepcopy(result), result_hash=digest(result),
             reserved_call_id=call, raw_response=raw)
     row.status = 'awaiting_merge'; row.version = 2
     assert pipeline.check_row(row, p) is row
     command = pipeline.MergePreviewCommand(revision=2, request_id='fm_' + str(uuid4()))
+    legacy=copy.deepcopy(row)
+    for stage in legacy.data['extractions']:
+        old=stage['raw_response'];old.pop('provider_wire_base64');old['receipt']={'call_id':stage['reserved_call_id']}
+        old['hash']=digest({k:v for k,v in old.items() if k!='hash'})
+    assert pipeline.check_row(legacy,p) is legacy
+    with pytest.raises(HTTPException) as rejected:
+        pipeline.merge_preview(legacy,p,command,cap)
+    assert rejected.value.detail['code']=='full_completion_unverified'
     merged = pipeline.merge_preview(row, p, command, cap)
     prepared, _ = pipeline.prepared_stage(cap, value['generation_contract'], merged['payload'], merge=True)
     assert merged['messages_hash'] == digest(prepared)
