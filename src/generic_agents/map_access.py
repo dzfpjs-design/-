@@ -111,10 +111,16 @@ def route_guard(request:Request,db=Depends(session)):
     protected = protected or bool((request.method in {'GET', 'HEAD'} and raw_get) or
         (request.method == 'POST' and raw_post) or (request.method == 'PUT' and raw_put))
     if protected:
-        if (request.method in {'GET', 'HEAD'} and
-                (path == '/api/setup/report-evidence-readings' or
-                 path.startswith('/api/setup/report-evidence-readings/') or
-                 path == full_root or path.startswith(full_root + '/'))):
+        # These two POSTs are read-only lookups with ReadP, not writes.  Start
+        # their snapshot before authentication/policy queries use this session.
+        read_only_post = request.method == 'POST' and (
+            path == '/api/setup/report-evidence-delegated/budget-plan/find' or
+            re.fullmatch(r'/api/setup/report-evidence-delegated/' + uuid_part + r'/origin', path))
+        read_only_get = request.method in {'GET', 'HEAD'} and (
+            path == '/api/setup/report-evidence-readings' or
+            path.startswith('/api/setup/report-evidence-readings/') or
+            path == full_root or path.startswith(full_root + '/'))
+        if read_only_post or read_only_get:
             from .db import begin_private_read_snapshot
             begin_private_read_snapshot(db)
         from .security import authenticated
