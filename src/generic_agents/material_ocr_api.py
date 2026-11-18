@@ -2,7 +2,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from pydantic import Field, StrictInt, StrictStr
 from sqlalchemy import select, func
 from .contracts import Contract
@@ -131,6 +131,14 @@ def unit_scope(db,p,material_id,run_id,unit_id):
 @router.get('/materials/{material_id}/ocr/units/{unit_id}')
 def get_unit(material_id:str,unit_id:str,run_id:UUID,p:P,db:ReadDB):
     material,run,unit=unit_scope(db,p,material_id,run_id,unit_id);return ocr.unit_detail(db,p,material,run,unit)
+
+
+@router.get('/materials/{material_id}/ocr/units/{unit_id}/native-comparison')
+def native_comparison(material_id:str,unit_id:str,run_id:UUID,p:P,db:ReadDB):
+    from .material_ocr_native_comparison import comparison
+    material,run,unit=unit_scope(db,p,material_id,run_id,unit_id)
+    return JSONResponse(comparison(db,p,material,run,unit),headers={
+        'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
 
 
 def image_response(db,p,unit,expected):

@@ -15,7 +15,7 @@ let tmp,Component;
 test.before(async()=>{
  tmp=await mkdtemp(join(tmpdir(),'ocr-incremental-source-'));await mkdir(join(tmp,'src'));await mkdir(join(tmp,'empty-env'));
  // Only these public source files enter the external SSR root; no project config or env files are read.
- for(const name of ['MaterialOCRReview.jsx','ocr-page-window.mjs','material-ocr.css','material-ocr-contract.mjs','ocr-draft-journal.mjs','runtime-api.js','draft-cache-contract.mjs','configuration-numeric-wire.mjs','typed-numbers-v132.mjs'])await copyFile(join(src,name),join(tmp,'src',name));
+ for(const name of ['MaterialOCRReview.jsx','OCRNativeComparison.jsx','ocr-page-window.mjs','material-ocr.css','material-ocr-contract.mjs','ocr-draft-journal.mjs','runtime-api.js','draft-cache-contract.mjs','configuration-numeric-wire.mjs','typed-numbers-v132.mjs'])await copyFile(join(src,name),join(tmp,'src',name));
  const previous=globalThis.sessionStorage;globalThis.sessionStorage={getItem:()=>null};
  try{const output=await build({root:tmp,configFile:false,envDir:join(tmp,'empty-env'),cacheDir:join(tmp,'cache'),logLevel:'silent',build:{ssr:join(tmp,'src/MaterialOCRReview.jsx'),write:false,minify:false,rollupOptions:{external:['react'],output:{format:'es',inlineDynamicImports:true,paths:id=>id==='react'?new URL('../node_modules/react/index.js',import.meta.url).href:id}}}});const path=join(tmp,'component.mjs');await writeFile(path,output.output.find(x=>x.isEntry).code);Component=(await import(pathToFileURL(path))).default;}finally{globalThis.sessionStorage=previous;}
 });
