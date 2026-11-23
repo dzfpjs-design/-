@@ -10,7 +10,7 @@ from . import same_goal_advice_price_v307 as prices
 from . import workspace_advice_nonce_candidate_v2 as candidate
 from . import workspace_command_nonce_lock_v312 as legacy
 from .contracts import digest
-from .models import Audit
+from .models import Audit, Evidence
 from .relations import lock_current_actor
 from .security import Principal, require
 
@@ -49,6 +49,15 @@ def recover_only(db, p, body):
             and saved['workspace_id'] == p.workspace_id and saved['model_pin'] == body['model_pin']
             and saved['request_id'] == body['request_id'] and saved['body_hash'] == digest(body)
             and digest(saved['body']) == digest(body), '原价格申请正文或身份无法核对；未创建替代申请')
+        evidence = db.scalar(select(Evidence).where(Evidence.workspace_id == p.workspace_id,
+            Evidence.id == saved['official_evidence_ref']['evidence_id'])
+            .with_for_update(read=True).execution_options(populate_existing=True))
+        upload = db.scalar(select(Audit).where(Audit.workspace_id == p.workspace_id,
+            Audit.id == saved['upload_audit_ref']['id']).with_for_update(read=True)
+            .execution_options(populate_existing=True))
+        legacy.need(evidence is not None and upload is not None and upload.object_id == evidence.id
+            and upload.action == 'evidence.upload' and upload.actor_id == original.actor_id,
+            '原价格证据或上传记录无法核对；请保留原记录')
         expected = {'id': original.id, 'record_hash': digest(original.data)}
         # Use the same fixed receipt reader as the existing replay branch;
         # never call a possibly wrapped authorize or enter its new-price path.
