@@ -8,7 +8,7 @@ import os
 from time import monotonic
 
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.orm import Session
 
 from generic_agents import goal_queries, native_goals
@@ -47,6 +47,19 @@ def test_actual_goal_counters_match_candidate_for_persisted_v1_start(monkeypatch
         task = db.get(Task, case.task_id)
         assert goal_queries.call_count(db, p, task) == original_calls
         assert native_goals.total_steps(db, p, task) == original_steps
+        task.title = '未保存的真实目标标题编辑'
+        with db.no_autoflush:
+            assert goal_queries.call_count(db, p, task) == original_calls
+            assert native_goals.total_steps(db, p, task) == original_steps
+        assert task in db.dirty and task.title == '未保存的真实目标标题编辑'
+        db.commit()
+    with Session(engine()) as db:
+        assert db.get(Task, case.task_id).title == '未保存的真实目标标题编辑'
     comparison = {'queries': measured['queries'], 'seconds': round(monotonic() - start, 3)}
     print('SYNTHETIC_COUNTER_PERFORMANCE', {'baseline': baseline, 'candidate': comparison}, flush=True)
     print('V1_CANDIDATE_GOAL_COUNTERS_MATCH', flush=True)
+    with Session(engine()) as db:
+        db.execute(text('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY'))
+        task = db.get(Task, case.task_id)
+        assert common.read_snapshot(db, case.principal, task) == {'v1_calls': 1, 'queued_v2': 0}
+    print('V1_START_READ_ONLY_SNAPSHOT_MATCH', flush=True)

@@ -4,6 +4,8 @@ Only the original v1 lifecycle and pristine queued v2 records are readable.
 This independent reader has no route/worker and does not replace the v1 API.
 Unknown versions, incomplete originals, and unexplained records fail closed.
 """
+from uuid import UUID
+
 from sqlalchemy import func, or_, select
 
 from . import same_goal_advice_contracts_v302 as c
@@ -22,19 +24,40 @@ def read(db, p, task):
     must acquire the workspace nonce lock before calling this function. This
     reader itself does not take that lock or authorize a future mutation.
     """
-    with read_session.isolated(db) as reader:
+    with read_session.isolated(db, task.id) as reader:
         return _read(reader, p, task.id)
 
 
-def _read(db, p, task_id):
+@old.checked
+def read_snapshot(db, p, task):
+    """Display only, from this actual PG repeatable-read read-only snapshot.
+
+    This does not authorize a write or sender. Revocations committed after the
+    snapshot starts are visible only to a later request/snapshot.
+    """
+    try:
+        UUID(p.session_id)
+    except (ValueError, TypeError, AttributeError):
+        old.need(False, '只读展示必须使用真实用户会话')
+    with read_session.isolated(db, task.id) as reader:
+        old.need(reader.get_bind().dialect.name == 'postgresql')
+        isolation, read_only = reader.execute(select(func.current_setting('transaction_isolation'),
+            func.current_setting('transaction_read_only'))).one()
+        old.need(read_only == 'on' and isolation in {'repeatable read', 'serializable'},
+            '只读展示需要一致的数据库快照；未用于授权或执行')
+        return _read(reader, p, task.id, lock=False)
+
+
+def _read(db, p, task_id, *, lock=True):
     from . import same_goal_advice_execution_v308 as execution
 
     with db.no_autoflush:
         old._reader(db, p)
-        task = db.scalar(select(Task).where(Task.workspace_id == p.workspace_id,
-            Task.id == task_id).with_for_update(read=True).execution_options(populate_existing=True))
+        query = select(Task).where(Task.workspace_id == p.workspace_id, Task.id == task_id)
+        if lock: query = query.with_for_update(read=True)
+        task = db.scalar(query.execution_options(populate_existing=True))
         old.need(task is not None)
-        http_session = v2._lock_current_reader(db, p)
+        http_session = v2._lock_current_reader(db, p) if lock else v2._lock_current_reader(db, p, lock=False)
         plans = old._rows(db, p, Plan, or_(
             (Plan.task_id == task.id) & Plan.data['schema'].as_string().startswith('same-goal-advice-', autoescape=True),
             Plan.data['preparation_snapshot']['scope']['task_id'].as_string() == task.id))
@@ -45,7 +68,8 @@ def _read(db, p, task_id):
                 prep, job = old._saved(db, p, task, plan)
                 legacy.append((plan, prep, job, execution.checked(db, p, task, plan, prep, job)))
             elif schema == v2.PLAN:
-                prep, job = v2.read_queued(db, p, task, plan)
+                prep, job = (v2.read_queued(db, p, task, plan) if lock else
+                    v2._read_queued(db, p, task.id, plan.id, lock=False))
                 queued.append((plan, prep, job))
             else:
                 old.need(False, '业务建议记录版本未知，保留原记录等待核对')

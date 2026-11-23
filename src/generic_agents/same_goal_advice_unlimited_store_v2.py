@@ -46,7 +46,7 @@ def accepted_data(plan_id, prep, job_id, key):
         'job_id': job_id, 'job_key': key}
 
 
-def _lock_current_reader(db, p):
+def _lock_current_reader(db, p, *, lock=True):
     """Protect the existing read-role semantics through this transaction.
 
     A real HTTP session is held and checked; descriptive internal worker
@@ -69,7 +69,9 @@ def _lock_current_reader(db, p):
             AuthSession.id == p.session_id, AuthSession.revoked.is_(False),
             AuthSession.expires_at > func.clock_timestamp())
         locked.append(AuthSession)
-    value = db.scalar(stmt.with_for_update(read=True, of=locked).execution_options(populate_existing=True))
+    if lock:
+        stmt = stmt.with_for_update(read=True, of=locked)
+    value = db.scalar(stmt.execution_options(populate_existing=True))
     old_store.need(value == p.user_id, '当前账号、工作区角色或会话无法核对；未读取资料')
     return http_session
 
@@ -78,22 +80,24 @@ def _lock_current_reader(db, p):
 def read_queued(db, p, task, plan):
     """Authenticate saved bytes; never checks current source or grants work."""
     old_store.need(type(p) is Principal and type(task) is Task and type(plan) is Plan)
-    with read_session.isolated(db) as reader:
+    with read_session.isolated(db, task.id) as reader:
         return _read_queued(reader, p, task.id, plan.id)
 
 
-def _read_queued(db, p, task_id, plan_id):
+def _read_queued(db, p, task_id, plan_id, *, lock=True):
     with db.no_autoflush:
         # Writers take the Task lock before actor/Plan/Job locks. Holding a
         # compatible read lock in that same order prevents an in-flight
         # claimant from making the returned queued state stale mid-read.
         old_store._reader(db, p)
-        task = db.scalar(select(Task).where(Task.workspace_id == p.workspace_id, Task.id == task_id)
-            .with_for_update(read=True).execution_options(populate_existing=True))
+        query = select(Task).where(Task.workspace_id == p.workspace_id, Task.id == task_id)
+        if lock: query = query.with_for_update(read=True)
+        task = db.scalar(query.execution_options(populate_existing=True))
         old_store.need(task is not None)
-        http_session = _lock_current_reader(db, p)
-        plan = db.scalar(select(Plan).where(Plan.workspace_id == p.workspace_id,
-            Plan.task_id == task.id, Plan.id == plan_id).with_for_update(read=True).execution_options(populate_existing=True))
+        http_session = _lock_current_reader(db, p) if lock else _lock_current_reader(db, p, lock=False)
+        query = select(Plan).where(Plan.workspace_id == p.workspace_id, Plan.task_id == task.id, Plan.id == plan_id)
+        if lock: query = query.with_for_update(read=True)
+        plan = db.scalar(query.execution_options(populate_existing=True))
         old_store.need(plan is not None)
         data = plan.data
         old_store.need(plan.workspace_id == task.workspace_id == p.workspace_id and plan.task_id == task.id
@@ -135,8 +139,9 @@ def _read_queued(db, p, task_id, plan_id):
         originals = old_store._rows(db, p, Job, or_(Job.id == pin['id'], Job.idempotency_key == key,
             Job.data['plan_id'].as_string() == plan.id))
         old_store.need(len(originals) == 1)
-        job = db.scalar(select(Job).where(Job.workspace_id == p.workspace_id, Job.id == originals[0].id)
-            .with_for_update(read=True).execution_options(populate_existing=True))
+        query = select(Job).where(Job.workspace_id == p.workspace_id, Job.id == originals[0].id)
+        if lock: query = query.with_for_update(read=True)
+        job = db.scalar(query.execution_options(populate_existing=True))
         old_store.need(job is not None)
         old_store.need(job.id == pin['id'] and job.kind == PREPARE_KIND and job.idempotency_key == key
             and job.status == 'queued' and job.attempts == 0 and job.lease_token is None and job.lease_until is None
