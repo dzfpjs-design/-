@@ -9,6 +9,7 @@ import NativeQueryEditor,{SavedQueryGoal,NativeQueryResult} from './NativeQueryE
 import NativeAcquisitionStudio from './NativeAcquisitionStudio';
 import GoalConflictObservationV259,{GoalConflictRecoveryV259} from './GoalConflictObservationV259';
 import NativeMethodExperience from './NativeMethodExperience';
+import GoalBudgetDisplayCandidate from './GoalBudgetDisplayCandidate';
 import {buildNativeGoal,defaultNativeGoal} from './native-goal-contract.mjs';
 import {SavedAction} from './DataNeedStudio';
 import {measurementUnit} from './measurement-unit-v342.mjs';
@@ -106,8 +107,9 @@ export default function NativeGoalStudio({task,account,Btn,locked,stopLocked=fal
  const continuationVerified=!!acceptedContinuation||continuationProof?.formal_completion_verified===true;
  const evidenceRows=[...(goal?.check?.evidence?.evidence||[]),...(goal?.check?.evidence?.observation_evidence||[])],evidenceOwner=stableStringify([scopeKey,goal?.check?.evaluation?.basis_hash||null,evidenceRows]),evidencePageCount=Math.max(1,Math.ceil(evidenceRows.length/10)),evidencePage=evidencePageState.owner===evidenceOwner?Math.min(evidencePageState.index,evidencePageCount-1):0,evidenceStart=evidencePage*10,evidenceEnd=Math.min(evidenceRows.length,evidenceStart+10);
  function showEvidencePage(index){setEvidencePageState({owner:evidenceOwner,index:Math.max(0,Math.min(index,evidencePageCount-1))});}
- if(!identityReady)return <section className="native-goal-studio media-form"><h3>业务目标与完成条件</h3><p role="status">当前账号与工作区尚未核对，本机目标稿暂不展示；原输入和原请求保留，不会自动发送。</p>{error&&<p role="alert">{error}</p>}<Btn disabled={busy} onClick={verifyIdentity}>重新核对当前账号</Btn></section>;
- return <section className="native-goal-studio media-form"><div className="section-title"><h3>业务目标与完成条件</h3><Btn disabled={busy} onClick={refresh}>更新目标核查进度</Btn></div>
+ if(!identityReady)return <section key="identity-unverified" className="native-goal-studio media-form"><h3>业务目标与完成条件</h3><p role="status">当前账号与工作区尚未核对，本机目标稿暂不展示；原输入和原请求保留，不会自动发送。</p>{error&&<p role="alert">{error}</p>}<Btn disabled={busy} onClick={verifyIdentity}>重新核对当前账号</Btn></section>;
+ return <section key="identity-verified" className="native-goal-studio media-form"><div className="section-title"><h3>业务目标与完成条件</h3><Btn disabled={busy} onClick={refresh}>更新目标核查进度</Btn></div>
+ {goal?.goal_confirmed&&!accessBlocked&&<GoalBudgetDisplayCandidate key={'goal-budget:'+scopeKey} taskId={task.id} scopeKey={scopeKey} request={json} Btn={Btn} onDenied={e=>{setIdentityReady(false);onPermissionIssue?.(e);}}/>}
  <details className="media-form"><summary>本机目标稿与原请求恢复</summary><p>每页输入独立保留；恢复稿不会自动提交，原请求沿原编号核对。</p>{journalNotice&&<p role="status">{journalNotice}</p>}{memoryUnsaved&&<p role="alert">有输入尚未保存到本机，请留在本页，存储恢复后另存本页稿。</p>}<Btn disabled={busy||!journal.current} onClick={()=>localDraftPage()}>读取本机目标稿</Btn><Btn disabled={busy||account.role==='viewer'||!journal.current?.canLock} onClick={()=>preserveLocal()}>另存本页目标稿并核对原请求</Btn>{localDrafts.map(item=><p key={item.key}>{item.label} <Btn disabled={busy||account.role==='viewer'||!journal.current?.canLock} onClick={()=>preserveLocal(item.key)}>保留本页并恢复此稿</Btn></p>)}{draftCursor&&<Btn disabled={busy} onClick={()=>localDraftPage(true)}>读取更多本机目标稿</Btn>}</details>
  {locked&&<p>当前步骤还有未保存内容或待核请求。确认、核查和验收前请先保存或恢复原步骤。停止目标可单独进行，原人稿和待核提交先独立保留。</p>}{error&&<p role="alert">{error}</p>}{cacheError&&<p role="alert">{cacheError}</p>}
  {executionBlockedReason&&<p role="alert">{executionBlockedReason} 新的目标执行暂不可用；原稿、原请求核对、停止和历史仍保留。</p>}

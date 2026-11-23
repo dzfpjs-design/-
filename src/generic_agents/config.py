@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     # Server-owned build selection lets an isolated runtime verify new UI assets
     # without replacing the files served to existing users before deployment.
     setup_build_dir: Path | None = None
+    # Display-only Goal totals; can be disabled by the server operator.
+    # Never used to grant execution or send.
+    goal_budget_display_preview_enabled: bool = True
     model_config = SettingsConfigDict(env_prefix="GA_", env_file=".env", extra="ignore")
     database_url: str
     # Explicit process mode; no_idle closes returned connections immediately.

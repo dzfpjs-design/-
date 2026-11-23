@@ -50,6 +50,7 @@ async function harness(run){
    const base='/api/workspace/tasks/'+state.task.id;
    if(path===base+'/goal/export'){assert.equal(method,'GET');assert.ok(state.exportRaw);return new Response(state.exportRaw,{headers:{'Content-Type':'application/json'}});}
    if(path===base+'/goal'&&method==='GET')return respond(state.goal);
+   if(path===base+'/goal/budget-display'&&method==='GET')return respond({detail:'目标计数展示暂不可用'},404);
    if(path===base+'/goal'&&method==='POST'){
     const outbox=Array.from({length:storage.length},(_,i)=>storage.key(i)).find(key=>key.startsWith('ga-native-goal-v132:')&&key.endsWith(':outbox'));
     assert.ok(outbox,'original typed request is durable before POST');assert.equal(JSON.parse(storage.getItem(outbox)).exact_body,options.body);

@@ -28,6 +28,7 @@ export function conflictFixtureV259(){
   }
   if(p.startsWith(base+'/')){const id=p.slice(base.length+1),row=[...state.commands.values()].find(row=>row.receipt.id===id);if(row){if(state.detailError)throw state.detailError;return copy(row.detail);}}
   if(p==='/workspace/tasks/'+taskId+'/goal'&&options.method!=='POST')return copy(state.goal);
+  if(p==='/workspace/tasks/'+taskId+'/goal/budget-display'&&options.method!=='POST')throw Object.assign(Error('目标计数展示暂不可用'),{status:404});
   const ancillary=['/query-proposals','/supporting-queries','/intelligent-plan','/goal/acquisitions','/experience'];if(ancillary.some(tail=>p==='/workspace/tasks/'+taskId+tail)&&options.method!=='POST')throw Object.assign(Error('本合成传输不提供该独立子链'),{status:503});
   state.unexpected.push((options.method||'GET')+' '+path);throw Object.assign(Error('Unexpected synthetic route '+path),{status:500});
  }

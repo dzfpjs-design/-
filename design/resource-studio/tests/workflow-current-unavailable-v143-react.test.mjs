@@ -47,6 +47,7 @@ async function harness(kind,run){
    if(path==='/api/me'){assert.equal(method,'GET');return respond(account);}
    if(path===base+'/ability-requests/'+nonce){assert.equal(method,'GET');return respond({request_id:nonce,task_id:taskID,actor_id:account.user_id,saved:false,status:'unknown',request_hash:null,step_id:null,visit:null,result_version:null,task_version:3,task_status:'workflow_waiting',current_step_id:step.id,current_visit:0});}
    if(path===base+'/goal'&&method==='GET'){const gate=state.goalReadGate;if(gate)await gate.promise;return respond(state.goal);}
+   if(path===base+'/goal/budget-display'&&method==='GET')return respond({detail:'目标计数展示暂不可用'},404);
    if(path===base+'/goal/requests/recover'){
     assert.equal(method,'POST');const body=JSON.parse(options.body);assert.equal(body.operation,'check');assert.equal(body.action,'probe');assert.deepEqual(body.original_request,{request_id:nonce,expected_version:3,reason:'原核对请求完整说明'});return respond({version:3,saved:true,abandoned:false});
    }

@@ -193,6 +193,8 @@ from .mqtt_domain_options import router as mqtt_domain_options_router
 app.include_router(mqtt_domain_options_router)
 from .workspace_api import router as workspace_router
 app.include_router(workspace_router)
+from .goal_budget_display_candidate_api import router as goal_budget_display_candidate_router
+app.include_router(goal_budget_display_candidate_router)
 from .native_cases_api import router as native_cases_router
 app.include_router(native_cases_router)
 from .native_method_suggestions_api import router as native_method_suggestions_router
