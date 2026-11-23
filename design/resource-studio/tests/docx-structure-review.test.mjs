@@ -24,6 +24,18 @@ const candidate = (kind,text,n=1) => ({kind,text,review_required:true,location:{
 const response = (candidates=[]) => ({schema:'docx-structure-audit-v1',status:'review_required',counts:{top_level_directories:1,textboxes_all_branches:1,alternate_content:1},issues:[{code:'directory',message:'目录内容需要核对。'}],candidates});
 async function click(element) { await act(async()=>{element.click();await wait();}); }
 
+test('特殊连字符不被静默隐藏并提醒参照原件',async()=>{
+  const dom=setup(),Component=await component(),root=require('react-dom/client').createRoot(document.getElementById('root'));
+  try {
+    await act(async()=>root.render(React.createElement(Component,{account,materialID:'doc-1',requestJSON:async()=>response([candidate('textbox','\u201120\u00ad50')])})));
+    await click(document.querySelector('summary'));
+    const text=document.body.textContent;
+    assert.match(text,/‑20［可选连字符］50/);
+    assert.match(text,/可能是负号或词内连字符/);
+    assert.match(text,/不代表排版时一定显示/);
+  } finally { await act(async()=>root.unmount());teardown(dom); }
+});
+
 test('仅展开时只读加载，区分候选与原文事实，并显示可定位来源',async()=>{
   const dom=setup(),Component=await component(),root=require('react-dom/client').createRoot(document.getElementById('root')),calls=[];
   const requestJSON=async(path,opts)=>{calls.push({path,opts});return response([candidate('directory_entry','示例目录'),candidate('textbox','示例文本框',3)]);};

@@ -18,6 +18,7 @@ def sample_docx():
       <w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p>
       <w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/>
       </w:docPartObj></w:sdtPr><w:sdtContent><w:p><w:r><w:t>Contents entry</w:t>
+      </w:r></w:p><w:p><w:r><w:noBreakHyphen/><w:t>20</w:t><w:softHyphen/><w:t>50</w:t>
       </w:r></w:p></w:sdtContent></w:sdt></w:body></w:document>'''
     data = io.BytesIO()
     with zipfile.ZipFile(data, 'w') as archive:
@@ -40,6 +41,9 @@ def test_audit_is_read_only_workspace_scoped_and_checks_source_integrity(client)
     assert details.status_code == 200
     assert any(item['text'] == 'Contents entry' and item['review_required']
                for item in details.json()['candidates'])
+    assert any(item['text'] == '\u201120\u00ad50' and item['review_required']
+               for item in details.json()['candidates'])
+    assert client.get(url + '/docx-structure', params={'include_candidates': 'true'}).json() == details.json()
     assert client.get(url).json() == before
     assert client.get(url + '/content').content == original
 

@@ -47,7 +47,7 @@ function StructurePanel({materialID,requestJSON}){
   };
   return <details className="docx-structure-review" onToggle={event=>event.currentTarget.open?load():cancel()}>
     <summary>核对 Word 目录与文本框</summary>
-    <p>这里仅展示顶层目录条目和按备用内容单分支提取的文本框候选；修订、图像及其他正文仍需结合原件核对。以下内容均待核对，不代表正文已完整解析或业务内容已核实。</p>
+    <p>这里仅展示顶层目录条目和按备用内容单分支提取的文本框候选；修订、图像及其他正文仍需结合原件核对。非断行连字符可能是负号或词内连字符，请结合原件判断；可选连字符标为“［可选连字符］”，不代表排版时一定显示。以下内容均待核对，不代表正文已完整解析或业务内容已核实。</p>
     {state.kind==='loading'&&<p role="status">正在读取文档结构，请稍候…</p>}
     {state.kind==='error'&&<div role="alert"><p>{state.denied?'当前账号无法读取这份资料的结构，请核对资料与工作区权限。':'未能读取文档结构，请检查资料状态或稍后重试。'}</p><button type="button" onClick={load}>重试读取</button></div>}
     {state.kind==='ready'&&<>
@@ -58,7 +58,7 @@ function StructurePanel({materialID,requestJSON}){
         <p>本次检出目录条目和文本框 {state.data.candidates.length} 条候选，当前显示 {Math.min(limit,state.data.candidates.length)} 条。文本框可能来自备用分支，不代表原文中一定可见。</p>
         <ol>{state.data.candidates.slice(0,limit).map((item,index)=><li key={index}>
           <strong>{item.kind==='directory_entry'?'目录条目候选':'文本框候选'} · 待核对</strong>
-          <p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{item.text}</p>
+          <p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{item.text.replaceAll('\u00ad','［可选连字符］')}</p>
           <small>来源：Word 文档主体第 {item.location.body_index} 项，结构路径 {item.location.child_path.join(' / ')||'主体'}（非页码）。请与原文件核对。</small>
         </li>)}</ol>
         {limit<state.data.candidates.length&&<button type="button" onClick={()=>setLimit(n=>n+PAGE_SIZE)}>显示更多候选</button>}

@@ -28,6 +28,18 @@ def archive(xml):
 
 
 class StructureAuditTest(unittest.TestCase):
+    def test_candidates_preserve_special_hyphens_without_changing_original_parse(self):
+        data = document('''<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/>
+          </w:docPartObj></w:sdtPr><w:sdtContent><w:p><w:r><w:noBreakHyphen/><w:t>20</w:t>
+          <w:softHyphen/><w:t>50</w:t></w:r></w:p></w:sdtContent></w:sdt>
+          <w:p><w:txbxContent><w:p><w:r><w:noBreakHyphen/><w:t>10</w:t></w:r>
+          <w:del><w:r><w:noBreakHyphen/><w:t>deleted</w:t></w:r></w:del></w:p></w:txbxContent></w:p>''')
+        before = parse_document(data, 'example.docx')
+        result = audit.audit_docx_structure(data, include_candidates=True)
+        self.assertEqual([x['text'] for x in result['candidates']], ['\u201120\u00ad50', '\u201110'])
+        self.assertTrue(all(x['review_required'] for x in result['candidates']))
+        self.assertEqual(parse_document(data, 'example.docx'), before)
+
     def test_separate_directory_and_single_visible_textbox_without_renumbering_v1(self):
         data = document('''<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/>
             </w:docPartObj></w:sdtPr><w:sdtContent><w:p><w:r><w:t>Index entry</w:t></w:r></w:p>

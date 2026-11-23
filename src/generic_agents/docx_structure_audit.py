@@ -116,6 +116,10 @@ def audit_docx_structure(content: bytes, *, include_candidates: bool = False) ->
                 continue
             if item.tag == W + 't':
                 result.append(item.text or '')
+            elif item.tag == W + 'noBreakHyphen':
+                result.append('\u2011')
+            elif item.tag == W + 'softHyphen':
+                result.append('\u00ad')
             elif item.tag == W + 'tab':
                 result.append('\t')
             elif item.tag in (W + 'br', W + 'cr'):
