@@ -7,6 +7,7 @@ maps stay local; messages contain only the anonymous closed CloudRequest.
 import copy
 import hashlib
 import json
+import re
 
 from . import business_uuid_projection_v307 as uuids
 from . import same_goal_advice_contracts_v302 as c
@@ -16,6 +17,7 @@ from .cloud_business_reasoning_v197 import strict_json
 from .contracts import digest
 from .typed_payload_codec_v131 import canonical_json
 from .workflow_goal_evaluation_store_v288 import PRIVATE_TEXT
+from fastapi import HTTPException
 
 SCHEMA = 'same-goal-advice-private-projection-v307'
 FRAME = 'same-goal-advice-current-frame-v305'
@@ -25,6 +27,29 @@ _FRAME_KEYS = {'schema', 'source_record', 'decision_input', 'capability_pins', '
     'instruction', 'evidence_ids', 'model_pin'}
 _PROJECTION_KEYS = {'schema', 'plan_id', 'preparation_snapshot_hash', 'local_input_hash',
     'aliases', 'mapping_hash', 'cloud_request', 'projection_hash'}
+
+
+def _reject_known_compact_ids(outbound, *, aliases):
+    """Fail closed for exact compact spellings, without rewriting evidence.
+
+    Only canonical UUIDs already known to the server inventory are checked;
+    this does not assert that unrelated arbitrary text is anonymous. Even a
+    real digest gets no exception when it contains a known compact identifier:
+    a caller can choose its request UUID to match a prefix of a genuine SHA.
+    The source, digest and citation offsets remain untouched on failure.
+    """
+    compact = sorted({key.replace('-', '').lower() for key in aliases})
+    if not compact: return
+    pattern = re.compile('|'.join(map(re.escape, compact)), re.IGNORECASE)
+    def visit(value):
+        if type(value) is str:
+            if pattern.search(value):
+                raise HTTPException(409, '问题或资料的编号与摘要存在冲突，请生成新请求编号或人工核对资料；未发送。')
+        elif type(value) is dict:
+            for key, child in value.items(): visit(key); visit(child)
+        elif type(value) is list:
+            for child in value: visit(child)
+    visit(outbound)
 
 
 def _public(value):
@@ -54,13 +79,13 @@ def _quotes(value):
 
 
 @sources.checked
-def derive(frame, preparation, *, evidence_parts, evidence_pins):
-    """Derive an anonymous request, without changing the original local input."""
+def _derive_model(frame, preparation, *, evidence_parts, evidence_pins, preparation_model):
+    """Shared projection; caller selects one exact closed preparation model."""
     inventory = {'frame': frame, 'preparation': preparation,
         'evidence_parts': evidence_parts, 'evidence_pins': evidence_pins}
     sources.need(len(canonical_json(inventory).encode('utf-8')) <= uuids.MAX_BYTES
         and type(frame) is dict and set(frame) == _FRAME_KEYS and frame['schema'] == FRAME)
-    prep = c._parse(c.PreparationSnapshot, preparation)
+    prep = c._parse(preparation_model, preparation)
     source = c._parse(c.SourceRecord, frame['source_record'])
     decision = c._parse(c.CloudDecisionInput, frame['decision_input']); c._check_decision(decision)
     sources.need(digest(decision) == digest(frame['decision_input'])
@@ -109,6 +134,7 @@ def derive(frame, preparation, *, evidence_parts, evidence_pins):
     projected = uuids.project(outbound, aliases=aliases)
     projected['decision_input'] = _quotes(projected['decision_input'])
     projected['input_hash'] = digest(projected['decision_input'])
+    _reject_known_compact_ids(projected, aliases=aliases)
     cloud = c.check_cloud_request(projected, forbidden_identifiers=aliases.keys())
     _public(cloud); sources.need(PRIVATE_TEXT.search(canonical_json(cloud)) is None)
     value = {'schema': SCHEMA, 'plan_id': namespace, 'preparation_snapshot_hash': prep['record_hash'],
@@ -119,12 +145,23 @@ def derive(frame, preparation, *, evidence_parts, evidence_pins):
 
 
 @sources.checked
+def derive(frame, preparation, *, evidence_parts, evidence_pins):
+    """Derive the original v302 request; never accept a v2 snapshot here."""
+    return _derive_model(frame, preparation, evidence_parts=evidence_parts,
+        evidence_pins=evidence_pins, preparation_model=c.PreparationSnapshot)
+
+
+@sources.checked
 def messages(projection):
     """Serialize only the closed anonymous request, never its local inventory."""
     sources.need(type(projection) is dict and set(projection) == _PROJECTION_KEYS
         and projection['schema'] == SCHEMA
         and projection['mapping_hash'] == digest(projection['aliases'])
         and projection['projection_hash'] == digest({key: value for key, value in projection.items() if key != 'projection_hash'}))
+    # Defense in depth for known aliases on this boundary. This is not a
+    # substitute for server-side rederivation from authenticated originals:
+    # a caller-supplied alias map could omit identifiers entirely.
+    _reject_known_compact_ids(projection['cloud_request'], aliases=projection['aliases'])
     cloud = c.check_cloud_request(projection['cloud_request'], forbidden_identifiers=projection['aliases'].keys())
     _public(cloud)
     content = {key: copy.deepcopy(cloud[key]) for key in ('question', 'registered_instruction', 'decision_input', 'input_hash')}

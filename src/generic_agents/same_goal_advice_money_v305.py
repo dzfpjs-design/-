@@ -187,10 +187,20 @@ def ceil_cost_minor(input_bound, output_bound, input_rate, output_rate):
 
 
 def _actual_request(prepared, model_pin, model_snapshot, budget):
+    limit = _parse(advice.Budget, budget)
+    return _actual_request_with_validated_limit(prepared, model_pin, model_snapshot, limit)
+
+
+def _actual_request_with_validated_limit(prepared, model_pin, model_snapshot, limit):
+    """Shared wire validation; caller must first validate its exact policy type.
+
+    The v1 entry above still requires its original closed Budget. New versions
+    may reuse this only after independently parsing their own closed policy;
+    this helper does not authorize a policy, a reservation, or a send.
+    """
     value = _parse(Prepared, prepared)
     pin = _parse(advice.CapabilityPin, model_pin)
     model = _parse(Manifest, model_snapshot)
-    limit = _parse(advice.Budget, budget)
     execution = model['execution']
     need(model['kind'] == 'foundation_model' and 'business' in model['allowed_agent_roles']
         and model['data_policy'].get('cloud_allowed') is True

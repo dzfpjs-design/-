@@ -384,8 +384,8 @@ def _cut(value):
     need(at.tzinfo is not None and at.utcoffset() is not None)
 
 
-def check_preparation(raw, *, manifest):
-    value = _parse(PreparationSnapshot, raw); cap = _manifest(manifest)
+def _check_preparation_model(raw, *, manifest, model):
+    value = _parse(model, raw); cap = _manifest(manifest)
     need(value['record_hash'] == record_hash(value) and value['request_hash'] == digest(value['request'])
         and value['request']['expected_goal_hash'] == value['scope']['goal_hash']
         and value['request']['expected_mature_head_hash'] == value['mature_head']['head_hash']
@@ -400,8 +400,12 @@ def check_preparation(raw, *, manifest):
     _cut(value['evaluation_cut']); return value
 
 
-def check_source(raw, *, preparation, manifest):
-    prep = check_preparation(preparation, manifest=manifest); cap = _manifest(manifest)
+def check_preparation(raw, *, manifest):
+    return _check_preparation_model(raw, manifest=manifest, model=PreparationSnapshot)
+
+
+def _check_source_model(raw, *, preparation, manifest, preparation_checker):
+    prep = preparation_checker(preparation, manifest=manifest); cap = _manifest(manifest)
     value = _parse(SourceRecord, raw)
     need(value['record_hash'] == record_hash(value) and value['plan_id'] == prep['scope']['analysis_plan_id']
         and all(value[key] == prep[key] for key in ('mature_head', 'original_query_ref', 'evaluation_query_ref', 'evaluation_cut')))
@@ -418,6 +422,11 @@ def check_source(raw, *, preparation, manifest):
             need(all(document['evidence_ref'][key] == selection['packet'][key] for key in ('evidence_id', 'sha256'))
                 and document['receipt_ref']['id'] == selection['packet']['id'])
     return value
+
+
+def check_source(raw, *, preparation, manifest):
+    return _check_source_model(raw, preparation=preparation, manifest=manifest,
+        preparation_checker=check_preparation)
 
 
 def check_cloud_request(raw, *, forbidden_identifiers):
@@ -482,10 +491,10 @@ def _check_decision(value):
     for conflict in value['known_conflicts']:base._conflict(conflict,facts)
 
 
-def check_preview(raw, *, preparation, source, manifest):
-    prep = check_preparation(preparation, manifest=manifest)
-    sources = check_source(source, preparation=prep, manifest=manifest)
-    value = _parse(PreviewRecord, raw)
+def _check_preview_model(raw, *, preparation, source, manifest, model, preparation_checker, source_checker):
+    prep = preparation_checker(preparation, manifest=manifest)
+    sources = source_checker(source, preparation=prep, manifest=manifest)
+    value = _parse(model, raw)
     from .business_uuid_projection_v307 import project_text
     instruction=project_text(prep['instruction'],namespace_id=prep['scope']['analysis_plan_id'],
         salt='same-goal-advice:'+prep['record_hash'])
@@ -511,16 +520,26 @@ def check_preview(raw, *, preparation, source, manifest):
     return value
 
 
-def check_plan(raw, *, preparation, manifest):
-    prep = check_preparation(preparation, manifest=manifest); value = _parse(ExecutionSnapshot, raw)
+def check_preview(raw, *, preparation, source, manifest):
+    return _check_preview_model(raw, preparation=preparation, source=source, manifest=manifest,
+        model=PreviewRecord, preparation_checker=check_preparation, source_checker=check_source)
+
+
+def _check_plan_model(raw, *, preparation, manifest, model, preparation_checker, preview_checker):
+    prep = preparation_checker(preparation, manifest=manifest); value = _parse(model, raw)
     need(value['record_hash'] == record_hash(value) and value['scope'] == prep['scope']
         and value['preparation_snapshot_hash'] == prep['record_hash']
         and value['start_request_hash'] == digest(value['start_request'])
         and value['start_request']['expected_goal_hash'] == prep['scope']['goal_hash']
         and value['start_request']['expected_mature_head_hash'] == prep['mature_head']['head_hash']
         and value['start_request']['preview_hash'] == value['preview']['preview_hash'])
-    check_preview(value['preview'], preparation=prep, source=value['source_record'], manifest=manifest)
+    preview_checker(value['preview'], preparation=prep, source=value['source_record'], manifest=manifest)
     return value
+
+
+def check_plan(raw, *, preparation, manifest):
+    return _check_plan_model(raw, preparation=preparation, manifest=manifest, model=ExecutionSnapshot,
+        preparation_checker=check_preparation, preview_checker=check_preview)
 
 
 def _seal(unsigned, checker, **kwargs):
