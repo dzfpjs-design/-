@@ -321,17 +321,20 @@ def input_summary(req,cap):
     return summary,digest(prepared_messages)
 
 
-def preview_budget(db,p,token_bound,*,detailed=False):
-    # 仅查询，不能为预览创建预算行或预留调用；网关发送前仍串行重查。
-    from .config import settings
-    budget=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,Job.idempotency_key=='cloud-budget:'+str(now().date())))
-    used=(budget.data if budget else {'tokens':0,'calls':0})
-    if used['tokens']+token_bound>settings().cloud_daily_token_limit or used['calls']>=settings().cloud_daily_call_limit:
+def preview_budget(db,p,token_bound,*,cap,detailed=False):
+    # 预览只读；能力和账本由与网关相同的策略重新核对，发送前仍须持锁重查。
+    from .cloud_budget_policy import budget_status
+    from .gateway import ModelBlocked
+    try:
+        status = budget_status(db,p,cap,token_bound)
+    except ModelBlocked:
+        raise HTTPException(409,'当前模型用量策略或记录无法核对；本次未预留或发送，请稍后重试。') from None
+    if not status['available']:
         if detailed:
-            limit=settings().cloud_daily_token_limit
+            limit=status['token_limit']
             raise HTTPException(409,
-                f"完整理解这些资料需要保守预留{token_bound:,} token（模型用量单位），今日剩余额度{max(0,limit-used['tokens']):,} token，"
-                f"每日上限{limit:,} token；今日调用次数{used['calls']}/{settings().cloud_daily_call_limit}。"
+                f"完整理解这些资料需要保守预留{token_bound:,} token（模型用量单位），今日剩余额度{max(0,limit-status['used_tokens']):,} token，"
+                f"每日上限{limit:,} token；今日调用次数{status['used_calls']}/{status['call_limit']}。"
                 "本次未预留、未发送。请由平台管理员调整每日云模型预算后重新核对；预留量包含输入和输出余量，不等于实际收费量。")
         raise HTTPException(409,'完整资料单次理解的保守预留超过工作区今日剩余云模型预算；本次未预留或发送，请等待额度恢复或由管理员调整')
 
@@ -435,7 +438,7 @@ def prepare(db, p, body):
             payload.update(edit_mode=True,edit_handles=edit_handles,edit_scope_hash=digest(edit_handles))
         payload['projection_hash']=digest(payload['chunks'][0])
         payload['input_summary'],payload['first_dispatch_messages_hash']=input_summary(payload,cap)
-        preview_budget(db,p,payload['input_summary']['token_bound'],detailed=body.contract_version in {4,5,6})
+        preview_budget(db,p,payload['input_summary']['token_bound'],cap=cap,detailed=body.contract_version in {4,5,6})
         payload['preview_hash']=digest(payload)
         return payload
     fixed_size=len(json.dumps({'context':context,'instruction':scrub(body.instruction)},ensure_ascii=False).encode())

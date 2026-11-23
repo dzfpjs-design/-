@@ -464,7 +464,10 @@ def preview_setup(monkeypatch):
     monkeypatch.setattr(rd, 'workspace_draft', lambda *a, **k: config)
     monkeypatch.setattr(rd, 'freeze_sources', lambda *a, **k: source)
     monkeypatch.setattr(rd.old(), 'model', lambda *a, **k: cap)
-    monkeypatch.setattr(rd.old(), 'preview_budget', lambda *a, **k: budgets.append(a[2]))
+    def check_budget(*a, **kwargs):
+        assert kwargs['cap'] is cap
+        budgets.append(a[2])
+    monkeypatch.setattr(rd.old(), 'preview_budget', check_budget)
     monkeypatch.setattr(rd, 'cloud_json', lambda *a, **k: pytest.fail('preview used model'))
     return source, cap, config, budgets
 

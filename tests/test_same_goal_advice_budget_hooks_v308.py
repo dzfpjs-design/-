@@ -60,6 +60,13 @@ def reserve_io(monkeypatch, *, deny=None):
     monkeypatch.setattr(budget, 'Session', lambda engine: db)
     monkeypatch.setattr(budget, 'engine', lambda: None)
     monkeypatch.setattr(budget, 'settings', lambda: NS(cloud_daily_token_limit=10000, cloud_daily_call_limit=10))
+    # These tests isolate same-goal money hooks with a deliberately minimal DB
+    # spy. Real provider/ledger admission is covered by separate PostgreSQL tests.
+    from generic_agents import cloud_budget_policy
+    monkeypatch.setattr(cloud_budget_policy, '_provider', lambda *args, **kwargs: 'qwen')
+    monkeypatch.setattr(cloud_budget_policy, 'budget_status', lambda _db, _p, _cap, bound, **kw:
+        {'available': daily.data['tokens'] + bound <= 10000 and daily.data['calls'] < 10,
+         'unlimited': False})
     monkeypatch.setattr(spending, 'prepare_reservation', prepare)
     monkeypatch.setattr(spending, 'bind_reservation', bind)
     return s, events, added, daily

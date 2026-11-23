@@ -552,8 +552,9 @@ def build_payload(db, p, source, draft_revision, value, configuration_revision, 
         'workspace_id': p.workspace_id, 'analysis_id': source['analysis_id'], 'result_hash': source['result_hash'],
         'source_hash': source['hash'], 'request_id': str(request_id), 'draft_revision': draft_revision,
         'value_hash': digest(value), 'answers_hash': digest(value['answers']), 'cloud_answers_hash': digest(answers)}
-    payload['input_summary'], payload['first_dispatch_messages_hash'] = old.input_summary(payload, old.model(db, p, value['model_id']))
-    old.preview_budget(db, p, payload['input_summary']['token_bound'], detailed=True)
+    cap = old.model(db, p, value['model_id'])
+    payload['input_summary'], payload['first_dispatch_messages_hash'] = old.input_summary(payload, cap)
+    old.preview_budget(db, p, payload['input_summary']['token_bound'], cap=cap, detailed=True)
     payload['preview_hash'] = digest(payload)
     return payload, body, answers
 

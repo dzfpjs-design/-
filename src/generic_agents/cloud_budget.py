@@ -34,16 +34,22 @@ def reserve(p, cap, token_bound, request_hash):
     with Session(engine()) as db:
         from .same_goal_advice_spending_v308 import prepare_reservation, bind_reservation
         spending = prepare_reservation(db, p, cap, token_bound, request_hash)
+        # Capability editors lock the capability before any daily ledger. Take
+        # a SHARE lock in the same order; no request metadata grants exemption.
+        from .cloud_budget_policy import budget_status, _provider, MARKER_KEY, DEEPSEEK_UNLIMITED
+        _provider(db, p, cap, lock=True)
         db.execute(insert(Job).values(workspace_id=p.workspace_id, kind="cloud_budget", status="internal",
             idempotency_key=key, data={"day": day, "tokens": 0, "calls": 0})
             .on_conflict_do_nothing(index_elements=["workspace_id", "idempotency_key"]))
         budget = db.scalar(select(Job).where(Job.workspace_id == p.workspace_id,
             Job.idempotency_key == key).with_for_update())
-        if budget.data["tokens"] + token_bound > settings().cloud_daily_token_limit or budget.data["calls"] >= settings().cloud_daily_call_limit:
+        admission = budget_status(db, p, cap, token_bound, day=day)
+        if not admission['available']:
             raise BudgetDenied("已达到工作区每日云模型预算，请等待额度恢复或由管理员调整")
         budget.data = {**budget.data, "tokens": budget.data["tokens"]+token_bound, "calls": budget.data["calls"]+1}
+        policy_data = ({MARKER_KEY: DEEPSEEK_UNLIMITED} if admission['unlimited'] else {})
         call = CloudCall(workspace_id=p.workspace_id, capability_id=cap.id, reserved_tokens=token_bound,
-            charged_tokens=token_bound, data={"day": day, "request_hash": request_hash, "actor_id": p.user_id, **dispatch_data})
+            charged_tokens=token_bound, data={"day": day, "request_hash": request_hash, "actor_id": p.user_id, **dispatch_data, **policy_data})
         db.add(call); db.flush()
         bind_reservation(db, p, cap, call, spending)
         call_id = call.id; db.commit(); return call_id

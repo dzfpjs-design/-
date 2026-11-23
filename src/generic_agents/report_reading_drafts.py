@@ -378,7 +378,7 @@ def make_preview(db, p, body, *, check_budget=True):
     cap = old().model(db, p, str(body.model_id))
     value = build_preview(p, body, config.data, cap, freeze_sources(db, p, body.material_refs))
     if check_budget:
-        old().preview_budget(db, p, value['input_summary']['token_bound'], detailed=True)
+        old().preview_budget(db, p, value['input_summary']['token_bound'], cap=cap, detailed=True)
     return value
 
 

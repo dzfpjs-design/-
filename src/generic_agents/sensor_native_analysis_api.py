@@ -19,7 +19,7 @@ class Preview(Contract):
     packet_id:UUID
     model_id:UUID
     max_output_tokens:StrictInt=Field(ge=128,le=8192)
-    max_cost_fen:StrictInt=Field(ge=1,le=5000)
+    max_cost_fen:StrictInt|None=Field(default=None,ge=1,le=5000)
 class Send(Contract):
     request_id:UUID
     preview_hash:str=Field(pattern=r'^[0-9a-f]{64}$')
@@ -37,11 +37,11 @@ def same(row,p,task_id):
 def outcome(row,p,task_id):
     same(row,p,task_id)
     if row.kind==svc.STOP:return {'state':'cancelled'}
-    if row.kind!=svc.ANALYSIS:raise HTTPException(409,'原请求类型无法核对')
+    if row.kind not in svc.ANALYSIS_KINDS:raise HTTPException(409,'原请求类型无法核对')
     result=svc.public_analysis(row);return {'state':result['state'],'analysis':result}
 
 def uncertain(db,p,identity):
-    rows=list(db.scalars(select(Job).where(Job.workspace_id==p.workspace_id,Job.kind==svc.ANALYSIS,
+    rows=list(db.scalars(select(Job).where(Job.workspace_id==p.workspace_id,Job.kind.in_(svc.ANALYSIS_KINDS),
         Job.data['task_id'].as_string()==identity,Job.data['actor_id'].as_string()==p.user_id,
         Job.data['state'].as_string().in_(['dispatching','response_unknown']))))
     return sorted(row.data['request_id'] for row in rows if svc.public_analysis(row)['state']=='response_unknown')
@@ -62,7 +62,7 @@ def context(task_id:UUID,p:P,db:DB,page:int=Query(default=1,ge=1,le=10000)):
                 'input_rate_fen_per_million':value['input_cache_miss_minor_per_million'],'output_rate_fen_per_million':value['output_minor_per_million']}
         except HTTPException:available=False;price=None
         models.append({'id':cap.id,'name':cap.name,'provider':'deepseek','model':cap.data['execution']['model'],'version':cap.release_version,'price_available':available,'price':price,'max_output_tokens':cap.data['execution']['max_tokens']})
-    history=list(db.scalars(select(Job).where(Job.workspace_id==p.workspace_id,Job.kind==svc.ANALYSIS,Job.data['task_id'].as_string()==identity,Job.data['actor_id'].as_string()==p.user_id).order_by(Job.created_at.desc(),Job.id.desc()).offset((page-1)*50).limit(51)))
+    history=list(db.scalars(select(Job).where(Job.workspace_id==p.workspace_id,Job.kind.in_(svc.ANALYSIS_KINDS),Job.data['task_id'].as_string()==identity,Job.data['actor_id'].as_string()==p.user_id).order_by(Job.created_at.desc(),Job.id.desc()).offset((page-1)*50).limit(51)))
     return {'models':models,'analyses':[svc.public_analysis(x) for x in history[:50]],'page':page,'has_more':len(history)>50,'cloud_analysis_supported':True,'read_only':False}
 
 @router.post('/tasks/{task_id}/analyses/price')
@@ -112,7 +112,7 @@ def send(task_id:UUID,preview_id:UUID,body:Send,p:P,db:DB):
         if original.kind==svc.STOP:raise HTTPException(409,'原发送请求已安全停止')
         if original.data.get('fingerprint')!=fingerprint:raise HTTPException(409,'原发送请求与当前内容不一致')
         return outcome(original,p,identity)
-    prior=list(db.scalars(select(Job).where(Job.workspace_id==p.workspace_id,Job.kind==svc.ANALYSIS,
+    prior=list(db.scalars(select(Job).where(Job.workspace_id==p.workspace_id,Job.kind.in_(svc.ANALYSIS_KINDS),
         Job.data['task_id'].as_string()==identity,Job.data['actor_id'].as_string()==p.user_id,
         Job.data['state'].as_string().in_(['queued','dispatching','response_saved','response_unknown']))))
     unknown=False
@@ -130,7 +130,7 @@ def send(task_id:UUID,preview_id:UUID,body:Send,p:P,db:DB):
     if d['snapshot'].get('uncertain_request_ids',[])!=uncertain(db,p,identity):raise HTTPException(409,'前次发送状态已变化，请重新预览风险')
     svc.check_current(db,p,task,d['snapshot'])
     value={'task_id':identity,'actor_id':p.user_id,'request_id':rid,'preview_id':preview.id,'fingerprint':fingerprint,'state':'queued','packet_id':d['snapshot']['packet_id'],'model_id':d['snapshot']['model_pin']['id'],'snapshot':d['snapshot'],'snapshot_hash':body.preview_hash,'result':None,'receipt':None,'acknowledge_prior_uncertain':body.acknowledge_prior_uncertain}
-    row=Job(workspace_id=p.workspace_id,kind=svc.ANALYSIS,status='internal',idempotency_key=key,data=value);db.add(row);db.flush()
+    row=Job(workspace_id=p.workspace_id,kind=svc.ANALYSIS_UNLIMITED if d['snapshot']['quote'].get('schema')=='sensor-native-unlimited-quote-v2' else svc.ANALYSIS,status='internal',idempotency_key=key,data=value);db.add(row);db.flush()
     preview.data={**d,'used_by':rid};preview.version+=1;audit(db,p,'sensor.native.analysis_consented',task.id,{'analysis_id':row.id,'preview_id':preview.id,'snapshot_hash':body.preview_hash});db.commit()
     return outcome(row,p,identity)
 
@@ -142,7 +142,7 @@ def lookup(task_id:UUID,request_id:UUID,p:P,db:DB):
 @router.get('/tasks/{task_id}/analyses/history')
 def history(task_id:UUID,p:P,db:DB,page:int=Query(default=1,ge=1,le=10000)):
     identity=str(task_id);task=packets.history_access(db,p,identity,allow_admin_read=True)
-    rows=list(db.scalars(select(Job).where(Job.workspace_id==p.workspace_id,Job.kind==svc.ANALYSIS,Job.data['task_id'].as_string()==identity,Job.data['actor_id'].as_string()==task.owner_id).order_by(Job.created_at.desc(),Job.id.desc()).offset((page-1)*50).limit(51)))
+    rows=list(db.scalars(select(Job).where(Job.workspace_id==p.workspace_id,Job.kind.in_(svc.ANALYSIS_KINDS),Job.data['task_id'].as_string()==identity,Job.data['actor_id'].as_string()==task.owner_id).order_by(Job.created_at.desc(),Job.id.desc()).offset((page-1)*50).limit(51)))
     return {'analyses':[svc.public_analysis(row) for row in rows[:50]],'page':page,'has_more':len(rows)>50}
 
 @router.post('/tasks/{task_id}/analyses/requests/{request_id}/cancel')
@@ -151,7 +151,7 @@ def cancel(task_id:UUID,request_id:UUID,p:P,db:DB):
     packets.history_access(db,p,identity);row=find(db,p,key)
     if row:
         same(row,p,identity)
-        if row.kind==svc.ANALYSIS and row.data.get('state')=='queued':
+        if row.kind in svc.ANALYSIS_KINDS and row.data.get('state')=='queued':
             row=db.scalar(select(Job).where(Job.id==row.id).with_for_update().execution_options(populate_existing=True))
             if row.data.get('state')=='queued':row.data={**row.data,'state':'cancelled'};row.version+=1;audit(db,p,'sensor.native.analysis_cancelled',identity,{'analysis_id':row.id});db.commit()
         return outcome(row,p,identity)
@@ -160,7 +160,7 @@ def cancel(task_id:UUID,request_id:UUID,p:P,db:DB):
 @router.get('/tasks/{task_id}/analyses/{analysis_id}')
 def detail(task_id:UUID,analysis_id:UUID,p:P,db:DB):
     identity=str(task_id);task=packets.history_access(db,p,identity,allow_admin_read=True)
-    row=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,Job.id==str(analysis_id),Job.kind==svc.ANALYSIS))
+    row=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,Job.id==str(analysis_id),Job.kind.in_(svc.ANALYSIS_KINDS)))
     if not row:raise HTTPException(404,'未找到原分析')
     if row.data.get('task_id')!=identity or row.data.get('actor_id')!=task.owner_id:raise HTTPException(404,'未找到原分析')
     return {'analysis':svc.public_analysis(row)}
@@ -169,7 +169,7 @@ def detail(task_id:UUID,analysis_id:UUID,p:P,db:DB):
 def original(task_id:UUID,analysis_id:UUID,p:P,db:DB):
     import base64
     identity=str(task_id);task=packets.history_access(db,p,identity,allow_admin_read=True)
-    row=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,Job.id==str(analysis_id),Job.kind==svc.ANALYSIS))
+    row=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,Job.id==str(analysis_id),Job.kind.in_(svc.ANALYSIS_KINDS)))
     if not row or row.data.get('task_id')!=identity or row.data.get('actor_id')!=task.owner_id:raise HTTPException(404,'未找到原分析')
     capture=row.data.get('capture')
     if not isinstance(capture,dict) or not isinstance(capture.get('raw_base64'),str):raise HTTPException(409,'尚无可核对的原首答')

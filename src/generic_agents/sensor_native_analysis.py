@@ -21,7 +21,8 @@ from . import same_goal_advice_price_v307 as prices
 from . import same_goal_advice_money_v305 as money
 from . import same_goal_advice_store_v302 as advice_store
 
-PREVIEW='sensor_native_analysis_preview_v1';ANALYSIS='sensor_native_analysis_v1';STOP='sensor_native_analysis_stop_v1'
+PREVIEW='sensor_native_analysis_preview_v1';ANALYSIS='sensor_native_analysis_v1';ANALYSIS_UNLIMITED='sensor_native_analysis_unlimited_v2';STOP='sensor_native_analysis_stop_v1'
+ANALYSIS_KINDS=(ANALYSIS,ANALYSIS_UNLIMITED)
 NOTICE='以下均为设备读数或阈值线索，尚未现场核实；不能当作现场结论，也不能触发处置。'
 
 def preview_key(rid):return 'sensor-native-analysis-preview:'+rid
@@ -36,7 +37,7 @@ def model(db,p,identity):
         or execution.get('task')=='embedding' or execution.get('report_evidence_output') is not None
         or execution.get('secret_ref')!='DEEPSEEK_API_KEY' or 'business' not in cap.data.get('allowed_agent_roles',[])
         or cap.data.get('data_policy',{}).get('cloud_allowed') is not True):
-        raise HTTPException(409,'仅支持已发布、允许业务调用且已核定价格的 DeepSeek 模型')
+        raise HTTPException(409,'仅支持已发布且允许业务调用的 DeepSeek 模型')
     if type(execution.get('max_tokens')) is not int or not 128<=execution['max_tokens']<=8192:raise HTTPException(409,'模型输出上限未正确配置')
     return cap
 
@@ -72,7 +73,7 @@ def _material(packet):
     keys=('object_name','device_name','field_name','value','unit','quality','freshness','freshness_note','source_timestamp','received_at','status','threshold')
     return [{'ref':'R'+str(i+1),**{k:r.get(k) for k in keys}} for i,r in enumerate(packet['records'])]
 
-def prepare(db,p,task,packet,cap,max_output_tokens,max_cost_fen):
+def prepare(db,p,task,packet,cap,max_output_tokens,max_cost_fen,*,skip_optional_price=False):
     execution=cap.data['execution']
     if not 128<=max_output_tokens<=execution['max_tokens']:raise HTTPException(422,'输出上限超过模型配置')
     refs=['R'+str(i+1) for i in range(len(packet.data['packet']['records']))]
@@ -90,15 +91,22 @@ def prepare(db,p,task,packet,cap,max_output_tokens,max_cost_fen):
     schema_json=json.dumps(_schema(refs),ensure_ascii=False,sort_keys=True,separators=(',',':'))
     schema=json.loads(schema_json);prepared=transport.prepare(cap,raw_messages,schema,output_token_limit=max_output_tokens)
     if any(type(m.get('content')) is not str for m in prepared['messages']):raise HTTPException(409,'仅允许完整可核对的纯文字预览')
-    pin=advice_store._pin(cap);price_read=prices.current(db,p,pin);price=price_read['price']
+    pin=advice_store._pin(cap)
+    price_read=None
+    if not skip_optional_price:
+        try:price_read=prices.current(db,p,pin)
+        except HTTPException:
+            if max_cost_fen is not None:raise
+    price=price_read['price'] if price_read else None
     input_bound=prepared['text_bytes']+1024
-    cost=money.ceil_cost_minor(input_bound,max_output_tokens,price['input_cache_miss_minor_per_million'],price['output_minor_per_million'])
-    if cost>max_cost_fen:raise HTTPException(409,'保守费用上限超过本次允许金额')
-    quote={'currency':'CNY','maximum_cost_fen':cost,'user_limit_fen':max_cost_fen,'price_expires_at':price['expires_at'],
+    cost=money.ceil_cost_minor(input_bound,max_output_tokens,price['input_cache_miss_minor_per_million'],price['output_minor_per_million']) if price else None
+    if max_cost_fen is not None and cost>max_cost_fen:raise HTTPException(409,'保守费用上限超过本次允许金额')
+    quote={'currency':'CNY','maximum_cost_fen':cost,'user_limit_fen':max_cost_fen,'price_expires_at':price['expires_at'] if price else None,
         'provider_price_locked':False,'input_token_bound':input_bound,'output_token_bound':max_output_tokens,
-        'input_rate_fen_per_million':price['input_cache_miss_minor_per_million'],'output_rate_fen_per_million':price['output_minor_per_million']}
+        'input_rate_fen_per_million':price['input_cache_miss_minor_per_million'] if price else None,'output_rate_fen_per_million':price['output_minor_per_million'] if price else None}
+    if max_cost_fen is None:quote['schema']='sensor-native-unlimited-quote-v2'
     return {'raw_messages':raw_messages,'messages':prepared['messages'],'options':prepared['options'],'output_schema':schema,'schema_json':schema_json,
-        'prepared':prepared,'price':price,'price_basis_ref':price_read['basis_ref'],'quote':quote,'model_pin':pin,
+        'prepared':prepared,'price':price,'price_basis_ref':price_read['basis_ref'] if price_read else None,'quote':quote,'model_pin':pin,
         'model':{'id':cap.id,'name':cap.name,'provider':'deepseek','model':execution['model'],'version':cap.release_version},
         'task_id':task.id,'task_version':task.version,'task_title':task.title,'entity_ids':task.data['entity_ids'],
         'release_id':task.data['instance_release_id'],'object_binding_hash':task.data.get('object_definition_bindings_hash'),
@@ -113,12 +121,15 @@ def check_current(db,p,task,snapshot):
         or task.data.get('object_definition_bindings_hash')!=snapshot['object_binding_hash']):raise HTTPException(409,'任务或对象范围已变化，请重新预览')
     packet=_packet(db,p,task,snapshot['packet_id']);cap=model(db,p,snapshot['model_pin']['id'])
     if packet.data['packet_hash']!=snapshot['packet_hash'] or advice_store._pin(cap)!=snapshot['model_pin']:raise HTTPException(409,'原证据或模型已变化，请重新预览')
-    current=prepare(db,p,task,packet,cap,snapshot['quote']['output_token_bound'],snapshot['quote']['user_limit_fen'])
+    quote=snapshot['quote'];unlimited=quote.get('schema')=='sensor-native-unlimited-quote-v2'
+    if (unlimited and quote.get('user_limit_fen') is not None) or (not unlimited and type(quote.get('user_limit_fen')) is not int):
+        raise HTTPException(409,'预览用量策略无法核对')
+    current=prepare(db,p,task,packet,cap,quote['output_token_bound'],quote['user_limit_fen'],skip_optional_price=unlimited)
     # Price validity is time dependent; compare the registered basis and rates,
     # not the advancing clock. Prepared wire bytes must be exactly the preview.
-    if (current['price_basis_ref']!=snapshot['price_basis_ref'] or current['price']['record_hash']!=snapshot['price']['record_hash']
-        or current['prepared']!=snapshot['prepared'] or current['schema_json']!=snapshot['schema_json'] or current['output_schema']!=snapshot['output_schema']
-        or current['quote']!=snapshot['quote']):raise HTTPException(409,'价格或将发送内容已变化，请重新预览')
+    if ((not unlimited and (current['price_basis_ref']!=snapshot['price_basis_ref'] or current['price']['record_hash']!=snapshot['price']['record_hash'] or current['quote']!=quote))
+        or current['prepared']!=snapshot['prepared'] or current['schema_json']!=snapshot['schema_json'] or current['output_schema']!=snapshot['output_schema']):
+        raise HTTPException(409,'价格或将发送内容已变化，请重新预览')
     return cap
 
 def public_preview(row):
@@ -152,7 +163,7 @@ def _recover(workspace,identity):
     """Replay only a saved first answer; never invokes a model or device."""
     from .cloud_budget import finish_tx
     with Session(engine(),expire_on_commit=False) as db:
-        row=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind==ANALYSIS).with_for_update().execution_options(populate_existing=True))
+        row=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind.in_(ANALYSIS_KINDS)).with_for_update().execution_options(populate_existing=True))
         if not row or row.data.get('state')!='response_saved':return False
         d=row.data;capture=d.get('capture') or {};call_id=d.get('call_id')
         if not call_id or capture.get('call_id')!=call_id:return False
@@ -177,14 +188,14 @@ def process(workspace,identity):
     from .gateway import cloud_json
     from .models import User
     with Session(engine(),expire_on_commit=False) as db:
-        original=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind==ANALYSIS))
+        original=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind.in_(ANALYSIS_KINDS)))
         if not original:return False
         if original.data.get('state')=='response_saved':return _recover(workspace,identity)
         if original.data.get('state')!='queued':return False
         rid=original.data['request_id'];_lock(db,workspace,send_key(rid))
         p=_principal(db,workspace,original.data['actor_id'],lock=False);task,_,_=_task(db,p,original.data['task_id'],lock=True)
         if _principal(db,workspace,p.user_id).role!=p.role:raise HTTPException(403,'原授权人的角色已变化')
-        row=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind==ANALYSIS).with_for_update().execution_options(populate_existing=True))
+        row=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind.in_(ANALYSIS_KINDS)).with_for_update().execution_options(populate_existing=True))
         if not row or row.data.get('state')!='queued':return False
         if digest(row.data['snapshot'])!=row.data['snapshot_hash']:raise HTTPException(409,'已确认预览完整性无法核对')
         cap=check_current(db,p,task,row.data['snapshot']);snapshot=copy.deepcopy(row.data['snapshot'])
@@ -195,7 +206,7 @@ def process(workspace,identity):
         actor=Principal(p.user_id,workspace,p.role,'sensor-native-worker')
         def reserved(call_id):
             with Session(engine(),expire_on_commit=False) as journal:
-                row=journal.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind==ANALYSIS).with_for_update().execution_options(populate_existing=True))
+                row=journal.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind.in_(ANALYSIS_KINDS)).with_for_update().execution_options(populate_existing=True))
                 ledger=journal.scalar(select(CloudCall).where(CloudCall.id==call_id,CloudCall.workspace_id==workspace))
                 if (not row or row.data.get('state')!='dispatching' or row.data.get('call_id') is not None or not ledger
                     or row.data.get('snapshot_hash')!=digest(snapshot) or row.data.get('snapshot')!=snapshot
@@ -210,7 +221,7 @@ def process(workspace,identity):
         def captured(raw,receipt):
             raw_bytes=raw.encode('utf-8',errors='surrogateescape');encoded=base64.b64encode(raw_bytes).decode('ascii')
             with Session(engine(),expire_on_commit=False) as journal:
-                row=journal.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind==ANALYSIS).with_for_update().execution_options(populate_existing=True))
+                row=journal.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind.in_(ANALYSIS_KINDS)).with_for_update().execution_options(populate_existing=True))
                 if not row or row.data.get('state')!='dispatching' or row.data.get('call_id')!=receipt.get('call_id'):raise HTTPException(409,'原首答与原发送不一致')
                 row.data={**row.data,'state':'response_saved','capture':{'call_id':receipt['call_id'],'raw_base64':encoded,
                     'raw_sha256':hashlib.sha256(raw_bytes).hexdigest(),'receipt_hash':digest(receipt),'receipt':copy.deepcopy(receipt)}};row.version+=1
@@ -225,7 +236,7 @@ def process(workspace,identity):
         finally:live.rollback()
     if _recover(workspace,identity):return True
     with Session(engine(),expire_on_commit=False) as db:
-        row=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind==ANALYSIS).with_for_update().execution_options(populate_existing=True))
+        row=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind.in_(ANALYSIS_KINDS)).with_for_update().execution_options(populate_existing=True))
         if row and row.data.get('state')=='dispatching':
             row.data={**row.data,'state':'response_unknown','error':'原次发送或费用结果未核实；不会自动重发。'};row.version+=1;db.commit()
     return True
@@ -234,14 +245,14 @@ def tick(workspace,*,limit=4):
     from uuid import UUID
     if str(UUID(workspace))!=workspace or type(limit) is not int or not 1<=limit<=16:raise ValueError('invalid scope')
     with Session(engine()) as db:
-        rows=list(db.scalars(select(Job.id).where(Job.workspace_id==workspace,Job.kind==ANALYSIS,Job.status=='internal',Job.data['state'].as_string().in_(['queued','response_saved'])).order_by(Job.created_at,Job.id).limit(limit)))
+        rows=list(db.scalars(select(Job.id).where(Job.workspace_id==workspace,Job.kind.in_(ANALYSIS_KINDS),Job.status=='internal',Job.data['state'].as_string().in_(['queued','response_saved'])).order_by(Job.created_at,Job.id).limit(limit)))
     done=0
     for identity in rows:
         try:done+=bool(process(workspace,identity))
         except Exception:
             # Scope/permission failures remain visible and do not dispatch.
             with Session(engine()) as db:
-                row=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind==ANALYSIS).with_for_update().execution_options(populate_existing=True))
+                row=db.scalar(select(Job).where(Job.workspace_id==workspace,Job.id==identity,Job.kind.in_(ANALYSIS_KINDS)).with_for_update().execution_options(populate_existing=True))
                 if row and row.data.get('state')=='queued':row.data={**row.data,'state':'blocked','error':'任务、授权、来源、模型或费用已变化，请重新核对。'};row.version+=1;db.commit()
     return done
 

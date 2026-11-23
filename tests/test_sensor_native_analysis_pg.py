@@ -117,6 +117,100 @@ def test_missing_official_price_and_model_without_business_role_block_preview(cl
     body={'request_id':str(uuid4()),'packet_id':packet['id'],'model_id':model,'max_output_tokens':256,'max_cost_fen':5}
     assert client.post(base+'/analyses/preview',json=body).status_code==409
 
+def test_unlimited_preview_without_price_is_durable_and_sent_once(client,account,device,monkeypatch):
+    from sqlalchemy import delete
+    from generic_agents.models import Audit
+    task,base,packet,model=setup_analysis(client,account,device,monkeypatch)
+    with Session(engine()) as db:
+        db.execute(delete(Audit).where(Audit.workspace_id==account[2],Audit.action=='same_goal_advice.official_price_registered_v307'));db.commit()
+    body={'request_id':str(uuid4()),'packet_id':packet['id'],'model_id':model,'max_output_tokens':256}
+    first=client.post(base+'/analyses/preview',json=body);assert first.status_code==200,first.text
+    preview=first.json();assert client.post(base+'/analyses/preview',json=body).json()==preview
+    assert preview['quote']['schema']=='sensor-native-unlimited-quote-v2'
+    assert preview['quote']['user_limit_fen'] is None and preview['quote']['maximum_cost_fen'] is None
+    calls=fake_provider(monkeypatch)
+    req={'request_id':str(uuid4()),'preview_hash':preview['preview_hash'],'consent':True}
+    url=base+'/analyses/'+preview['preview_id']+'/send';saved=client.post(url,json=req)
+    assert saved.status_code==200,saved.text
+    assert client.post(url,json=req).json()==saved.json()
+    with Session(engine()) as db:
+        assert db.get(Job,saved.json()['analysis']['id']).kind==service.ANALYSIS_UNLIMITED
+    assert service.tick(account[2])==1 and len(calls)==1
+    result=client.get(base+'/analyses/requests/'+req['request_id']).json()
+    assert result['state']=='completed' and result['analysis']['cost_status']['maximum_cost_fen'] is None
+    assert result['analysis']['cost_status']['actual_cost_fen'] is None
+    assert service.tick(account[2])==0 and len(calls)==1
+    engine().dispose()
+    assert client.get(base+'/analyses/history').json()['analyses'][0]['request_id']==req['request_id']
+    with Session(engine()) as db:
+        assert len(list(db.scalars(select(CloudCall))))==1 and db.get(Task,task['id']).status=='workflow_waiting'
+
+def test_unlimited_queue_keeps_original_identity_without_price(client,account,device,monkeypatch):
+    from sqlalchemy import delete
+    from generic_agents.models import Audit
+    _,base,packet,model=setup_analysis(client,account,device,monkeypatch)
+    with Session(engine()) as db:
+        db.execute(delete(Audit).where(Audit.workspace_id==account[2],Audit.action=='same_goal_advice.official_price_registered_v307'));db.commit()
+    body={'request_id':str(uuid4()),'packet_id':packet['id'],'model_id':model,'max_output_tokens':256}
+    response=client.post(base+'/analyses/preview',json=body);assert response.status_code==200,response.text
+    preview=response.json();assert client.post(base+'/analyses/preview',json=body).json()==preview
+    assert preview['quote']['schema']=='sensor-native-unlimited-quote-v2'
+    assert preview['quote']['maximum_cost_fen'] is None and preview['quote']['user_limit_fen'] is None
+    req={'request_id':str(uuid4()),'preview_hash':preview['preview_hash'],'consent':True}
+    url=base+'/analyses/'+preview['preview_id']+'/send';saved=client.post(url,json=req)
+    assert saved.status_code==200,saved.text
+    assert client.post(url,json=req).json()==saved.json()
+    engine().dispose()
+    assert client.get(base+'/analyses/requests/'+req['request_id']).json()==saved.json()
+    with Session(engine()) as db:
+        row=db.get(Job,saved.json()['analysis']['id']);assert row.kind==service.ANALYSIS_UNLIMITED
+        assert not list(db.scalars(select(CloudCall)))
+
+def test_unlimited_quote_does_not_require_price_after_preview(client,account,device,monkeypatch):
+    from sqlalchemy import delete
+    from generic_agents.models import Audit
+    _,base,packet,model=setup_analysis(client,account,device,monkeypatch)
+    body={'request_id':str(uuid4()),'packet_id':packet['id'],'model_id':model,'max_output_tokens':256}
+    response=client.post(base+'/analyses/preview',json=body);assert response.status_code==200,response.text
+    preview=response.json();assert isinstance(preview['quote']['maximum_cost_fen'],int)
+    with Session(engine()) as db:
+        db.execute(delete(Audit).where(Audit.workspace_id==account[2],Audit.action=='same_goal_advice.official_price_registered_v307'));db.commit()
+    req={'request_id':str(uuid4()),'preview_hash':preview['preview_hash'],'consent':True}
+    saved=client.post(base+'/analyses/'+preview['preview_id']+'/send',json=req)
+    assert saved.status_code==200,saved.text
+    assert saved.json()['state']=='queued'
+    assert saved.json()['analysis']['cost_status']['maximum_cost_fen']==preview['quote']['maximum_cost_fen']
+    with Session(engine()) as db:assert not list(db.scalars(select(CloudCall)))
+
+def test_unlimited_unknown_never_retries_and_is_visible_to_legacy_flow(client,account,device,monkeypatch):
+    _,base,packet,model=setup_analysis(client,account,device,monkeypatch)
+    body={'request_id':str(uuid4()),'packet_id':packet['id'],'model_id':model,'max_output_tokens':256}
+    preview=client.post(base+'/analyses/preview',json=body).json();calls=fake_provider(monkeypatch,crash=True)
+    request={'request_id':str(uuid4()),'preview_hash':preview['preview_hash'],'consent':True}
+    assert client.post(base+'/analyses/'+preview['preview_id']+'/send',json=request).status_code==200
+    assert service.tick(account[2])==1 and len(calls)==1
+    assert client.get(base+'/analyses/requests/'+request['request_id']).json()['state']=='response_unknown'
+    assert service.tick(account[2])==0 and len(calls)==1
+    old_preview=prepare(client,base,packet,model);assert old_preview['requires_uncertainty_ack']
+    fresh={'request_id':str(uuid4()),'preview_hash':old_preview['preview_hash'],'consent':True}
+    assert client.post(base+'/analyses/'+old_preview['preview_id']+'/send',json=fresh).status_code==409
+    assert len(calls)==1
+
+def test_unlimited_saved_response_recovery_never_resends(client,account,device,monkeypatch):
+    _,base,packet,model=setup_analysis(client,account,device,monkeypatch)
+    body={'request_id':str(uuid4()),'packet_id':packet['id'],'model_id':model,'max_output_tokens':256}
+    preview=client.post(base+'/analyses/preview',json=body).json();calls=fake_provider(monkeypatch)
+    request={'request_id':str(uuid4()),'preview_hash':preview['preview_hash'],'consent':True}
+    assert client.post(base+'/analyses/'+preview['preview_id']+'/send',json=request).status_code==200
+    original=service._recover;monkeypatch.setattr(service,'_recover',lambda *args:False)
+    assert service.tick(account[2])==1 and len(calls)==1
+    assert client.get(base+'/analyses/requests/'+request['request_id']).json()['state']=='response_saved'
+    monkeypatch.setattr(service,'_recover',original);engine().dispose()
+    assert service.tick(account[2])==1 and len(calls)==1
+    result=client.get(base+'/analyses/requests/'+request['request_id']).json()
+    assert result['state']=='completed' and result['analysis']['receipt']['usage']['total_tokens']==50
+    with Session(engine()) as db:assert len(list(db.scalars(select(CloudCall))))==1
+
 def test_one_real_deepseek_synthetic_only(client,account,device,monkeypatch):
     import os,pytest
     if os.getenv('GA_RUN_SENSOR_REAL_DEEPSEEK')!='1':pytest.skip('explicit synthetic-only paid run required')
