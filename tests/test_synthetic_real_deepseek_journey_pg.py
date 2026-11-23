@@ -75,7 +75,7 @@ def run_journey(client, account, device, monkeypatch, mode, evidence_dir):
             jobs=list(db.scalars(select(Job).where(Job.workspace_id==account[2],Job.idempotency_key==service.send_key(rid))))
             evidence={'phase':phase,'request_id':rid,'provider_mode':mode,'outbound_attempts':len(attempts),
                 'cloud_calls':[{'id':c.id,'status':c.status,'reserved_tokens':c.reserved_tokens,'charged_tokens':c.charged_tokens,'receipt':copy.deepcopy(c.data.get('receipt'))} for c in calls],
-                'jobs':[{'id':j.id,'kind':j.kind,'state':j.data.get('state'),'error':j.data.get('error'),'capture':copy.deepcopy(j.data.get('capture')),'output_schema':copy.deepcopy(j.data.get('snapshot',{}).get('output_schema'))} for j in jobs],**extra}
+                'jobs':[{'id':j.id,'kind':j.kind,'state':j.data.get('state'),'error':j.data.get('error'),'failure_reason':service.failure_reason(j.data) if j.data.get('state')=='response_invalid' else None,'capture':copy.deepcopy(j.data.get('capture')),'output_schema':copy.deepcopy(j.data.get('snapshot',{}).get('output_schema'))} for j in jobs],**extra}
             write_private(evidence_path,evidence)
             return evidence
     try:
@@ -85,6 +85,8 @@ def run_journey(client, account, device, monkeypatch, mode, evidence_dir):
         evidence=snapshot('before_replay');assert len(evidence['jobs'])==1,'original request not durably recorded; replay forbidden'
         original_state=evidence['jobs'][0]['state'];first_count=len(evidence['cloud_calls'])
         replay=client.post(url,json=body);assert replay.status_code==200,'same request replay refused'
+        replay_value=replay.json();assert replay_value.get('state')==original_state
+        if original_state=='response_invalid':assert replay_value['analysis']['failure_reason']==evidence['jobs'][0]['failure_reason']
         # This checks the worker cannot claim the original a second time.
         assert service.tick(account[2])==0,'same request created another runnable dispatch'
         after=snapshot('replay_checked',initial_state=original_state,replay_status=replay.status_code)
@@ -103,6 +105,7 @@ def test_synthetic_model_replay_with_fake_provider(client,account,device,monkeyp
     run_journey(client,account,device,monkeypatch,mode,tmp_path)
     evidence=json.loads((tmp_path/'evidence.json').read_text())
     assert evidence['jobs'][0]['capture']['raw_base64'] and evidence['jobs'][0]['output_schema']
+    if mode=='invalid':assert evidence['jobs'][0]['failure_reason']['code']=='content_not_json'
     assert (tmp_path/'evidence.json').stat().st_mode & 0o777 == 0o600
     assert (tmp_path/'journal.json').stat().st_mode & 0o777 == 0o600
 
