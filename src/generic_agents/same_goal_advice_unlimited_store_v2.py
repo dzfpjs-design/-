@@ -19,6 +19,7 @@ from . import workspace_command_nonce_lock_v312 as nonces
 from .contracts import digest
 from .models import Audit, AuthSession, Capability, CloudCall, Evidence, Invocation, Job, Membership, Plan, Task, User
 from .security import Principal
+from . import same_goal_advice_read_session_v2 as read_session
 
 PLAN = 'same-goal-advice-unlimited-plan-v2'
 PREPARE_KIND = 'prepare_same_goal_advice_unlimited_v2'
@@ -77,17 +78,22 @@ def _lock_current_reader(db, p):
 def read_queued(db, p, task, plan):
     """Authenticate saved bytes; never checks current source or grants work."""
     old_store.need(type(p) is Principal and type(task) is Task and type(plan) is Plan)
+    with read_session.isolated(db) as reader:
+        return _read_queued(reader, p, task.id, plan.id)
+
+
+def _read_queued(db, p, task_id, plan_id):
     with db.no_autoflush:
         # Writers take the Task lock before actor/Plan/Job locks. Holding a
         # compatible read lock in that same order prevents an in-flight
         # claimant from making the returned queued state stale mid-read.
         old_store._reader(db, p)
-        task = db.scalar(select(Task).where(Task.workspace_id == p.workspace_id, Task.id == task.id)
+        task = db.scalar(select(Task).where(Task.workspace_id == p.workspace_id, Task.id == task_id)
             .with_for_update(read=True).execution_options(populate_existing=True))
         old_store.need(task is not None)
         http_session = _lock_current_reader(db, p)
         plan = db.scalar(select(Plan).where(Plan.workspace_id == p.workspace_id,
-            Plan.task_id == task.id, Plan.id == plan.id).with_for_update(read=True).execution_options(populate_existing=True))
+            Plan.task_id == task.id, Plan.id == plan_id).with_for_update(read=True).execution_options(populate_existing=True))
         old_store.need(plan is not None)
         data = plan.data
         old_store.need(plan.workspace_id == task.workspace_id == p.workspace_id and plan.task_id == task.id

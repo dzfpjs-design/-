@@ -10,6 +10,7 @@ from . import same_goal_advice_contracts_v302 as c
 from . import same_goal_advice_store_v302 as old
 from . import same_goal_advice_unlimited_policy_v2 as policy
 from . import same_goal_advice_unlimited_store_v2 as v2
+from . import same_goal_advice_read_session_v2 as read_session
 from .models import Audit, AuthSession, CloudCall, Evidence, Invocation, Job, Plan, Task
 
 
@@ -21,12 +22,17 @@ def read(db, p, task):
     must acquire the workspace nonce lock before calling this function. This
     reader itself does not take that lock or authorize a future mutation.
     """
+    with read_session.isolated(db) as reader:
+        return _read(reader, p, task.id)
+
+
+def _read(db, p, task_id):
     from . import same_goal_advice_execution_v308 as execution
 
     with db.no_autoflush:
         old._reader(db, p)
         task = db.scalar(select(Task).where(Task.workspace_id == p.workspace_id,
-            Task.id == task.id).with_for_update(read=True).execution_options(populate_existing=True))
+            Task.id == task_id).with_for_update(read=True).execution_options(populate_existing=True))
         old.need(task is not None)
         http_session = v2._lock_current_reader(db, p)
         plans = old._rows(db, p, Plan, or_(
