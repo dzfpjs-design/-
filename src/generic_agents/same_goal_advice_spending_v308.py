@@ -262,6 +262,11 @@ def _ledger(db,p,cap,call,context,identity,attempt_id):
 
 
 def _hold(context,call,refs,identity,attempt_id,at):
+    # PostgreSQL returns the same timestamptz instant in each session's time
+    # zone. The original reservation is written by _clock in UTC, so rebuild
+    # its immutable bytes in UTC too; do not rewrite the saved Audit or ledger.
+    need(type(at) is datetime and at.tzinfo is not None and at.utcoffset() is not None)
+    at = at.astimezone(timezone.utc)
     quote,budget = context['spending_quote'],context['spending_budget']
     return {'schema':SCHEMA,'workspace_id':refs['workspace_id'],'actor_id':refs['actor_id'],
         'task_id':refs['task_id'],'plan_id':refs['plan_id'],'job_id':refs['job_id'],'invocation_id':refs['invocation_id'],
@@ -415,6 +420,10 @@ def _original_financials(db,p,context,at):
 
 
 def _intent_data(context,refs,hold,hold_value,call,identity,attempt_id,at):
+    # Intent Audit timestamps are written by _clock in UTC, but the original
+    # timestamptz may be returned in the reader session's local time zone.
+    need(type(at) is datetime and at.tzinfo is not None and at.utcoffset() is not None)
+    at = at.astimezone(timezone.utc)
     return {'schema':INTENT_SCHEMA,'workspace_id':refs['workspace_id'],'actor_id':refs['actor_id'],
         'task_id':refs['task_id'],'plan_id':refs['plan_id'],'job_id':refs['job_id'],
         'invocation_id':refs['invocation_id'],'execution_hash':refs['execution_hash'],

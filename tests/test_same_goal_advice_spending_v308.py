@@ -284,14 +284,19 @@ def test_paid_historical_hold_uses_original_sdk_creator_not_reclaimed_job_token_
     assert t.ledger.data==original and spend.current_scope() is None
 
 
-@pytest.mark.parametrize('fault',['hold-deleted','intent-deleted','marker-deleted','amount-rewritten'])
+@pytest.mark.parametrize('fault',['hold-deleted','intent-deleted','marker-deleted','amount-rewritten',
+    'hold-time-rewritten','intent-time-rewritten'])
 def test_historical_proof_damage_blocks_adoption_without_new_reserve_or_deleting_paid_state(scene,monkeypatch,fault):
     t=scene
     with attempt(t):reserve(t);t.reserved();spend.before_transport()
     if fault=='hold-deleted':t.rows[Audit].remove(events(t,spend.HOLD)[0])
     elif fault=='intent-deleted':t.rows[Audit].remove(events(t,spend.INTENT)[0])
     elif fault=='marker-deleted':t.ledger.data.pop(spend.KEY)
-    else:events(t,spend.HOLD)[0].data['reserved_minor_units']=0
+    elif fault=='amount-rewritten':events(t,spend.HOLD)[0].data['reserved_minor_units']=0
+    elif fault=='hold-time-rewritten':
+        event=events(t,spend.HOLD)[0];event.data['reserved_at']=(event.created_at+timedelta(seconds=1)).isoformat()
+    else:
+        event=events(t,spend.INTENT)[0];event.data['checked_at']=(event.created_at+timedelta(seconds=1)).isoformat()
     history_financial_io(monkeypatch,t)
     counts={model:len(rows) for model,rows in t.rows.items()}
     with pytest.raises(ModelBlocked):spend.checked_original_hold(t.db,t.p,t.context,t.ledger)
