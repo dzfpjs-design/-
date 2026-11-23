@@ -8,6 +8,7 @@ from sqlalchemy import select, text
 from . import same_goal_advice_contracts_v302 as contracts
 from . import same_goal_advice_options_v310 as options
 from . import same_goal_advice_price_v307 as prices
+from . import same_goal_advice_quota_v304 as quota
 from . import workspace_advice_nonce_candidate_v2 as candidate
 from . import workspace_advice_policy_recovery_candidate_v2 as policy_recovery
 from . import workspace_command_nonce_lock_v312 as legacy
@@ -38,7 +39,12 @@ def recover_only(db, p, task_id, body):
         wrapper = rows[0]; value = options._shape(p, task, wrapper)
         legacy.need(wrapper.actor_id == p.user_id and digest(value['body']) == digest(body),
             '原任务额度申请正文或账号无法核对；未创建替代申请')
-        authorization = policy_recovery.recover_only(db, p, task.id, value['authorization_body'])
+        # Never acquire a second nonce while holding this task and actor: an
+        # invalid historical wrapper must be rejected before the inner reader.
+        resolved = contracts._parse(quota.Authorize, value['authorization_body'])
+        legacy.need(resolved['request_id'] == body['request_id'],
+            '原额度申请编号不一致；请保留原记录核对')
+        authorization = policy_recovery.recover_only(db, p, task.id, resolved)
         legacy.need(authorization['quota_policy_ref'] == value['policy_ref'])
         original, _, _ = options._quota_anchors(db, p, task, wrapper, value)
         basis = db.scalar(select(Audit).where(Audit.workspace_id == p.workspace_id,

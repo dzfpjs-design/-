@@ -198,3 +198,69 @@ def test_quota_original_chain_rows_are_locked_until_transaction_end(task_quota_o
                 first.commit(); assert future.result(timeout=6) == 'rolled-back'
             finally:
                 first.rollback()
+
+
+def test_mismatched_nested_nonce_rejects_before_cross_nonce_wait(task_quota_original, monkeypatch):
+    """Two real PG transactions demonstrate no reverse wait for malformed history."""
+    from generic_agents import workspace_command_nonce_lock_v312 as nonce_lock
+    s = task_quota_original
+    outer = s['quota_body']['request_id']; inner = str(uuid4())
+    with Session(engine()) as db:
+        wrapper = db.get(Audit, s['ids']['wrapper'])
+        damaged = copy.deepcopy(wrapper.data)
+        damaged['authorization_body']['request_id'] = inner
+        damaged['record_hash'] = contracts.record_hash(damaged)
+        wrapper.data = damaged
+        assert options._shape(s['principal'], db.get(Task, s['task_id']), wrapper)['authorization_body']['request_id'] == inner
+        db.commit()
+    inner_held, outer_held, reverse_start, proceed = Event(), Event(), Event(), Event()
+    pids = {}
+    original_admin = options._admin_task
+    def held_admin(*args, **kwargs):
+        result = original_admin(*args, **kwargs)
+        outer_held.set()
+        assert proceed.wait(5)
+        return result
+    monkeypatch.setattr(options, '_admin_task', held_admin)
+
+    def reverse():
+        with Session(engine()) as db:
+            db.execute(text("SET LOCAL lock_timeout='5000ms'"))
+            pids['reverse'] = db.scalar(select(func.pg_backend_pid()))
+            db.execute(text(nonce_lock.LOCK_SQL), {'workspace_command_nonce_key': nonce_lock.key(s['principal'].workspace_id, inner)})
+            inner_held.set(); assert reverse_start.wait(5)
+            db.execute(text(nonce_lock.LOCK_SQL), {'workspace_command_nonce_key': nonce_lock.key(s['principal'].workspace_id, outer)})
+            db.rollback(); return 'released'
+
+    def recover():
+        with Session(engine()) as db:
+            db.execute(text("SET LOCAL lock_timeout='5000ms'"))
+            pids['recover'] = db.scalar(select(func.pg_backend_pid()))
+            try:
+                with pytest.raises(HTTPException) as rejected:
+                    recovery.recover_only(db, s['principal'], s['task_id'], s['quota_body'])
+                assert rejected.value.status_code == 409
+                assert rejected.value.detail == '原额度申请编号不一致；请保留原记录核对'
+                return 'rejected'
+            finally:
+                db.rollback()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        reverse_future = pool.submit(reverse)
+        assert inner_held.wait(3)
+        recovery_future = pool.submit(recover)
+        try:
+            assert outer_held.wait(3)
+            reverse_start.set()
+            deadline = monotonic() + 3
+            while True:
+                with Session(engine()) as observer:
+                    blockers = observer.scalar(text('SELECT pg_blocking_pids(:pid)'), {'pid': pids['reverse']})
+                if pids['recover'] in blockers: break
+                assert monotonic() < deadline and not reverse_future.done()
+                sleep(.02)
+            proceed.set()
+            assert recovery_future.result(timeout=2) == 'rejected'
+            assert reverse_future.result(timeout=2) == 'released'
+        finally:
+            proceed.set(); reverse_start.set()
