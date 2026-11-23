@@ -139,6 +139,36 @@ def public_preview(row):
         'uncertain_request_ids':copy.deepcopy(s.get('uncertain_request_ids',[])),'source_policies':copy.deepcopy(s['source_policies']),
         'source_policy_notice':s['source_policy_notice']}
 
+FAILURE_REASONS={
+    'provider_http_error':'模型服务返回了错误，原答已保存。请核对服务状态和访问配置。',
+    'response_not_json':'模型服务返回的数据不是可解析的 JSON。',
+    'response_envelope_invalid':'模型服务返回的数据结构不完整或不符合要求。',
+    'response_truncated':'模型回答因输出长度限制而未完成。',
+    'response_incomplete':'模型回答未正常结束，无法作为完整结果使用。',
+    'content_not_json':'模型回答内容不是可解析的 JSON。',
+    'content_schema_invalid':'模型回答的字段或格式不符合本次分析要求。',
+    'unknown':'暂时无法确定失败原因，请查看保存的原答或联系管理员核对。',
+}
+
+def failure_reason(data):
+    """Diagnose only the integrity-checked original; do not modify history."""
+    code='unknown'
+    try:
+        capture=data['capture'];encoded=capture['raw_base64'];receipt=capture['receipt']
+        # Bound per-history-item work before decoding untrusted persisted bytes.
+        if (type(encoded) is str and len(encoded) <= 4*((transport.MAX_RESPONSE_BYTES+2)//3)
+            and data.get('call_id') and capture.get('call_id') == data['call_id']
+            and digest(receipt) == capture['receipt_hash']
+            and digest(data['snapshot']) == data['snapshot_hash']):
+            raw=base64.b64decode(encoded,validate=True)
+            if hashlib.sha256(raw).hexdigest() == capture['raw_sha256']:
+                code=transport.diagnose_saved_response(raw.decode('utf-8',errors='surrogateescape'),
+                    data['snapshot']['output_schema'],receipt)
+    except Exception:
+        pass
+    if code not in FAILURE_REASONS:code='unknown'
+    return {'code':code,'message':FAILURE_REASONS[code]}
+
 def public_analysis(row):
     d=row.data;receipt=copy.deepcopy(d.get('receipt'))
     if receipt:
@@ -149,7 +179,8 @@ def public_analysis(row):
     return {'id':row.id,'request_id':d['request_id'],'state':state,'packet_id':d['packet_id'],'model_id':d['model_id'],'evidence_refs':evidence_refs,
         'created_at':row.created_at.astimezone(timezone.utc).isoformat(),'result':copy.deepcopy(d.get('result')),'receipt':receipt,
         'cost_status':{'currency':'CNY','maximum_cost_fen':d['snapshot']['quote']['maximum_cost_fen'],'actual_cost_fen':None,
-        'explanation':'真实费用以服务商账单为准；未核实账单金额。'},'notice':NOTICE,'error':d.get('error')}
+        'explanation':'真实费用以服务商账单为准；未核实账单金额。'},'notice':NOTICE,'error':d.get('error'),
+        'failure_reason':failure_reason(d) if state=='response_invalid' else None}
 
 def _principal(db,workspace,actor,*,lock=True):
     from .models import Membership,User

@@ -140,6 +140,53 @@ def parse_response(raw, schema, receipt):
         raise _blocked('业务分析原回答未通过完整结构检查；原回答与费用保留，未自动修复或重发') from error
 
 
+def diagnose_saved_response(raw, schema, receipt):
+    """Classify an already authenticated saved answer without returning its contents.
+
+    This is explanatory only: it neither changes parse acceptance nor calls the
+    provider. Never return exception text, provider content, or field values.
+    """
+    if type(receipt) is not dict or type(receipt.get('http_status')) is not int:
+        return 'unknown'
+    if receipt['http_status'] != 200:
+        return 'provider_http_error' if 100 <= receipt['http_status'] <= 599 else 'unknown'
+    if type(raw) is not str or len(raw.encode('utf-8', errors='surrogateescape')) > MAX_RESPONSE_BYTES:
+        return 'unknown'
+    try:
+        envelope = strict_json(raw)
+    except (ValueError, TypeError, UnicodeError, RecursionError):
+        return 'response_not_json'
+    if type(envelope) is not dict:
+        return 'response_envelope_invalid'
+    choices = envelope.get('choices')
+    if type(choices) is not list or len(choices) != 1 or type(choices[0]) is not dict:
+        return 'response_envelope_invalid'
+    first = choices[0]
+    if first.get('finish_reason') == 'length':
+        return 'response_truncated'
+    if first.get('finish_reason') != 'stop':
+        return 'response_incomplete'
+    message = first.get('message')
+    if type(message) is not dict or message.get('tool_calls') or message.get('function_call'):
+        return 'response_envelope_invalid'
+    content = message.get('content')
+    if type(content) is not str:
+        return 'response_envelope_invalid'
+    try:
+        value = strict_json(content)
+    except (ValueError, TypeError, UnicodeError, RecursionError):
+        return 'content_not_json'
+    try:
+        from .services import validate
+        validate(schema, value)
+    except HTTPException:
+        return 'content_schema_invalid'
+    except Exception:
+        return 'unknown'
+    # The response may have failed for another reason, or under older rules.
+    return 'unknown'
+
+
 def call(capability, messages, schema, principal, *, key, on_reserved, on_response,
         output_token_limit=None):
     """Exactly one POST; the original full HTTP bytes are captured before parse."""
