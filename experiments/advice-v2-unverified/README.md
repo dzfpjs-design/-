@@ -1,0 +1,1 @@
+These unfinished test drafts are archived for follow-up only. They were interrupted or used an expired test checkpoint and do not demonstrate a passing end-to-end run. They are deliberately outside the test suite.
