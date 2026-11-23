@@ -5,10 +5,13 @@ Goal/policy/consent preparation journey has run. No worker or model is called.
 """
 import copy
 from datetime import timedelta
+from queue import Queue
+from threading import Event, Thread
+from time import monotonic, sleep
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from generic_agents import same_goal_advice_contracts_v302 as c
@@ -119,6 +122,74 @@ def test_read_only_role_and_revoked_session_are_checked_on_real_pg(synthetic_cus
     with Session(engine()) as db:
         with pytest.raises(HTTPException):
             subject.read_queued(db, viewer, db.get(Task, s['task_id']), db.get(Plan, s['plan_id']))
+
+
+def test_session_expiring_during_custody_read_is_rechecked(synthetic_custody, monkeypatch):
+    s = synthetic_custody; p = s['principal']
+    with Session(engine()) as db:
+        session = db.get(AuthSession, p.session_id)
+        session.expires_at = db.scalar(select(func.clock_timestamp())) + timedelta(seconds=4)
+        db.commit()
+    original = subject._lock_current_reader; entered = []
+    def delayed(db, actor):
+        value = original(db, actor)
+        entered.append(True)
+        db.execute(select(func.pg_sleep(4.2)))
+        return value
+    monkeypatch.setattr(subject, '_lock_current_reader', delayed)
+    with Session(engine()) as db:
+        with pytest.raises(HTTPException) as error:
+            subject.read_queued(db, p, db.get(Task, s['task_id']), db.get(Plan, s['plan_id']))
+        assert entered and '会话已过期' in str(error.value.detail)
+
+
+@pytest.mark.parametrize('target', ['task', 'plan', 'job', 'session', 'user', 'membership'])
+def test_reader_holds_real_rows_against_concurrent_writers(synthetic_custody, target):
+    s = synthetic_custody; p = s['principal']; reader = Session(engine(), expire_on_commit=False)
+    ready, finished = Queue(), Event(); outcome = {}; thread = None
+    try:
+        subject.read_queued(reader, p, reader.get(Task, s['task_id']), reader.get(Plan, s['plan_id']))
+        reader_pid = reader.scalar(select(func.pg_backend_pid()))
+        def writer():
+            with Session(engine()) as db:
+                try:
+                    db.execute(text("SET LOCAL statement_timeout = '10000ms'"))
+                    ready.put(db.scalar(select(func.pg_backend_pid())))
+                    if target == 'membership':
+                        statement = select(Membership).where(Membership.workspace_id == p.workspace_id,
+                            Membership.user_id == p.user_id)
+                    else:
+                        model, identity = {'task': (Task, s['task_id']), 'plan': (Plan, s['plan_id']),
+                            'job': (Job, s['job_id']), 'session': (AuthSession, p.session_id),
+                            'user': (User, p.user_id)}[target]
+                        statement = select(model).where(model.id == identity)
+                    row = db.scalar(statement.with_for_update())
+                    assert row is not None
+                    if target == 'job': row.status = 'running'
+                    elif target == 'session': row.revoked = True
+                    elif target == 'user': row.active = False
+                    elif target == 'membership': row.role = 'viewer'
+                    db.commit(); outcome['done'] = True
+                except BaseException as error:
+                    db.rollback(); outcome['error'] = error
+                finally: finished.set()
+        thread = Thread(target=writer, daemon=True); thread.start(); pid = ready.get(timeout=5)
+        deadline = monotonic() + 5
+        while True:
+            with Session(engine()) as observer:
+                blocked = observer.scalar(text('SELECT pg_blocking_pids(:pid)'), {'pid': pid})
+            if reader_pid in blocked: break
+            assert not finished.is_set() and monotonic() < deadline, '未证明并发写入等待原读取锁'
+            sleep(.05)
+        reader.rollback()
+        assert finished.wait(8) and outcome.get('done') and 'error' not in outcome
+    finally:
+        reader.rollback(); reader.close()
+        if thread is not None: thread.join(timeout=10)
+    if target in {'job', 'session', 'user', 'membership'}:
+        with Session(engine()) as db:
+            with pytest.raises(HTTPException):
+                subject.read_queued(db, p, db.get(Task, s['task_id']), db.get(Plan, s['plan_id']))
 
 
 @pytest.mark.parametrize('fault', ['job_bytes', 'policy_hash', 'accepted_audit', 'unexpected_receipt', 'unstarted_lease',

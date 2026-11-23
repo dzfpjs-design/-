@@ -78,9 +78,17 @@ def read_queued(db, p, task, plan):
     """Authenticate saved bytes; never checks current source or grants work."""
     old_store.need(type(p) is Principal and type(task) is Task and type(plan) is Plan)
     with db.no_autoflush:
+        # Writers take the Task lock before actor/Plan/Job locks. Holding a
+        # compatible read lock in that same order prevents an in-flight
+        # claimant from making the returned queued state stale mid-read.
+        old_store._reader(db, p)
+        task = db.scalar(select(Task).where(Task.workspace_id == p.workspace_id, Task.id == task.id)
+            .with_for_update(read=True).execution_options(populate_existing=True))
+        old_store.need(task is not None)
         http_session = _lock_current_reader(db, p)
-        task = old_store._fresh(db, p, Task, task.id)
-        plan = old_store._fresh(db, p, Plan, plan.id)
+        plan = db.scalar(select(Plan).where(Plan.workspace_id == p.workspace_id,
+            Plan.task_id == task.id, Plan.id == plan.id).with_for_update(read=True).execution_options(populate_existing=True))
+        old_store.need(plan is not None)
         data = plan.data
         old_store.need(plan.workspace_id == task.workspace_id == p.workspace_id and plan.task_id == task.id
             and plan.status == 'queued' and plan.version == 1 and type(data) is dict
@@ -121,7 +129,9 @@ def read_queued(db, p, task, plan):
         originals = old_store._rows(db, p, Job, or_(Job.id == pin['id'], Job.idempotency_key == key,
             Job.data['plan_id'].as_string() == plan.id))
         old_store.need(len(originals) == 1)
-        job = originals[0]
+        job = db.scalar(select(Job).where(Job.workspace_id == p.workspace_id, Job.id == originals[0].id)
+            .with_for_update(read=True).execution_options(populate_existing=True))
+        old_store.need(job is not None)
         old_store.need(job.id == pin['id'] and job.kind == PREPARE_KIND and job.idempotency_key == key
             and job.status == 'queued' and job.attempts == 0 and job.lease_token is None and job.lease_until is None
             and digest(job.data) == digest(job_data(plan.id, prep, key)))
