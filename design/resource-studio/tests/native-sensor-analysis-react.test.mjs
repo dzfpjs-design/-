@@ -5,6 +5,49 @@ import {randomUUID} from 'node:crypto';
 import {build} from 'esbuild';
 import {JSDOM} from 'jsdom';
 
+test('失权后迟到的本机锁不会在重新登录后发出旧请求',async()=>{
+ const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost'});globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.localStorage=dom.window.localStorage;globalThis.sessionStorage=dom.window.sessionStorage;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});Object.defineProperty(globalThis,'crypto',{value:{randomUUID},configurable:true});let grantLock;const gate=new Promise(resolve=>{grantLock=resolve});Object.defineProperty(dom.window.navigator,'locks',{value:{request:async(_key,_opts,fn)=>{await gate;return fn({})}}});
+ const require=createRequire(import.meta.url),React=require('react'),{act}=React,{createRoot}=require('react-dom/client'),built=await build({entryPoints:['src/NativeSensorAnalysis.jsx'],bundle:true,format:'cjs',platform:'node',packages:'external',write:false,logLevel:'silent'}),module={exports:{}};new Function('require','module','exports',built.outputFiles[0].text)(require,module,module.exports);
+ const Component=module.exports.default,Btn=({children,...p})=>React.createElement('button',p,children),account={workspace_id:'w',user_id:'u',role:'admin'},task={id:'task'},packet={id:'packet',created_at:'2026-11-14T08:00:00Z',records:[{kind:'data',id:'r'}]},model={id:'model',name:'DeepSeek',provider:'deepseek',model:'deepseek-v4-pro',version:1,price_available:false,max_output_tokens:1024,price:null};
+ let failHistory,historyCount=0,posts=0;const pendingHistory=new Promise((_,reject)=>{failHistory=reject});
+ const request=async path=>{if(path==='/me')return {workspace_id:'w',user_id:'u',role:'admin'};if(path.endsWith('/context'))return {cloud_analysis_supported:true,read_only:false,models:[model],analyses:[]};if(path.includes('/packets?page='))return {packets:[packet],page:1,has_more:false};if(path.includes('/history?page='))return ++historyCount===1?pendingHistory:{analyses:[],page:1,has_more:false};if(path.endsWith('/preview'))return {preview_id:'preview',preview_hash:'a'.repeat(64),model,messages:[{role:'user',content:'旧会话原文'}],options:{model:'deepseek-v4-pro',max_tokens:512},output_schema:{type:'object'},quote:{schema:'sensor-native-unlimited-quote-v2',currency:'CNY',maximum_cost_fen:null,user_limit_fen:null,price_expires_at:null,provider_price_locked:false,output_token_bound:512,input_rate_fen_per_million:null,output_rate_fen_per_million:null},requires_uncertainty_ack:false,uncertain_request_ids:[],source_policy_notice:'来源待核对',source_policies:[{ref:'R1',status:'未设置'}]};if(path.endsWith('/send')){posts++;throw Error('must not send');}throw Error('unexpected '+path)};
+ const root=createRoot(document.getElementById('root')),wait=()=>new Promise(r=>setTimeout(r,0));const button=t=>[...document.querySelectorAll('button')].find(b=>b.textContent===t);const click=async t=>{assert.ok(button(t),t);await act(async()=>{button(t).click();await wait()})};const choose=async(label,value)=>{const el=[...document.querySelectorAll('label')].find(l=>l.textContent.startsWith(label)).querySelector('select');await act(async()=>{el.value=value;el.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await wait()})};
+ try{await act(async()=>{root.render(React.createElement(Component,{account,task,Btn,request}));await wait()});await click('查看设备数据分析');await choose('已保存设备证据包','packet');await choose('DeepSeek 模型','model');await click('核对发送内容和费用');await act(async()=>{[...document.querySelectorAll('label')].find(x=>x.textContent.includes('我已核对完整发送内容')).querySelector('input').click();await wait()});await click('确认并开始一次分析');const error=Error('权限失效');error.status=403;await act(async()=>{failHistory(error);await wait()});assert.match(document.body.textContent,/权限需要重新核对/);await click('重新核对会话');assert.doesNotMatch(document.body.textContent,/旧会话原文/);await act(async()=>{grantLock();await wait()});assert.equal(posts,0);assert.equal(localStorage.getItem('sensor-analysis:w:u:task:pending'),null);assert.equal(JSON.parse(sessionStorage.getItem('sensor-analysis:w:u:task:draft')).packet,'packet');}finally{grantLock();await act(async()=>root.unmount());dom.window.close()}
+});
+
+for(const deniedStatus of [401,403])test(`权限 ${deniedStatus} 时隐藏旧证据、隔离迟到响应并保留原请求`,async()=>{
+ const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost'});globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.localStorage=dom.window.localStorage;globalThis.sessionStorage=dom.window.sessionStorage;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});Object.defineProperty(globalThis,'crypto',{value:{randomUUID},configurable:true});Object.defineProperty(dom.window.navigator,'locks',{value:{request:async(_key,_opts,fn)=>fn({})}});
+ const require=createRequire(import.meta.url),React=require('react'),{act}=React,{createRoot}=require('react-dom/client'),built=await build({entryPoints:['src/NativeSensorAnalysis.jsx'],bundle:true,format:'cjs',platform:'node',packages:'external',write:false,logLevel:'silent'}),module={exports:{}};
+ new Function('require','module','exports',built.outputFiles[0].text)(require,module,module.exports);
+ const Component=module.exports.default,Btn=({children,...p})=>React.createElement('button',p,children),account={workspace_id:'w',user_id:'u',role:'admin'},task={id:'task'};
+ const packet={id:'packet',created_at:'2026-11-14T08:00:00Z',records:[{kind:'data',id:'r'}]},model={id:'model',name:'DeepSeek',provider:'deepseek',model:'deepseek-v4-pro',version:1,price_available:false,max_output_tokens:1024,price:null};
+ let identity='u',serverRole='admin',lateHistory;const late=new Promise(resolve=>{lateHistory=resolve});let historyCount=0,posts=0;
+ const request=async(path)=>{
+  if(path==='/me')return {workspace_id:'w',user_id:identity,role:serverRole};
+  if(path.endsWith('/context'))return {cloud_analysis_supported:true,read_only:false,models:[model],analyses:[]};
+  if(path.includes('/analyses/history?page=')){historyCount++;if(historyCount===1)return late;return {analyses:[],page:1,has_more:false};}
+  if(path.includes('/packets?page='))return {packets:[packet],page:1,has_more:false};
+  if(path.endsWith('/preview'))return {preview_id:'preview',preview_hash:'a'.repeat(64),model,messages:[{role:'user',content:'合成保密原文'}],options:{model:'deepseek-v4-pro',max_tokens:512},output_schema:{type:'object'},quote:{schema:'sensor-native-unlimited-quote-v2',currency:'CNY',maximum_cost_fen:null,user_limit_fen:null,price_expires_at:null,provider_price_locked:false,output_token_bound:512,input_rate_fen_per_million:null,output_rate_fen_per_million:null},requires_uncertainty_ack:false,uncertain_request_ids:[],source_policy_notice:'来源待核对',source_policies:[{ref:'R1',status:'未设置'}]};
+  if(path.endsWith('/send')){posts++;const e=Error('无权访问');e.status=deniedStatus;throw e;}
+  throw Error('unexpected '+path);
+ };
+ const root=createRoot(document.getElementById('root')),wait=()=>new Promise(r=>setTimeout(r,0));const button=t=>[...document.querySelectorAll('button')].find(b=>b.textContent===t);
+ const click=async t=>{assert.ok(button(t),t);await act(async()=>{button(t).click();await wait()})};
+ const choose=async(label,value)=>{const el=[...document.querySelectorAll('label')].find(l=>l.textContent.startsWith(label)).querySelector('select');await act(async()=>{el.value=value;el.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await wait()})};
+ try{
+  await act(async()=>{root.render(React.createElement(Component,{account,task,Btn,request}));await wait()});await click('查看设备数据分析');await choose('已保存设备证据包','packet');await choose('DeepSeek 模型','model');await click('核对发送内容和费用');assert.match(document.body.textContent,/合成保密原文/);
+  await act(async()=>{[...document.querySelectorAll('label')].find(x=>x.textContent.includes('我已核对完整发送内容')).querySelector('input').click();await wait()});await click('确认并开始一次分析');
+  assert.doesNotMatch(document.body.textContent,/合成保密原文/);assert.match(document.body.textContent,/权限|会话/);assert.equal(posts,1);assert.ok(localStorage.getItem('sensor-analysis:w:u:task:pending'));
+  await act(async()=>{lateHistory({analyses:[{id:'old',state:'completed',result:{summary:'迟到的合成信息'}}],page:1,has_more:false});await wait()});assert.doesNotMatch(document.body.textContent,/迟到的合成信息/);
+  identity='different';await click('重新核对会话');assert.doesNotMatch(document.body.textContent,/合成保密原文|迟到的合成信息/);assert.ok(localStorage.getItem('sensor-analysis:w:u:task:pending'));
+  identity='u';serverRole='viewer';await click('重新核对会话');assert.match(document.body.textContent,/权限仍无法核对/);assert.ok(localStorage.getItem('sensor-analysis:w:u:task:pending'));
+  serverRole='admin';await click('重新核对会话');assert.match(document.body.textContent,/原分析请求/);assert.doesNotMatch(document.body.textContent,/合成保密原文|迟到的合成信息/);assert.ok(localStorage.getItem('sensor-analysis:w:u:task:pending'));assert.equal(posts,1);
+  const saved=JSON.parse(sessionStorage.getItem('sensor-analysis:w:u:task:draft'));assert.equal(saved.packet,'packet');assert.equal(saved.model,'model');
+ }finally{await act(async()=>root.unmount());dom.window.close()}
+});
+
 test('设备数据分析需核对全文与费用，响应丢失后只核对原请求',async()=>{
  const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost'});globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.localStorage=dom.window.localStorage;globalThis.sessionStorage=dom.window.sessionStorage;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
  Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});Object.defineProperty(globalThis,'crypto',{value:{randomUUID},configurable:true});Object.defineProperty(dom.window.navigator,'locks',{value:{request:async(_key,_opts,fn)=>fn({})}});

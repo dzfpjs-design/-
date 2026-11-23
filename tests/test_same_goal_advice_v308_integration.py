@@ -173,11 +173,24 @@ def test_ordinary_gateway_refusal_precedes_any_sdk_or_legacy_approval_lookup(mon
 @pytest.mark.parametrize('explicit', [False, True])
 def test_cloud_wrapper_none_omits_new_keyword_but_explicit_limit_reaches_fixed_internal_transport(monkeypatch, explicit):
     seen = []
-    def cloud(*args, **kwargs): seen.append(kwargs); return 'original_single_call_IO'
+    capability=NS(data={'execution':{'provider':'deepseek'}})
+    from generic_agents.config import settings
+    monkeypatch.setattr(settings(),'cloud_allowed_providers','deepseek')
+    def cloud(*args, **kwargs):
+        assert args[0] is capability
+        seen.append(kwargs); return 'original_single_call_IO'
     monkeypatch.setattr(gateway, '_cloud_json', cloud)
-    value = gateway.cloud_json(NS(), [], {}, evidence_stage=transport.STAGE, output_token_limit=1024 if explicit else None)
+    value = gateway.cloud_json(capability, [], {}, evidence_stage=transport.STAGE, output_token_limit=1024 if explicit else None)
     assert value == 'original_single_call_IO' and len(seen) == 1
     assert (seen[0]['output_token_limit'] == 1024) if explicit else ('output_token_limit' not in seen[0])
+
+
+def test_cloud_wrapper_rejects_disabled_provider_before_internal_transport(monkeypatch):
+    from generic_agents.config import settings
+    monkeypatch.setattr(settings(),'cloud_allowed_providers','qwen')
+    monkeypatch.setattr(gateway, '_cloud_json', lambda *args, **kwargs: pytest.fail('disabled provider must not call transport'))
+    with pytest.raises(gateway.ModelBlocked):
+        gateway.cloud_json(NS(data={'execution':{'provider':'deepseek'}}), [], {}, evidence_stage=transport.STAGE)
 
 
 @pytest.mark.parametrize('limit', [None, 1024])

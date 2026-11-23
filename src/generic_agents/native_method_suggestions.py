@@ -242,7 +242,7 @@ def policy_actor(db,p,row,lock=False):
     if lock:stmt=stmt.with_for_update(read=True)
     if not db.execute(stmt).first():fail('自动授权人的当前管理员权限已失效')
 def valid_policy(db,p,row,lock=False):
-    if row.status!='enabled' or not row.data['enabled']:fail('自动生成方法建议已停用')
+    if row.status not in {'enabled','enabled_unlimited_v2'} or not row.data['enabled']:fail('自动生成方法建议已停用')
     if row.data['projection_contract_hash']!=CONTRACT_HASH:fail('结构白名单合同已改变，请重新授权')
     if row.data.get('generation_contract')!=generation_contract() or row.data.get('generation_contract_hash')!=generation_contract()['generation_contract_hash']:
         fail('固定生成规则授权已改变或尚未固定，请重新授权')
@@ -251,6 +251,10 @@ def valid_policy(db,p,row,lock=False):
     policy_actor(db,p,row,lock)
     cap=model(db,p,row.data['model_profile_id'])
     if model_hash(cap)!=row.data['model_hash']:fail('自动授权模型版本或权限已改变')
+    if row.status=='enabled_unlimited_v2':
+        if row.data.get('daily_limit') is not None or cap.data['execution'].get('provider')!='deepseek':fail('不限每日次数的模型授权无法核对')
+    elif type(row.data.get('daily_limit')) is not int or not 1<=row.data['daily_limit']<=5:
+        fail('自动建议每日限额无法核对')
     return cap
 def model_hash(cap):return digest({'content_hash':cap.content_hash,'data':cap.data})
 def future_scope(db,p,task,lock=False):
@@ -975,13 +979,14 @@ def execute(db,p,task,body,operation,target=None):
         elif body.expected_policy_version is not None or body.policy_record_hash is not None:fail('原自动授权记录不存在')
         if body.enabled:
             if p.role!='admin':raise HTTPException(403,'只有管理员能够授权同范围未来任务自动生成建议')
-            if not body.cloud_authorized or body.projection_contract_hash!=CONTRACT_HASH or body.generation_contract_hash!=generation_contract()['generation_contract_hash'] or not body.model_profile_id or body.daily_limit is None or body.valid_days is None:fail('启用需要明确模型、白名单与生成合同、期限、限额和云授权')
+            if not body.cloud_authorized or body.projection_contract_hash!=CONTRACT_HASH or body.generation_contract_hash!=generation_contract()['generation_contract_hash'] or not body.model_profile_id or 'daily_limit' not in body.model_fields_set or body.valid_days is None:fail('启用需要明确模型、白名单与生成合同、期限、每日设置和云授权')
             request,cap=preview(db,p,task,body.model_profile_id)
+            if body.daily_limit is None and cap.data['execution'].get('provider')!='deepseek':fail('只有 DeepSeek 自动建议可以不设每日上限')
             if not body.preview_hash or request['preview_hash']!=body.preview_hash:fail('启用预览、来源或模型版本已改变，请重新核对授权')
             if current is None:
                 current=Memory(workspace_id=p.workspace_id,task_id=task.id,status='enabled',text='同范围方法建议自动授权',data={});db.add(current);db.flush()
             else:current.version+=1
-            current.status='enabled';current.valid_until=now()+timedelta(days=body.valid_days)
+            current.status='enabled_unlimited_v2' if body.daily_limit is None else 'enabled';current.valid_until=now()+timedelta(days=body.valid_days)
             current.data={**current.data,'type':POLICY,'native_package_id':task.package_id,'scope':request['scope'],'scope_hash':digest(request['scope']),
                 'enabled':True,'model_profile_id':cap.id,'model_hash':model_hash(cap),'provider':cap.data['execution']['provider'],'model':cap.data['execution']['model'],
                 'authorized_by':p.user_id,'projection_contract_hash':CONTRACT_HASH,
@@ -1097,7 +1102,7 @@ def recover(db,p,task,body):
 def schedule_automatic(db,p,task):
     """验收事务只登记作业；任何提炼错误不得改变已保存原业务验收。"""
     row=policy_row(db,p,task,True)
-    if not row or row.status!='enabled':return
+    if not row or row.status not in {'enabled','enabled_unlimited_v2'}:return
     from .security import Principal
     author=Principal(row.data['authorized_by'],p.workspace_id,'admin','automatic-native-suggestion')
     day=str(now().astimezone(ZoneInfo('Asia/Shanghai')).date());scope_hash=row.data['scope_hash']
@@ -1112,7 +1117,7 @@ def schedule_automatic(db,p,task):
         count=db.scalar(select(func.count()).select_from(Memory).where(Memory.workspace_id==p.workspace_id,
             Memory.data['type'].as_string()==TYPE,Memory.data['automatic']['scope_hash'].as_string()==scope_hash,
             Memory.data['automatic']['day'].as_string()==day,Memory.data['automatic']['quota_reserved'].as_boolean().is_(True)))
-        if count>=row.data['daily_limit']:fail('同范围今天已达到自动候选限额，换版或停启不会重置额度')
+        if row.data['daily_limit'] is not None and count>=row.data['daily_limit']:fail('同范围今天已达到自动候选限额，换版或停启不会重置额度')
         request,_=preview(db,author,task,cap.id)
         request={**request,'provider':cap.data['execution']['provider'],'model':cap.data['execution']['model']}
         automatic['quota_reserved']=True

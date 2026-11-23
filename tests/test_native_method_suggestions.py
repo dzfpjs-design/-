@@ -221,6 +221,41 @@ def test_automatic_scope_china_day_quota_survives_disable_enable_and_failure(cli
         assert list(db.scalars(select(Memory).where(Memory.data['type'].as_string()==methods.POLICY)))
 
 
+def test_deepseek_new_automatic_policy_unlimited_and_old_policy_remains_limited(client,monkeypatch):
+    release,_,a,spec,cap=seed(client);sent=[];transport(monkeypatch,sent)
+    policy,_=enable_policy(client,a,cap,None)
+    assert policy['daily_limit'] is None and policy['effective_enabled']
+    with Session(engine()) as db:
+        saved=db.get(Memory,policy['id'])
+        assert saved.status=='enabled_unlimited_v2' and saved.data['provider']=='deepseek'
+    tasks=[]
+    for _ in range(6):
+        _,task=another(client,release,spec);assert accept(client,task).status_code==200
+        items=client.get(url(task)).json()['items'];assert len(items)==1 and items[0]['status']=='queued'
+        tasks.append((task,items[0]))
+    run(tasks[0][1]);assert get(client,*tasks[0])['status']=='needs_review' and len(sent)==1
+    with Session(engine()) as db:
+        assert len(list(db.scalars(select(CloudCall))))==1
+    policy,_=enable_policy(client,a,cap,1)
+    assert policy['daily_limit']==1 and policy['effective_enabled']
+    _,later=another(client,release,spec);assert accept(client,later).status_code==200
+    item=client.get(url(later)).json()['items'][0]
+    assert item['status']=='failed' and '限额' in item['error'] and len(sent)==1
+
+
+def test_other_provider_cannot_enable_unlimited_automatic_policy(client):
+    _,_,task,_,_=seed(client)
+    cap=publish(client,manifest('foundation_model',name='limited_provider_for_policy_test',allowed_agent_roles=['business'],
+        execution={'provider':'qwen','model':'qwen-plus','secret_ref':'DASHSCOPE_API_KEY','max_tokens':2048},
+        data_policy={'cloud_allowed':True}))
+    view=preview(client,task,cap);current=client.get(url(task)+'/policy').json()['policy']
+    body=common(view['version'],enabled=True,expected_policy_version=current['version'],policy_record_hash=current['record_hash'],
+        model_profile_id=cap['id'],projection_contract_hash=view['projection_contract_hash'],preview_hash=view['preview_hash'],
+        generation_contract_hash=view['generation_contract']['generation_contract_hash'],cloud_authorized=True,daily_limit=None,valid_days=1)
+    response=client.post(url(task)+'/policy',json=body)
+    assert response.status_code==409 and 'DeepSeek' in response.json()['detail']
+
+
 def test_disable_before_dispatch_and_expiry_preserve_acceptance_without_cloud(client,monkeypatch):
     release,_,a,spec,cap=seed(client);sent=[];transport(monkeypatch,sent)
     policy,_=enable_policy(client,a,cap,5)

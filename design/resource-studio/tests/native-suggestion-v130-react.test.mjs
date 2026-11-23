@@ -101,7 +101,7 @@ async function harness(run) {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',
     {url:'https://synthetic-native.invalid/', pretendToBeVisual:true, resources:new NoResources(), virtualConsole});
   const backing = dom.window.localStorage, session = dom.window.sessionStorage;
-  const state = {me:copy(account), detail:detail(), allMeGate:null, nextMeGate:null,
+  const state = {me:copy(account), detail:detail(), models:[], startAllowed:false, allMeGate:null, nextMeGate:null,
     failWorkingWrites:false, parentGuard:false, guardHistory:[], visibility:'visible'};
   const storage = {
     get length() { return backing.length; }, key:index => backing.key(index),
@@ -139,10 +139,10 @@ async function harness(run) {
         state.nextMeGate = null;
         if (held) await held.promise;
         value = identity;
-      } else if (url.pathname === prefix + '/models' && !url.search) value = [];
+      } else if (url.pathname === prefix + '/models' && !url.search) value = copy(state.models);
       else if (url.pathname === prefix && url.search === '?limit=20') {
         value = {items:[copy(state.detail)], version:4, next_cursor:null, policy:null,
-          permissions:{start:{allowed:false}, local_start:{allowed:false}}};
+          permissions:{start:{allowed:state.startAllowed}, local_start:{allowed:false}}};
       } else if (url.pathname === prefix + '/' + suggestionID && !url.search) value = copy(state.detail);
       else throw Error('Unexpected synthetic API route: ' + call.path);
       return new Response(JSON.stringify(value), {status:200, headers:{'Content-Type':'application/json'}});
@@ -205,6 +205,17 @@ async function harness(run) {
     for (const name of names) { if (descriptors[name]) Object.defineProperty(globalThis, name, descriptors[name]); else delete globalThis[name]; }
   }
 }
+
+test('automatic daily setting follows the selected provider without changing old saved policies', async () => harness(async h => {
+  h.state.models=[{id:'deepseek-model',name:'DeepSeek',provider:'deepseek',model:'synthetic',version:1},{id:'qwen-model',name:'Qwen',provider:'qwen',model:'synthetic',version:1}];
+  h.state.startAllowed=true;
+  await h.mount();
+  const model=h.input('方法建议云模型');assert.ok(model);
+  await act(async()=>{model.value='deepseek-model';model.dispatchEvent(new h.dom.window.Event('change',{bubbles:true}));});await h.settle();
+  let daily=h.input('自动方法建议每日限额');assert.ok(daily);assert.equal(daily.value,'unlimited');
+  await act(async()=>{model.value='qwen-model';model.dispatchEvent(new h.dom.window.Event('change',{bubbles:true}));});await h.settle();
+  daily=h.input('自动方法建议每日限额');assert.equal(daily.value,'1');assert.equal([...daily.options].some(option=>option.value==='unlimited'),false);
+}));
 
 test('actual StrictMode mount conceals a local private draft until the real account checks complete', async () => harness(async h => {
   const gate = h.blockIdentity(), before = h.snapshots();
