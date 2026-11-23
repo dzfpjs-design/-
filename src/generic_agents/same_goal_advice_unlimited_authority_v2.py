@@ -55,7 +55,17 @@ def current_policy(db, p, task_id, policy_ref):
         and all(saved['limits'][name] == request['limits'][name] for name in request['limits']))
     # This fixed server resolver rechecks the Goal, maturity, graph binding,
     # published capability/model hashes, current source actors and capacity.
-    context = old._configuration(db, p, task, request)
+    # A saved pristine v2 preparation is unknown to the v1-only counters in
+    # old._configuration. Use the still-unrouted shared reader here; it holds
+    # Task/custody locks and fails closed for any progressed or unknown v2
+    # state. This does not make an existing Plan a send authorization.
+    from . import goal_budget_versioned_snapshot_candidate_v3 as capacity
+    context = old._configuration_base(db, p, task, request)
+    used = capacity.read_locked(db, p, task)
+    store.need(used['calls'] < context['goal']['spec']['max_tool_calls'],
+        '原目标调用额度已用尽，不能增加本次建议额度')
+    store.need(used['steps'] < context['goal']['spec']['max_steps'],
+        '原目标步骤额度已用尽，不能增加本次建议额度')
     store.need(context['scope'] == saved['scope']
         and store._pin(context['source']) == saved['source_business_capability_ref']
         and store._pin(context['advice']) == saved['advice_capability_ref']
