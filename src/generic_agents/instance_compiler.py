@@ -392,9 +392,15 @@ def compile_configuration(db,p,configuration,objects,role_bindings,*,target_inst
             from .instance_native_graph_scope_v136 import binding_issues
             issues.extend(binding_issues(binding,target_instance_id))
             issues.extend(graph_role_issues[name])
-            businesses.append({'id':identifier('business',name),'name':name,'flow':flow,
+            from .instance_candidate_fields_v1 import observation_scope, issue as observation_scope_issue
+            candidate_scope=observation_scope(binding,catalog,schemas)
+            scope_issue=observation_scope_issue(candidate_scope)
+            if scope_issue:issues.append(scope_issue)
+            entry={'id':identifier('business',name),'name':name,'flow':flow,
                 'issues':list(dict.fromkeys(issues)), 'available':not issues,
-                'execution_mode':'confirmed_graph_workflow' if not issues else 'blocked'})
+                'execution_mode':'confirmed_graph_workflow' if not issues else 'blocked'}
+            if candidate_scope is not None:entry['candidate_observation_scope']=candidate_scope
+            businesses.append(entry)
             continue
         for step in flow.get('steps',[]):
             if step.get('agent')=='人工确认':

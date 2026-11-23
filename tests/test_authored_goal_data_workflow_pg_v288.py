@@ -3,6 +3,7 @@
 Actual owned loopback discovery and material/configuration fixtures are reused.
 No Task, measurement, GoalEvaluation or paid answer is fabricated by adopting.
 """
+import copy
 import hashlib
 import json
 from uuid import uuid4
@@ -16,6 +17,7 @@ from generic_agents import authored_goal_data_workflow_contracts_v288 as command
 from generic_agents.contracts import Manifest
 from generic_agents.contracts import digest
 from generic_agents.db import engine
+from generic_agents.instance_compiler import identifier
 from generic_agents import models as m
 from tests.test_authored_decision_workflow_pg_v286 import prepared_decision, counts
 from tests.test_authored_service_workflow_pg_v270 import good, publish
@@ -38,6 +40,12 @@ def tool(module, role, execution, *, dependencies=None, cloud=False):
 def test_real_six_port_adoption_recovers_original_request_and_publishes_fixed_preparation_policy(managed):
     s = managed
     original, old_pins, model, candidate, extractor, _material = prepared_decision(s)
+    field_keys = [identifier('field', label) for label in ('气温', '相对湿度')]
+    for item in original['candidate_specs']:
+        for pin in item['capability_pins']:
+            if pin['delivery'] == 'requested_observation':
+                pin['ports'] = [{'field': field, 'pointer': '/requested_observation/' + field}
+                                for field in field_keys]
     listed = good(s.client.get('/api/capabilities'))
     context = [row for row in listed if row['data']['execution'].get('handler') == reader.HANDLER]
     assert len(context) == 1
@@ -72,7 +80,10 @@ def test_real_six_port_adoption_recovers_original_request_and_publishes_fixed_pr
     view = good(s.client.get(commands.PREFIX + '/adoptions/' + adopted['id']))
     assert view['graph'] == preview['binding']['graph'] and not view['can_execute']
     current = good(s.client.get('/api/setup/draft'))
-    publication = {'revision': current['revision'], 'objects': OBJECTS,
+    objects = copy.deepcopy(OBJECTS)
+    objects[0]['fields'].extend([{'label': '气温', 'kind': '数值', 'required': False, 'unit': '℃'},
+                                 {'label': '相对湿度', 'kind': '数值', 'required': False, 'unit': '%'}])
+    publication = {'revision': current['revision'], 'objects': objects,
         'role_bindings': {key: actor['user_id'] for key, actor in preview['binding']['role_bindings'].items()}}
     checked = good(s.client.post('/api/instances/check', json=publication))
     assert not checked['general_issues'] and all(row['available'] for row in checked['businesses'])
