@@ -31,6 +31,7 @@ from tests.test_authored_image_acceptance_pg_v243 import actor_client, approval 
 from tests.test_runtime_documents_pg_v205 import uploaded, run, version
 from generic_agents import runtime_document_receipts
 from generic_agents.runtime_document_models import RuntimeDocumentVersion
+import tests.test_authored_service_workflow_pg_v270 as authored_service_fixture
 
 
 @pytest.fixture
@@ -144,8 +145,15 @@ def test_real_authored_goal_graph_release_and_task_are_saved_in_pg(managed):
         assert not list(db.scalars(select(CloudCall)))
 
 
-def test_graph_task_uses_saved_document_source_and_real_approval_roles(managed):
+@pytest.mark.parametrize('model_provider', ['qwen', 'deepseek'])
+def test_graph_task_uses_saved_document_source_and_real_approval_roles(managed, monkeypatch, model_provider):
     """Source authorization, approval and initial goal only; no model call."""
+    if model_provider == 'deepseek':
+        synthetic_model = copy.deepcopy(authored_service_fixture.model_manifest())
+        synthetic_model['name'] = 'synthetic_deepseek'
+        synthetic_model['execution'] = {'provider': 'deepseek', 'model': 'deepseek-v4-pro',
+            'secret_ref': 'DEEPSEEK_API_KEY', 'max_tokens': 1024, 'thinking_mode': 'disabled'}
+        monkeypatch.setattr(authored_service_fixture, 'model_manifest', lambda: copy.deepcopy(synthetic_model))
     release, target, task_id, unit = make_goal_graph_draft(managed)
     client = managed.client
     holder = SimpleNamespace(client=client, workspace=managed.workspace_id)
@@ -162,6 +170,7 @@ def test_graph_task_uses_saved_document_source_and_real_approval_roles(managed):
     with Session(engine()) as db:
         reasoning_cap = db.get(Capability, reasoning['execution']['capability_id'])
         model_id = reasoning_cap.data['execution']['model_profile_id']
+        assert db.get(Capability, model_id).data['execution']['provider'] == model_provider
         evidence_id = db.get(RuntimeDocumentVersion, version_id).evidence_id
         evidence_version = db.get(Evidence, evidence_id).version
     authorized = client.post('/api/evidence/' + evidence_id + '/authorize', json={
