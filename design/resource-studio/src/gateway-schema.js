@@ -54,6 +54,10 @@ export const gatewayDesign={
 };
 export const localProtocols=['本地受管模型','本地上传','影像文件','CSV / XLSX','内置工具'];
 export const endpointHints={'FTP':'ftp://files.example.invalid','SFTP':'sftp://files.example.invalid','SMB':'\\\\files.example.invalid\\share','MQTT':'mqtts://broker.example.invalid:8883','Modbus TCP':'tcp://device.example.invalid:502','OPC UA':'opc.tcp://device.example.invalid:4840'};
+export function gatewayRuntimeFields(form){
+ const fields=gatewayDesign[form.category]?.runtime||[];
+ return form.category==='models'&&form.protocol==='DeepSeek'?fields.filter(field=>!['budget','overBudget'].includes(field.key)):fields;
+}
 export function makeGatewayForm(record,category){
  const c=categories.find(c=>c.id===category),protocol=record?.protocol||c.protocols[0];
  return {id:record?.id||null,category,name:record?.name||'',protocol,endpoint:record?.endpoint||'',auth:record?.auth||'无需认证',account:record?.account||'',node:'平台托管网关',nodeAddress:'',timeout:30,retries:2,protocolValues:{[protocol]:record?.details||{}},settings:{},...record?.gatewayConfig};

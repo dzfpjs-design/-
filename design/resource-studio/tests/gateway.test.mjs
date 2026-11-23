@@ -1,7 +1,17 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {categories,initialWorkspace} from '../src/catalog.js';
-import {gatewayDesign,makeGatewayForm,cleanGatewayForm,gatewayProblems,gatewayRecord,commitGateway} from '../src/gateway-schema.js';
+import {gatewayDesign,gatewayRuntimeFields,makeGatewayForm,cleanGatewayForm,gatewayProblems,gatewayRecord,commitGateway} from '../src/gateway-schema.js';
+import {loadWorkspace,persistWorkspace} from '../src/workspace-store.js';
+test('DeepSeek prototype hides cost controls but keeps historical draft fields through save and reload',()=>{
+ const model=makeGatewayForm(null,'models');Object.assign(model,{name:'已保存模型',protocol:'DeepSeek',settings:{budget:17,overBudget:'等待人工调整额度'}});
+ assert(!gatewayRuntimeFields(model).some(f=>['budget','overBudget'].includes(f.key)));
+ const saved=gatewayRecord(model,'model-historical');const values=new Map();const storage={getItem:k=>values.has(k)?values.get(k):null,setItem:(k,v)=>values.set(k,v)};
+ const workspace=commitGateway(initialWorkspace(),saved);persistWorkspace(storage,workspace);
+ const loaded=loadWorkspace(storage),row=loaded.connections.find(x=>x.id==='model-historical'),reopened=makeGatewayForm(row,'models');
+ assert.equal(reopened.settings.budget,17);assert.equal(reopened.settings.overBudget,'等待人工调整额度');
+ reopened.protocol='Qwen';assert(gatewayRuntimeFields(reopened).some(f=>f.key==='budget'));assert.equal(cleanGatewayForm(reopened).settings.budget,17);
+});
 test('specialist connections default local and preserve an explicit cloud choice through save and reopen',()=>{
  const form={...makeGatewayForm(null,'models'),name:'本地分割服务',protocol:'专业模型 HTTP'};
  const local=gatewayRecord(form,'local');
