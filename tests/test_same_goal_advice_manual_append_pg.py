@@ -8,6 +8,7 @@ import copy
 import json
 import time
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -57,7 +58,8 @@ def deepseek_3600_publication(managed, monkeypatch):
     return publication
 
 
-def test_manual_append_second_generation_with_real_receipt_and_no_cloud(deepseek_3600_publication, monkeypatch):
+@pytest.fixture
+def matured_manual_case(deepseek_3600_publication, monkeypatch):
     publication = deepseek_3600_publication
     seen = []
     setup = helpers.setup_simulated_scope
@@ -163,4 +165,16 @@ def test_manual_append_second_generation_with_real_receipt_and_no_cloud(deepseek
         selected = append_store.provider.binding(db, principal, task)
         assert append_store._mature_head(db, principal, task, selected)['head']['head_hash'] == head['head_hash']
         assert db.scalar(select(func.count()).select_from(m.CloudCall).where(m.CloudCall.workspace_id == workspace)) == 0
+        running = db.scalar(select(func.count()).select_from(m.Job).where(m.Job.workspace_id == workspace,
+            m.Job.data['task_id'].as_string() == task_id, m.Job.status == 'running'))
+        assert running == 0
     print('SECOND_EVALUATION_MATURED', flush=True)
+    # No background Goal worker is started by this fixture. Previously issued
+    # queued checks/timers are left intact; they confer no new authority.
+    yield SimpleNamespace(workspace_id=workspace, task_id=task_id, principal=principal, client=client,
+        publication=publication, release=release, first_head=first_head, head=copy.deepcopy(head),
+        q0=q0, observation_id=observation_id)
+
+
+def test_manual_append_second_generation_with_real_receipt_and_no_cloud(matured_manual_case):
+    assert matured_manual_case.head['generation'] == matured_manual_case.first_head['generation'] + 1

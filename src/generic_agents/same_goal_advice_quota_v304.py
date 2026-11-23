@@ -189,7 +189,14 @@ def authorize(db, p, task_id, body):
         # Original receipt, not a renewed policy: expiry, cut, head and money
         # ceiling are never extended by retrying the nonce.
         return _receipt(db, p, task, body, originals[0], now)
+    # Cross-version checks share the task lock. Existing receipts remain
+    # replayable; a new v1 request cannot conceal or supersede a v2 policy.
+    from . import same_goal_advice_unlimited_policy_v2 as unlimited
+    store.need(not store._rows(db, p, Audit, Audit.action == unlimited.AUTHORIZATION,
+        Audit.object_id == task.id, Audit.data['request_id'].as_string() == body['request_id']),
+        '原请求编号已用于另一版政策')
     context = _configuration(db, p, task, body)
+    unlimited.assert_no_active_v2(db, p, task, context['scope'], now)
     expires = instant(body['expires_at'])
     store.need(now < expires <= now + MAX_VALIDITY, '额度有效期必须晚于服务器当前时间且不超过24小时')
     deadline = context['goal']['spec'].get('deadline')
