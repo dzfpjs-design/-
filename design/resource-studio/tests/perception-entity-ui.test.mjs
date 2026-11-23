@@ -200,3 +200,16 @@ test('MQTT untagged pending request remains exact and visible while retrying its
 test('MQTT explicit destination reconfirmation creates a fresh nonce and requires fresh historical replay consent',async()=>environment(async env=>{
  const original=mqttDraft({instance_release_id:'release-original',include_existing:true}),{ui,posts,properties,key}=await mqttFixture(env,{draft:original});await ui.click('核对并采用当前业务目的地');const updated=properties.workspace.mqttBindingDrafts[key];assert.equal(posts.length,0);assert.notEqual(updated.requestId,original.requestId);assert.equal(updated.include_existing,false);assert.equal(updated.instance_release_id,releaseID);for(const field of ['topic','entity_id','extractor_id','field_links'])assert.deepEqual(updated[field],original[field]);assert.equal(Object.hasOwn(updated,'pending'),false);assert.match(text(ui.render()),/历史处理范围已重置为只处理以后数据/);
 }));
+
+test('evidence question preview describes usage recording and possible cost without implying every provider has a budget',async()=>{
+ for(const provider of ['deepseek','qwen']) await environment(async env=>{
+  const Question=await component('EvidenceQuestionStudio'),key='ga-evidence-question:'+account.workspace_id+':'+account.username+':'+instanceId;
+  env.storage.setItem(key,JSON.stringify({form:{question:'核查最近观测',model_profile_id:'model-a'}}));
+  const posts=[];globalThis.fetch=async(path,options={})=>{
+   if(options.method==='POST'){posts.push(path);return finish({provider,model:'text-model',max_output_tokens:512,preview_hash:'preview',cloud_input:{question:'核查最近观测',objects:[{name:'原对象',type:'测量对象'}]},notice:'请核对内容'});}
+   return finish(path.endsWith('/models')?[{id:'model-a',name:'模型',provider,model:'text-model'}]:[]);
+  };
+  const ui=env.mount(Question,props({entityIds:['original-entity'],onAssessment(){},onBusy(){}}));await ui.flush();await ui.click('查看将发送的文字');await ui.flush();
+  const visible=text(ui.render());assert.match(visible,/调用用量会记录；可能产生云服务费用/);assert.doesNotMatch(visible,/调用计入模型网关预算/);assert.match(visible,provider==='deepseek'?/DeepSeek · text-model/:/Qwen · text-model/);assert.deepEqual(posts,['/api/evidence-questions/preview']);assert.equal(ui.button('保存问题并理解').props.disabled,true);
+ });
+});
