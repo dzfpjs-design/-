@@ -105,12 +105,12 @@ def test_unsupported_price_chain_cannot_be_reused(scene):
                 task_id=s['second'], body=s['body'])
 
 
-def test_unimplemented_price_wrapper_is_closed_even_on_its_first_request(scene):
+def test_new_price_wrapper_may_take_the_nonce_before_its_task_lock(scene):
     s = scene
     with Session(engine()) as db:
-        with pytest.raises(HTTPException):
-            candidate.acquire(db, s['principal'], action='same_goal_advice.task_price_registered_v310',
-                task_id=s['first'], subject_id=s['first'], body=s['body'])
+        candidate.acquire(db, s['principal'], action=candidate.PRICE_WRAPPER,
+            task_id=s['first'], subject_id=s['first'], body=s['body'])
+        db.rollback()
 
 
 def test_incomplete_quota_wrapper_never_replays_as_a_complete_request(scene):

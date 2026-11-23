@@ -1,9 +1,13 @@
 """Candidate shared nonce guard; intentionally not wired to routes or workers.
 
 Requires every participating writer to call it before taking a Task or actor
-lock. Old processes are not compatible. Price-registration chains remain
-closed until their lifecycle is independently validated.
+lock. Old processes are not compatible. This is not a release-ready
+integration: price, policy and command callers do not yet all use it.
 """
+from functools import wraps
+from types import SimpleNamespace
+
+from fastapi import HTTPException
 from sqlalchemy import or_, text
 
 from . import workspace_command_nonce_lock_v312 as legacy
@@ -18,6 +22,20 @@ QUOTA_WRAPPER = 'same_goal_advice.task_quota_configured_v310'
 EXTRA_ACTIONS = frozenset({V1_POLICY_REQUEST, V2_POLICY_REQUEST, PRICE_BASIS})
 
 
+def checked(function):
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except HTTPException:
+            raise
+        except (KeyError, TypeError, ValueError, AttributeError, IndexError, StopIteration,
+                UnicodeError, RecursionError, OverflowError):
+            legacy.need(False, '原申请编号或关联凭据无法核对；请保留原记录，未创建替代申请')
+    return wrapper
+
+
+@checked
 def acquire(db, p, *, action, task_id, body, subject_id=None, advice_id=None):
     """Serialize candidate command and authenticate any existing nonce owner.
 
@@ -25,11 +43,16 @@ def acquire(db, p, *, action, task_id, body, subject_id=None, advice_id=None):
     still use the original route's receipt checks. Not safe with older API
     processes or any writer that does not participate in this protocol.
     """
-    legacy.need(action in legacy.ACTIONS | {V1_POLICY_REQUEST, V2_POLICY_REQUEST})
-    legacy.need(action != PRICE_WRAPPER, '价格登记链尚未接入新版编号协议，请保留原记录核对')
+    legacy.need(action in legacy.ACTIONS | {V1_POLICY_REQUEST, V2_POLICY_REQUEST, PRICE_BASIS})
     legacy.need(type(body) is dict and 'request_id' in body)
     request_id = legacy._id(body['request_id'])
-    legacy._id(task_id); legacy._id(p.user_id)
+    if action == PRICE_BASIS:
+        legacy.need(task_id is None and type(body.get('model_pin')) is dict)
+        model_id = legacy._id(body['model_pin'].get('id'))
+        legacy.need(subject_id in {None, model_id} and advice_id is None)
+    else:
+        legacy._id(task_id)
+    legacy._id(p.user_id)
     if subject_id is not None: legacy._id(subject_id)
     if advice_id is not None: legacy._id(advice_id)
     with db.no_autoflush:
@@ -45,12 +68,10 @@ def acquire(db, p, *, action, task_id, body, subject_id=None, advice_id=None):
         pointers = legacy._rows(db, p, Plan, or_(
             Plan.data['operations'].contains([{'request_id': request_id}]),
             Plan.data['revisions'].contains([{'request_id': request_id}])))
-        legacy.need(not any(event.action == PRICE_BASIS for event in events),
-            '价格登记链尚未接入新版编号协议，请保留原记录核对')
-        legacy.need(not (len(events) == 1 and events[0].action == QUOTA_WRAPPER),
-            '原额度配置缺少授权记录，请保留原记录核对')
-        if len(events) <= 1 and not any(event.action in {V1_POLICY_REQUEST, V2_POLICY_REQUEST} for event in events):
-            if action in {V1_POLICY_REQUEST, V2_POLICY_REQUEST}:
+        legacy.need(not (len(events) == 1 and events[0].action in {QUOTA_WRAPPER, PRICE_WRAPPER}),
+            '原配置缺少对应授权记录，请保留原记录核对')
+        if len(events) <= 1 and not any(event.action in EXTRA_ACTIONS for event in events):
+            if action in EXTRA_ACTIONS:
                 legacy.need(not events and not pointers)
                 return
             return legacy.acquire(db, p, action=action, task_id=task_id, body=body,
@@ -58,6 +79,15 @@ def acquire(db, p, *, action, task_id, body, subject_id=None, advice_id=None):
         legacy.need(not pointers)
         if len(events) == 1:
             event = events[0]
+            if event.action == PRICE_BASIS:
+                legacy.need(action == PRICE_BASIS and event.actor_id == p.user_id and event.object_id == model_id)
+                from . import same_goal_advice_price_v307 as prices
+                saved = prices._parse(prices.Registration, event.data)
+                legacy.need(saved['workspace_id'] == p.workspace_id
+                    and saved['actor_id'] == p.user_id and saved['model_pin'] == body['model_pin']
+                    and saved['request_id'] == request_id and saved['body_hash'] == digest(body)
+                    and digest(saved['body']) == digest(body))
+                return
             legacy.need(event.action == action and action in {V1_POLICY_REQUEST, V2_POLICY_REQUEST}
                 and event.actor_id == p.user_id and event.object_id == task_id
                 and type(event.data) is dict and event.data.get('task_id') == task_id
@@ -65,6 +95,23 @@ def acquire(db, p, *, action, task_id, body, subject_id=None, advice_id=None):
                 and event.data.get('body_hash') == digest(body))
             return
         legacy.need(len(events) == 2)
+        if {event.action for event in events} == {PRICE_WRAPPER, PRICE_BASIS}:
+            from . import same_goal_advice_options_v310 as options
+            wrapper = next(event for event in events if event.action == PRICE_WRAPPER)
+            original = next(event for event in events if event.action == PRICE_BASIS)
+            # _shape only needs the historical task identity. The standalone
+            # price receipt remains recoverable even if the task is retired;
+            # no task authorization is inferred from this lightweight value.
+            historical_task = SimpleNamespace(id=legacy._id(wrapper.object_id))
+            legacy.need(wrapper.actor_id == original.actor_id == p.user_id)
+            value = options._shape(p, historical_task, wrapper)
+            actual = options._price_anchor(db, p, wrapper, value)
+            legacy.need(actual.id == original.id and digest(value['body']) == digest(body))
+            if action == PRICE_WRAPPER:
+                legacy.need(task_id == wrapper.object_id and subject_id in {None, task_id} and advice_id is None)
+            else:
+                legacy.need(action == PRICE_BASIS and original.object_id == model_id)
+            return
         wrappers = [event for event in events if event.action == QUOTA_WRAPPER]
         originals = [event for event in events if event.action == V1_POLICY_REQUEST]
         legacy.need(len(wrappers) == len(originals) == 1)
