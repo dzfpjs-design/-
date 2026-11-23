@@ -78,7 +78,7 @@ export function gatewayProblems(form){
  if(form.node==='已有网关节点'&&!form.nodeAddress?.trim())problems.push('请填写网关节点管理地址。');
  if(form.node==='计划部署现场网关')problems.push('现场网关尚待部署，只能保存计划草稿。');
  if(form.auth!=='无需认证'&&!form.account?.trim())problems.push('请填写凭证引用名称。');
- for(const [group,fields] of [['scope',design.scope[form.protocol]||[]],['processing',design.processing],['runtime',design.runtime]])for(const f of fields){const v=fieldValue(form,group,f);if(f.required&&!String(v).trim())problems.push('请填写'+f.label+'。');if(f.type==='number'&&(!Number.isFinite(Number(v))||v===''||Number(v)<f.min))problems.push(f.label+'需为不小于'+f.min+'的数值。');if(f.multiple&&!v.length)problems.push('请选择至少一项'+f.label+'。');}
+ for(const [group,fields] of [['scope',design.scope[form.protocol]||[]],['processing',design.processing],['runtime',gatewayRuntimeFields(form)]])for(const f of fields){const v=fieldValue(form,group,f);if(f.required&&!String(v).trim())problems.push('请填写'+f.label+'。');if(f.type==='number'&&(!Number.isFinite(Number(v))||v===''||Number(v)<f.min))problems.push(f.label+'需为不小于'+f.min+'的数值。');if(f.multiple&&!v.length)problems.push('请选择至少一项'+f.label+'。');}
  if(!Number.isFinite(Number(form.timeout))||Number(form.timeout)<=0)problems.push('连接超时需大于0秒。');
  if(!Number.isInteger(Number(form.retries))||Number(form.retries)<0||Number(form.retries)>5)problems.push('读取重试次数需为0至5的整数。');
  if(form.category==='tools'&&form.settings.effect==='修改外部业务状态'&&!form.settings.idempotency?.trim())problems.push('修改外部状态的工具需要幂等标识。');

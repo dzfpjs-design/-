@@ -16,7 +16,7 @@ test('DeepSeek gateway prototype explains local scope without showing a fictitio
  try{
   const {default:Gateway}=await server.ssrLoadModule('/src/GatewayStudio.jsx');
   const {createRoot}=await import('react-dom/client');root=createRoot(document.getElementById('root'));
-  const form=makeGatewayForm(null,'models');Object.assign(form,{protocol:'DeepSeek',name:'合成模型连接',settings:{budget:17,overBudget:'等待人工调整额度'}});
+  const form=makeGatewayForm(null,'models');Object.assign(form,{protocol:'DeepSeek',name:'合成模型连接',settings:{budget:'',overBudget:'等待人工调整额度'}});
   const workspace=commitGateway(initialWorkspace(),gatewayRecord(form,'synthetic-connection'));
   const Btn=({children,icon,primary,ghost,...props})=>React.createElement('button',props,children);
   const Field=({children,label})=>React.createElement('label',null,label,children);
@@ -25,5 +25,8 @@ test('DeepSeek gateway prototype explains local scope without showing a fictitio
   await act(async()=>tab.click());const text=document.getElementById('root').textContent;
   assert.match(text,/本页草稿不会更改真实服务配置/);assert.match(text,/历史金额设置仍保留/);
   assert.doesNotMatch(text,/每日费用上限（元）/);assert.doesNotMatch(text,/超限处理/);
+  const check=[...document.querySelectorAll('button')].find(node=>node.textContent.includes('验证与影响'));assert.ok(check);await act(async()=>check.click());assert.doesNotMatch(document.getElementById('root').textContent,/每日费用上限/);
+  await act(async()=>root.unmount());root=createRoot(document.getElementById('root'));await act(async()=>root.render(React.createElement(Gateway,{workspace,initialCategory:'models',initialConnection:'synthetic-connection',onCommit:()=>true,onBack:()=>{},Icon:()=>null,Btn,Field,Dialog:()=>null})));
+  const recheck=[...document.querySelectorAll('button')].find(node=>node.textContent.includes('验证与影响'));await act(async()=>recheck.click());assert.doesNotMatch(document.getElementById('root').textContent,/每日费用上限/);
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [key,descriptor] of old){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}}
 });

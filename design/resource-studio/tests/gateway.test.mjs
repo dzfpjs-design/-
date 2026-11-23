@@ -33,3 +33,15 @@ test('planned gateway, missing references and embedded credentials cannot be val
 test('legacy saved scope survives migration and serialization',()=>{const f=makeGatewayForm({id:'one',name:'sensor',protocol:'MQTT',details:{topic:'observations/+',database:''}},'sensor');assert.equal(cleanGatewayForm(f).protocolValues.MQTT.topic,'observations/+');const restored=JSON.parse(JSON.stringify(cleanGatewayForm(f)));assert.equal(gatewayRecord(restored,'one').details.topic,'observations/+');});
 test('even incomplete draft saves remove credentials embedded in non-HTTP addresses',()=>{for(const endpoint of ['ftp://user:privatepass@example.invalid','rtsp://user:privatepass@example.invalid','mqtts://user:privatepass@example.invalid','https://example.invalid?access_token=privatepass']){const f=makeGatewayForm(null,'video');f.name='demo';f.endpoint=endpoint;assert(!JSON.stringify(gatewayRecord(f,'safe')).includes('privatepass'));}});
 test('restoring a default capability does not create a false connection change',()=>{const f=makeGatewayForm(null,'models');const edited={...f,settings:{...f.settings,abilities:['文本推理']}};assert.deepEqual(cleanGatewayForm(f),cleanGatewayForm(edited));assert.deepEqual(cleanGatewayForm(f).settings.callers,['业务智能体','多模感知智能体','数据管理智能体']);});
+
+test('hidden DeepSeek legacy budget never blocks while Qwen still validates it after draft reload',()=>{
+ for(const budget of ['',-1,'not-a-number']){
+  const form=makeGatewayForm(null,'models');Object.assign(form,{name:'模型连接',protocol:'DeepSeek',endpoint:'https://example.invalid',settings:{budget,overBudget:'等待人工调整额度'}});
+  assert(!gatewayProblems(form).some(x=>x.includes('每日费用上限')),String(budget));
+  const saved=gatewayRecord(form,'model-historical');const values=new Map(),storage={getItem:k=>values.has(k)?values.get(k):null,setItem:(k,v)=>values.set(k,v)};
+  persistWorkspace(storage,commitGateway(initialWorkspace(),saved));
+  const reopened=makeGatewayForm(loadWorkspace(storage).connections.find(x=>x.id==='model-historical'),'models');
+  assert.equal(reopened.settings.budget,budget);assert(!gatewayProblems(reopened).some(x=>x.includes('每日费用上限')));
+  reopened.protocol='Qwen';assert(gatewayProblems(reopened).some(x=>x.includes('每日费用上限')));assert.equal(reopened.settings.budget,budget);
+ }
+});
