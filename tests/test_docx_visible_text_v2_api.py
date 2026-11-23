@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from generic_agents.api import app
 from generic_agents.contracts import digest
 from generic_agents.db import engine
-from generic_agents.models import CloudCall, Job, Membership, Workspace
+from generic_agents.models import CloudCall, Job, Membership, SetupReportDraft, Workspace
 from generic_agents import map_access
 from tests.test_material_ocr import upload
 from tests.test_native_report_reading_pure import doc, p
@@ -26,7 +26,11 @@ def test_api_recalculates_same_source_after_new_client_without_changing_any_stat
     route = '/api/setup/materials/' + material['id'] + '/docx-visible-text-v2'
     params = {'version': material['version'], 'source_hash': material['hash']}
     with Session(engine()) as db:
-        before = (db.scalar(select(func.count()).select_from(Job)), db.scalar(select(func.count()).select_from(CloudCall)))
+        before = (db.scalar(select(func.count()).select_from(Job)), db.scalar(select(func.count()).select_from(CloudCall)),
+                  db.scalar(select(func.count()).select_from(SetupReportDraft)))
+    assert before[2] == 0
+    original = client.get('/api/setup/materials/' + material['id'] + '/content')
+    assert original.status_code == 200 and original.content == word
     first = client.get(route, params=params)
     assert first.status_code == 200, first.text
     value = first.json(); assert first.headers['cache-control'] == 'private, no-store'
@@ -43,8 +47,10 @@ def test_api_recalculates_same_source_after_new_client_without_changing_any_stat
         again = other.get(route, params=params)
         assert again.status_code == 200 and again.json() == value
     assert client.get(route, params={**params, 'source_hash': '0' * 64}).status_code == 409
+    assert client.get('/api/setup/materials/' + material['id'] + '/content').content == word
     with Session(engine()) as db:
-        assert (db.scalar(select(func.count()).select_from(Job)), db.scalar(select(func.count()).select_from(CloudCall))) == before
+        assert (db.scalar(select(func.count()).select_from(Job)), db.scalar(select(func.count()).select_from(CloudCall)),
+                db.scalar(select(func.count()).select_from(SetupReportDraft))) == before
 
 
 def test_enabled_policy_rejects_operator_without_exposing_text(client):
