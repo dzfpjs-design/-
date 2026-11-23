@@ -1,6 +1,6 @@
 """Closed cross-version inventory; not an execution or creation authority.
 
-Only the original v1 lifecycle and pristine queued v2 records are readable.
+Only the original v1 lifecycle and queued or locally prepared v2 records are readable.
 This independent reader has no route/worker and does not replace the v1 API.
 Unknown versions, incomplete originals, and unexplained records fail closed.
 """
@@ -18,7 +18,7 @@ from .models import Audit, AuthSession, CloudCall, Evidence, Invocation, Job, Pl
 
 @old.checked
 def read(db, p, task):
-    """Return validated v1 reservations and the number of queued v2 plans.
+    """Return validated v1 reservations and the number of open v2 plans.
 
     The Task lock precedes all custody reads. Callers that mutate commands
     must acquire the workspace nonce lock before calling this function. This
@@ -68,8 +68,9 @@ def _read(db, p, task_id, *, lock=True):
                 prep, job = old._saved(db, p, task, plan)
                 legacy.append((plan, prep, job, execution.checked(db, p, task, plan, prep, job)))
             elif schema == v2.PLAN:
-                prep, job = (v2.read_queued(db, p, task, plan) if lock else
-                    v2._read_queued(db, p, task.id, plan.id, lock=False))
+                prepared = plan.status == 'awaiting_consent'
+                prep, job = ((v2.read_prepared(db, p, task, plan) if prepared else v2.read_queued(db, p, task, plan))
+                    if lock else v2._read_queued(db, p, task.id, plan.id, lock=False, prepared=prepared))
                 queued.append((plan, prep, job))
             else:
                 old.need(False, '业务建议记录版本未知，保留原记录等待核对')
@@ -137,8 +138,11 @@ def _read(db, p, task_id, *, lock=True):
                 Audit.data['task_id'].as_string() == task.id,
                 Audit.data['plan_id'].as_string().in_(v2ids),
                 Audit.data['job_key'].as_string().startswith(v2prefix, autoescape=True)))
+        expected_audits = {row[0].data['operations'][0]['audit_id'] for row in queued}
+        expected_audits |= {row[0].data['document_preparation']['receipt_ref']['id']
+            for row in queued if row[0].status == 'awaiting_consent'}
         old.need({job.id for job in v2jobs} == {row[2].id for row in queued}
-            and {event.id for event in v2audits} == {row[0].data['operations'][0]['audit_id'] for row in queued},
+            and {event.id for event in v2audits} == expected_audits,
             '业务建议存在未识别的任务或凭据，保留原记录等待核对')
         # Reverse-search task-bound v2 transport and document markers even if
         # Plan, Job, and accepted Audit are all missing. An unrelated or wholly
@@ -160,7 +164,10 @@ def _read(db, p, task_id, *, lock=True):
         evidence = old._rows(db, p, Evidence, or_(
             Evidence.data[v2.DOCUMENT_KEY]['task_id'].as_string() == task.id,
             Evidence.data[v2.DOCUMENT_KEY]['plan_id'].as_string().in_(v2ids)))
-        old.need(not v2calls and not cloud and not evidence,
+        expected_files = {row[0].data['document_preparation']['evidence_ref']['evidence_id']
+            for row in queued if row[0].status == 'awaiting_consent'
+            and row[1]['request']['document_source']['kind'] == 'approved_source_set'}
+        old.need(not v2calls and not cloud and {item.id for item in evidence} == expected_files,
             '业务建议存在未识别的调用或资料记录，保留原记录等待核对')
         if http_session:
             valid = db.scalar(select(AuthSession.id).where(AuthSession.id == p.session_id,

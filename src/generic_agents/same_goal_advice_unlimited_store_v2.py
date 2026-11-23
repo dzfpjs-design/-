@@ -5,7 +5,7 @@ only a pristine queued Plan/Job and original immutable Audit records. Until
 versioned receipt, lease, cancellation and cross-version inventory are
 implemented, all later states are intentionally refused.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -27,6 +27,7 @@ JOB_SCHEMA = 'same-goal-advice-unlimited-prepare-job-v2'
 ACCEPTED = 'same_goal_advice.unlimited_preparation_accepted_v2'
 DOCUMENT_PREPARED = 'same_goal_advice.unlimited_documents_prepared_v2'
 DOCUMENT_KEY = 'same_goal_advice_unlimited_document_preparation_v2'
+UNAVAILABLE_TO_GENERAL_WORKERS = datetime(9999, 1, 1, tzinfo=timezone.utc)
 
 
 def job_key(task_id, plan_id):
@@ -84,7 +85,15 @@ def read_queued(db, p, task, plan):
         return _read_queued(reader, p, task.id, plan.id)
 
 
-def _read_queued(db, p, task_id, plan_id, *, lock=True):
+@old_store.checked
+def read_prepared(db, p, task, plan):
+    """Authenticate a complete isolated v2 document receipt, not a send grant."""
+    old_store.need(type(p) is Principal and type(task) is Task and type(plan) is Plan)
+    with read_session.isolated(db, task.id) as reader:
+        return _read_queued(reader, p, task.id, plan.id, prepared=True)
+
+
+def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False):
     with db.no_autoflush:
         # Writers take the Task lock before actor/Plan/Job locks. Holding a
         # compatible read lock in that same order prevents an in-flight
@@ -100,10 +109,13 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True):
         plan = db.scalar(query.execution_options(populate_existing=True))
         old_store.need(plan is not None)
         data = plan.data
+        old_store.need(type(prepared) is bool)
         old_store.need(plan.workspace_id == task.workspace_id == p.workspace_id and plan.task_id == task.id
-            and plan.status == 'queued' and plan.version == 1 and type(data) is dict
+            and (plan.status, plan.version) == (('awaiting_consent', 2) if prepared else ('queued', 1))
+            and type(data) is dict
             and set(data) == {'schema', 'preparation_snapshot', 'jobs', 'operations', 'document_preparation', 'reviews'}
-            and data['schema'] == PLAN and data['document_preparation'] is None and data['reviews'] == [])
+            and data['schema'] == PLAN and (type(data['document_preparation']) is dict if prepared
+                else data['document_preparation'] is None) and data['reviews'] == [])
         raw = data['preparation_snapshot']
         cap = old_store._fresh(db, p, Capability, raw['advice_capability_ref']['id'])
         old_store.need(cap.kind == 'tool' and cap.content_hash == cap.validated_hash
@@ -144,7 +156,9 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True):
         job = db.scalar(query.execution_options(populate_existing=True))
         old_store.need(job is not None)
         old_store.need(job.id == pin['id'] and job.kind == PREPARE_KIND and job.idempotency_key == key
-            and job.status == 'queued' and job.attempts == 0 and job.lease_token is None and job.lease_until is None
+            and (job.status, job.attempts) == (('succeeded', 1) if prepared else ('queued', 0))
+            and job.lease_token is None and job.lease_until is None
+            and job.available_at == UNAVAILABLE_TO_GENERAL_WORKERS
             and digest(job.data) == digest(job_data(plan.id, prep, key)))
         ops = data['operations']; old_store.need(type(ops) is list and len(ops) == 1)
         op = ops[0]
@@ -203,7 +217,10 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True):
             CloudCall.data[legacy_spending.KEY]['plan_id'].as_string() == plan.id,
             CloudCall.data['same_goal_advice_unlimited_v2']['plan_id'].as_string() == plan.id,
             CloudCall.data['same_goal_advice_unlimited_v2']['job_id'].as_string() == job.id))
-        old_store.need(not events and not files and not cloud,
+        if prepared:
+            from . import same_goal_advice_prepare_document_candidate_v2 as document
+            document.verify_original(db, p, task, plan, prep, job, events, files)
+        old_store.need((prepared or not events and not files) and not cloud,
             'v2 准备任务存在未归档的资料或调用记录，保留原记录等待核对')
         if http_session:
             # Row locks prevent revocation changes, but cannot stop a session

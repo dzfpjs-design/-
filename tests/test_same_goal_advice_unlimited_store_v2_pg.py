@@ -85,6 +85,7 @@ def synthetic_custody(client, account):
                     'body': prep['request'], 'body_hash': prep['request_hash'], 'actor_id': p.user_id, 'audit_id': accepted_id}],
                 'document_preparation': None, 'reviews': []})
         job = Job(id=job_id, workspace_id=p.workspace_id, kind=subject.PREPARE_KIND, status='queued', attempts=0, created_at=now,
+            available_at=subject.UNAVAILABLE_TO_GENERAL_WORKERS,
             idempotency_key=key, data=subject.job_data(plan_id, prep, key))
         db.add_all([policy_row, auth_row, plan]); db.flush(); db.add_all([job, accepted]); db.commit()
         return {'principal': p, 'task_id': task.id, 'plan_id': plan_id, 'job_id': job_id,
