@@ -42,7 +42,23 @@ def deepseek_3600_publication(managed, monkeypatch):
                         port['pointer'] = '/requested_observation/' + port['field']
         return (body, *rest)
     monkeypatch.setattr(journey, 'prepared_decision', mapped)
-    result = manual.deepseek_3600_publication.__wrapped__(managed, monkeypatch)
+    # The requested age is part of the new synthetic configuration before
+    # adoption/publication; no saved Goal, clock or expiry is patched.
+    model = copy.deepcopy(manual.authored_fixture.model_manifest())
+    model['name'] = 'synthetic_deepseek_fresh_24h'
+    model['execution'] = {'provider': 'deepseek', 'model': 'deepseek-v4-pro',
+        'secret_ref': 'DEEPSEEK_API_KEY', 'max_tokens': 1024, 'thinking_mode': 'disabled'}
+    monkeypatch.setattr(manual.authored_fixture, 'model_manifest', lambda: copy.deepcopy(model))
+    original_policy = journey.policy
+    def synthetic_policy():
+        value = original_policy()
+        value['max_age_seconds'] = 86400
+        value['policy_hash'] = manual.evaluation_contracts.policy_hash(value)
+        return value
+    monkeypatch.setattr(journey, 'policy', synthetic_policy)
+    result = journey.published_goal_data.__wrapped__(managed)
+    assert result.model['data']['execution']['provider'] == 'deepseek'
+    assert result.preview['binding']['preparation_policy']['max_age_seconds'] == 86400
     print('SYNTHETIC_ADOPTION_AND_INSTANCE_RELEASE_READY', flush=True)
     return result
 
