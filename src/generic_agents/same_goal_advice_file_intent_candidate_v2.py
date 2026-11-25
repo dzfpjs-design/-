@@ -7,8 +7,7 @@ safe garbage collector: legacy upload writers do not share its locks.
 """
 import hashlib
 from uuid import UUID
-from sqlalchemy import event, func, select, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import event, func, select
 from . import same_goal_advice_prepare_writer_candidate_v2 as guard
 from . import same_goal_advice_store_v302 as old
 from . import same_goal_advice_unlimited_store_v2 as v2
@@ -76,20 +75,6 @@ def _load(db, p, job_id, target, *, lock):
     return record, events[0]
 
 
-def _nearby_xid(current, low, horizon_min, horizon_max):
-    """Expand xmin's 32 bits only while the visible horizon is unambiguous."""
-    cycle = 1 << 32; half = 1 << 31
-    old.need(all(type(x) is int and x >= 0 for x in (current, low, horizon_min, horizon_max))
-        and 2 < low < cycle and horizon_min <= horizon_max)
-    # Include our newly assigned xid even if the statement snapshot predates it.
-    lower = min(current, horizon_min); upper = max(current + 1, horizon_max)
-    old.need(upper - lower < half, '事务跨度过大，无法安全核对登记提交状态')
-    full = current - current % cycle + low
-    if full - current > half: full -= cycle
-    elif current - full > half: full += cycle
-    old.need(full > 0 and abs(full - current) < half)
-    return full
-
 @old.checked
 def register(db, p, task_id, job_id):
     """Record intended bytes; caller must commit before attempting processing."""
@@ -121,32 +106,14 @@ def register(db, p, task_id, job_id):
 
 @old.checked
 def require_committed(db, p, task, plan, job, prep, resolved):
-    """Require committed originals on this connection; uncommitted rows fail closed.
+    """DISABLED: subtransaction status is not proof of parent commit.
 
-    PostgreSQL reports subtransaction XIDs as in progress until their parent
-    commits. A released SAVEPOINT therefore cannot confer write authority.
-    Missing/old transaction status or unsupported PostgreSQL must fail closed.
+    pg_xact_status may report a subtransaction committed before its parent
+    commits. No alternate proof is installed. Fail closed before any file
+    write, even when an intent appears committed on this connection.
     """
-    target = _target(p, task, plan, job, prep, resolved)
-    old.need(db.get_bind().dialect.name == 'postgresql', '无法核对登记提交状态，未写文件')
-    record, receipt = _load(db, p, job.id, target, lock=True)
-    try:
-        values = db.execute(text('SELECT j.xmin::text, a.xmin::text, pg_current_xact_id()::text, '
-            'pg_snapshot_xmin(pg_current_snapshot())::text, pg_snapshot_xmax(pg_current_snapshot())::text '
-            'FROM jobs j JOIN audit_events a ON a.id = :receipt_id '
-            'WHERE j.id = :record_id AND j.workspace_id = :workspace_id '
-            'AND a.workspace_id = :workspace_id'), {'record_id': record.id, 'receipt_id': receipt.id,
-                'workspace_id': p.workspace_id}).one_or_none()
-        old.need(values is not None, '原资料登记或回执无法核对，未写文件')
-        job_xid, audit_xid, current, horizon_min, horizon_max = values
-        old.need(all(type(x) is str and x.isdecimal() for x in values))
-        current = int(current); horizon_min = int(horizon_min); horizon_max = int(horizon_max)
-        for low_text in (job_xid, audit_xid):
-            full = _nearby_xid(current, int(low_text), horizon_min, horizon_max)
-            status = db.scalar(text('SELECT pg_xact_status(CAST(:xid AS xid8))'), {'xid': str(full)})
-            old.need(status == 'committed', '原资料登记尚未提交或事务状态不可核对，未写文件')
-    except SQLAlchemyError:
-        old.need(False, '数据库不支持核对登记事务状态，未写文件')
+    old.need(False, '单连接提交证明已禁用；尚无法确认登记已提交，未写入文件')
+
 
 @old.checked
 def check_private_directory(p, sha):
