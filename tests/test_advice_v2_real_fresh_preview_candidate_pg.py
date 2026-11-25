@@ -30,6 +30,7 @@ from generic_agents import same_goal_advice_unlimited_store_v2 as store
 from generic_agents import same_goal_advice_unlimited_analysis_candidate_v2 as frame
 from generic_agents import same_goal_advice_unlimited_preview_candidate_v2 as preview
 from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+from generic_agents import same_goal_advice_unlimited_lease_candidate_v2 as lease
 from generic_agents import same_goal_advice_start_safety_candidate_v2 as safety
 from generic_agents.layered_approval_models_v175 import ApprovalManagedTaskV175
 from tests.synthetic_advice_fresh_checkpoint_restore import restore_to_disposable_test_db
@@ -135,3 +136,10 @@ def test_real_mature_approved_source_to_durable_v2_preview(monkeypatch):
             assert db.get(Job,started['job_id']).available_at==store.UNAVAILABLE_TO_GENERAL_WORKERS
             assert db.scalar(select(func.count()).select_from(CloudCall))==0
         print('START_ORIGINAL_REPLAYED',flush=True)
+        with Session(engine()) as db:leased=lease.acquire(db,p,task_id,created['plan_id']);db.commit()
+        print('ISOLATED_LEASE_SAVED',flush=True)
+        engine().dispose()
+        with Session(engine()) as db:
+            assert lease.acquire(db,p,task_id,created['plan_id'])==leased
+            assert db.scalar(select(func.count()).select_from(CloudCall))==0
+        print('ISOLATED_LEASE_ORIGINAL_REPLAYED',flush=True)
