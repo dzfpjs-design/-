@@ -68,12 +68,14 @@ def _read(db, p, task_id, *, lock=True):
                 prep, job = old._saved(db, p, task, plan)
                 legacy.append((plan, prep, job, execution.checked(db, p, task, plan, prep, job)))
             elif schema == v2.PLAN:
-                prepared = plan.status == 'awaiting_consent'
+                started = plan.status == 'awaiting_dispatch'
+                prepared = plan.status in {'awaiting_consent','awaiting_dispatch'}
                 cancellations = old._rows(db, p, Audit, Audit.action == v2.CANCELLED_EXPIRED, Audit.object_id == plan.id)
                 cancelled = bool(cancellations)
                 prep, job = ((v2.read_expired_cancelled(db, p, task, plan) if cancelled else
+                    v2.read_started(db, p, task, plan) if started else
                     v2.read_prepared(db, p, task, plan) if prepared else v2.read_queued(db, p, task, plan))
-                    if lock else v2._read_queued(db, p, task.id, plan.id, lock=False, prepared=prepared, cancelled=cancelled))
+                    if lock else v2._read_queued(db, p, task.id, plan.id, lock=False, prepared=prepared, cancelled=cancelled, started=started))
                 (closed if cancelled else queued).append((plan, prep, job))
             else:
                 old.need(False, '业务建议记录版本未知，保留原记录等待核对')
@@ -144,13 +146,17 @@ def _read(db, p, task_id, *, lock=True):
                 Audit.data['job_key'].as_string().startswith(v2prefix, autoescape=True)))
         expected_audits = {row[0].data['operations'][0]['audit_id'] for row in v2records}
         expected_audits |= {row[0].data['document_preparation']['receipt_ref']['id']
-            for row in v2records if row[0].status == 'awaiting_consent'}
+            for row in v2records if row[0].status in {'awaiting_consent','awaiting_dispatch'}}
         expected_audits |= {event.id for plan, _, _ in closed for event in old._rows(db, p, Audit,
             Audit.action == v2.CANCELLED_EXPIRED, Audit.object_id == plan.id)}
         from . import same_goal_advice_unlimited_preview_candidate_v2 as previews
-        expected_audits |= {event.id for plan, _, _ in queued if plan.status == 'awaiting_consent'
+        expected_audits |= {event.id for plan, _, _ in queued if plan.status in {'awaiting_consent','awaiting_dispatch'}
             for event in old._rows(db, p, Audit, Audit.action == previews.ACTION, Audit.object_id == plan.id)}
-        old.need({job.id for job in v2jobs} == {row[2].id for row in v2records}
+        from . import same_goal_advice_unlimited_start_candidate_v2 as starts
+        expected_audits |= {plan.data[starts.POINTER]['audit_id'] for plan, _, _ in queued if plan.status=='awaiting_dispatch'}
+        expected_jobs = {row[2].id for row in v2records} | {
+            plan.data[starts.POINTER]['job_id'] for plan, _, _ in queued if plan.status=='awaiting_dispatch'}
+        old.need({job.id for job in v2jobs} == expected_jobs
             and {event.id for event in v2audits} == expected_audits,
             '业务建议存在未识别的任务或凭据，保留原记录等待核对')
         # Reverse-search task-bound v2 transport and document markers even if
@@ -174,7 +180,7 @@ def _read(db, p, task_id, *, lock=True):
             Evidence.data[v2.DOCUMENT_KEY]['task_id'].as_string() == task.id,
             Evidence.data[v2.DOCUMENT_KEY]['plan_id'].as_string().in_(v2ids)))
         expected_files = {row[0].data['document_preparation']['evidence_ref']['evidence_id']
-            for row in v2records if row[0].status == 'awaiting_consent'
+            for row in v2records if row[0].status in {'awaiting_consent','awaiting_dispatch'}
             and row[1]['request']['document_source']['kind'] == 'approved_source_set'}
         old.need(not v2calls and not cloud and {item.id for item in evidence} == expected_files,
             '业务建议存在未识别的调用或资料记录，保留原记录等待核对')

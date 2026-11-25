@@ -95,13 +95,21 @@ def read_prepared(db, p, task, plan):
 
 
 @old_store.checked
+def read_started(db, p, task, plan):
+    """Authenticate a parked test-only Start; this grants no transport."""
+    old_store.need(type(p) is Principal and type(task) is Task and type(plan) is Plan)
+    with read_session.isolated(db, task.id) as reader:
+        return _read_queued(reader, p, task.id, plan.id, prepared=True, started=True)
+
+
+@old_store.checked
 def read_expired_cancelled(db, p, task, plan):
     """Authenticate an expired cancellation without reviving its original Job."""
     with read_session.isolated(db, task.id) as reader:
         return _read_queued(reader, p, task.id, plan.id, cancelled=True)
 
 
-def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelled=False):
+def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelled=False, started=False):
     with db.no_autoflush:
         # Writers take the Task lock before actor/Plan/Job locks. Holding a
         # compatible read lock in that same order prevents an in-flight
@@ -117,12 +125,14 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
         plan = db.scalar(query.execution_options(populate_existing=True))
         old_store.need(plan is not None)
         data = plan.data
-        old_store.need(type(prepared) is bool and type(cancelled) is bool and not (prepared and cancelled))
+        old_store.need(type(prepared) is bool and type(cancelled) is bool and type(started) is bool
+            and not (prepared and cancelled) and (not started or prepared))
         old_store.need(plan.workspace_id == task.workspace_id == p.workspace_id and plan.task_id == task.id
-            and ((plan.status == 'awaiting_consent' and type(plan.version) is int and plan.version >= 2)
+            and ((plan.status == ('awaiting_dispatch' if started else 'awaiting_consent') and type(plan.version) is int and plan.version >= 2)
                 if prepared else (plan.status, plan.version) == ('queued', 1))
             and type(data) is dict
-            and set(data) == {'schema', 'preparation_snapshot', 'jobs', 'operations', 'document_preparation', 'reviews'}
+            and set(data) == ({'schema', 'preparation_snapshot', 'jobs', 'operations', 'document_preparation', 'reviews'}
+                | ({'advice_start_v2'} if started else set()))
             and data['schema'] == PLAN and (type(data['document_preparation']) is dict if prepared
                 else data['document_preparation'] is None) and data['reviews'] == [])
         raw = data['preparation_snapshot']
@@ -159,8 +169,8 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
             and pin['kind'] == PREPARE_KIND and pin['schema'] == JOB_SCHEMA and pin['key'] == key)
         originals = old_store._rows(db, p, Job, or_(Job.id == pin['id'], Job.idempotency_key == key,
             Job.data['plan_id'].as_string() == plan.id))
-        old_store.need(len(originals) == 1)
-        query = select(Job).where(Job.workspace_id == p.workspace_id, Job.id == originals[0].id)
+        old_store.need(len(originals) == (2 if started else 1))
+        query = select(Job).where(Job.workspace_id == p.workspace_id, Job.id == pin['id'])
         if lock: query = query.with_for_update(read=True)
         job = db.scalar(query.execution_options(populate_existing=True))
         old_store.need(job is not None)
@@ -230,11 +240,21 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
         if prepared:
             from . import same_goal_advice_prepare_document_candidate_v2 as document
             from . import same_goal_advice_unlimited_preview_candidate_v2 as previews
+            from . import same_goal_advice_unlimited_start_candidate_v2 as starts
             document_events = [event for event in events if event.action == DOCUMENT_PREPARED]
             preview_events = [event for event in events if event.action == previews.ACTION]
-            old_store.need(len(document_events) + len(preview_events) == len(events))
+            start_events = [event for event in events if event.action == starts.ACTION]
+            old_store.need(len(start_events)==(1 if started else 0)
+                and len(document_events)+len(preview_events)+len(start_events)==len(events))
             receipt = document.verify_original(db, p, task, plan, prep, job, document_events, files)
             previews.validate_chain(db, p, task, plan, prep, receipt, preview_events)
+            if started:
+                send_id=next((item.id for item in originals if item.id != job.id),None)
+                query=select(Job).where(Job.workspace_id==p.workspace_id,Job.id==send_id)
+                if lock: query=query.with_for_update(read=True)
+                send_job=db.scalar(query.execution_options(populate_existing=True))
+                old_store.need(send_job is not None)
+                starts.verify(db,p,task,plan,prep,start_events[0],send_job,preview_events)
         elif cancelled:
             old_store.need(len(events) == 1 and events[0].action == CANCELLED_EXPIRED and not files)
             event = events[0]; body = old_contracts.Cancel.model_validate(event.data['body']).model_dump(mode='json')

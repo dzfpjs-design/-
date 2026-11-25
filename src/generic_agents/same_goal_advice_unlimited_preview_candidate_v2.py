@@ -24,6 +24,7 @@ from . import workspace_advice_nonce_candidate_v2 as nonces
 from . import workspace_command_nonce_lock_v312 as nonce_records
 from . import evidence
 from . import cloud_business_reasoning_v197 as transport
+from . import workflow_evidence_consent_wait_v199 as consent
 from .contracts import digest
 from .models import Audit, Capability, Invocation, Job, Plan, Task, uid
 from .workflow_goal_evaluation_models_v288 import GoalEvaluationV288 as Evaluation
@@ -138,7 +139,8 @@ def validate_chain(db,p,task,plan,prep,document_receipt,events):
         store.need(value['previous_preview_record_hash']==(previous['record_hash'] if previous else None)
             and value['plan_version_before']==(2 if previous is None else previous['plan_version_after']))
         previous=value
-    store.need(plan.version==(previous['plan_version_after'] if previous else 2))
+    expected_version=previous['plan_version_after'] if previous else 2
+    store.need(plan.version==expected_version+(1 if plan.status=='awaiting_dispatch' else 0))
     return values
 
 
@@ -149,6 +151,53 @@ def _public(plan,prep,value):
         'options':copy.deepcopy(value['prepared']['options']),'provider':'deepseek',
         'model':value['model_snapshot']['execution']['model'],'price_state':'unknown','estimate_minor_units':None,
         'can_start':False,'cloud_send_authorized':False,'preview_generated_cloud_calls':0}
+
+
+@store.checked
+def verify_current_for_start(db,p,task,plan,prep,event):
+    """Recheck the saved preview against current originals, without starting.
+
+    Callers must authenticate the preview chain and hold the task/actor locks.
+    A successful return is not a dispatch grant or a substitute for commit-time
+    session, policy, worker lease, and durable intent checks.
+    """
+    checked,_=custody.read_prepared(db,p,task,plan)
+    store.need(digest(checked)==digest(prep) and (p.role=='admin' or p.user_id==prep['business_actor_id']))
+    events=store._rows(db,p,Audit,Audit.action==ACTION,Audit.object_id==plan.id)
+    store.need(bool(events) and event.action==ACTION and event.object_id==plan.id)
+    saved_event=next((row for row in events if row.id==event.id),None)
+    store.need(saved_event is not None and digest(saved_event.data)==digest(event.data)
+        and saved_event.data['preview_generation']==len(events))
+    original=saved_event.data
+    current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'])
+    frame=frame_builder.build_current(db,p,task,plan)
+    store.need(digest(frame)==digest(original['frame_snapshot'])
+        and frame['source_record']==original['source_record'] and frame['model_pin']==prep['model_pin'])
+    model=legacy._model(db,p,prep,live=True)
+    store.need(digest(model.data)==digest(original['model_snapshot']))
+    files=sources.cloud_documents(db,p,frame['evidence_ids'],model)
+    saved=original['preview_record']
+    store.need(files['model_pin']==prep['model_pin'] and files['parts']==original['evidence_parts']
+        and len(files['evidence_pins'])==len(saved['evidence_pins'])==len(saved['consent_pins']))
+    for current,pin,grant in zip(files['evidence_pins'],saved['evidence_pins'],saved['consent_pins']):
+        store.need(set(current)==set(pin) and all(current[key]==pin[key] for key in pin if key!='version')
+            and type(current['version']) is int and current['version']>=pin['version'])
+        file,raw=evidence.evidence_bytes(db,p,pin['evidence_id'])
+        store.need(file.workspace_id==p.workspace_id and file.sha256==pin['sha256']
+            and file.size_bytes==pin['size_bytes']==len(raw) and file.version==current['version'])
+        target={key:grant[key] for key in ('evidence_id','audit_id','audit_hash')}
+        store.need(target in consent._grants(db,file,model) and grant['model_profile_id']==model.id)
+        legacy._consent_original(db,p,grant,pin,pin,saved_event.created_at)
+    projected=projection.derive(frame,prep,evidence_parts=files['parts'],evidence_pins=saved['evidence_pins'])
+    prepared=transport.prepare(model,legacy.projection.messages(projected),old_contracts.model_value_schema(),
+        output_token_limit=prep['budget']['max_tokens'])
+    store.need(digest(projected)==digest(original['projection']) and projected['cloud_request']==saved['cloud_request']
+        and digest(prepared)==digest(original['prepared'])
+        and prepared['dispatch_options_hash']==saved['model_options_hash'])
+    money.check_quote(original['money_quote'],None,now=db.scalar(select(func.clock_timestamp())),prepared=prepared,
+        model_pin=prep['model_pin'],model_snapshot=model.data,limits=prep['budget'])
+    current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'])
+    return frame
 
 
 @store.checked
