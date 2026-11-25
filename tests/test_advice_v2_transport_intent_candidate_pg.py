@@ -155,6 +155,16 @@ def test_isolated_actual_reservation_binds_one_intent(started):
         db.commit()
     assert original['transport_authorized'] is False and original['send_outcome']=='unknown'
     with Session(engine()) as db:
+        from generic_agents import same_goal_advice_unlimited_store_v2 as custody
+        task,plan=db.get(Task,s['task_id']),db.get(Plan,created['plan_id'])
+        with pytest.raises(HTTPException):custody.read_reserved_test_only(db,p,task,plan)
+        _,_,reservation,intent=custody.read_intent_test_only(db,p,task,plan)
+        assert intent['intent_audit_id']==original['intent_audit_id'] and intent['transport_authorized'] is False
+        assert reservation['cloud_call_id']==receipt['cloud_call_id']
+        prep,_,_,_=custody.read_intent_test_only(db,p,task,plan)
+        saved_preview=db.scalar(select(Audit).where(Audit.action==preview.ACTION,Audit.object_id==plan.id))
+        assert preview.verify_current_for_start(db,p,task,plan,prep,saved_preview,started=True,
+            reserved_test_only=True,intent_test_only=True)
         assert len(list(db.scalars(select(Audit).where(Audit.action==subject.ACTION))))==1
         assert len(list(db.scalars(select(CloudCall))))==1
         # A saved intent cannot be treated as a grant or silently replayed.
