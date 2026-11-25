@@ -74,7 +74,7 @@ def test_loopback_success_capture_settlement_and_restart_without_resend(started)
             daily=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,
                 Job.idempotency_key=='cloud-budget:'+original_day))
             assert daily.data['day']==original_day and daily.data['tokens']==5 and daily.data['calls']==1
-        with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+        with pytest.raises((HTTPException,ModelBlocked)):subject.execute_synthetic_test_only(*args)
         assert len(server.requests)==1
 
 
@@ -95,7 +95,7 @@ def test_loopback_connection_loss_stays_unknown_no_retry(started):
     with provider(port,mode='drop') as server:
         result=subject.execute_synthetic_test_only(*args)
         assert result['state']=='unknown' and result['retry_authorized'] is False and len(server.requests)==1
-        with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+        with pytest.raises((HTTPException,ModelBlocked)):subject.execute_synthetic_test_only(*args)
         with Session(engine()) as db:
             row=db.get(CloudCall,args[-1]);assert row.status=='reserved' and row.charged_tokens==row.reserved_tokens
         assert len(server.requests)==1
@@ -107,7 +107,7 @@ def test_loopback_slow_stream_is_bounded_and_not_retried(started,monkeypatch):
     with provider(port,mode='slow',content=json.dumps(opinion)) as server:
         result=subject.execute_synthetic_test_only(*args)
         assert result['state']=='unknown' and result['retry_authorized'] is False and len(server.requests)==1
-        with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+        with pytest.raises((HTTPException,ModelBlocked)):subject.execute_synthetic_test_only(*args)
         assert len(server.requests)==1
 
 
@@ -137,14 +137,14 @@ def test_process_crash_after_capture_recovers_without_second_post(started,prepar
         if point=='mid_stream':
             with pytest.raises(spool.SpoolError):recovery.recover(p.workspace_id,args[-1],intent_id,permit_id)
             with Session(engine()) as db:assert db.get(CloudCall,args[-1]).status=='reserved'
-            with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+            with pytest.raises((HTTPException,ModelBlocked)):subject.execute_synthetic_test_only(*args)
             assert len(server.requests)==1
             return
         result=recovery.recover(p.workspace_id,args[-1],intent_id,permit_id)
         assert result['state']=='settled' and result['answer_state']=='succeeded'
         with Session(engine()) as db:assert db.get(CloudCall,args[-1]).charged_tokens==5
         assert len(server.requests)==1
-        with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+        with pytest.raises((HTTPException,ModelBlocked)):subject.execute_synthetic_test_only(*args)
         assert len(server.requests)==1
 
 
@@ -156,7 +156,7 @@ def test_loopback_response_size_limit_preserves_unknown_no_retry(started,monkeyp
         assert result['state']=='unknown' and result['retry_authorized'] is False and len(server.requests)==1
         with Session(engine()) as db:
             assert db.get(CloudCall,args[-1]).status=='reserved'
-        with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+        with pytest.raises((HTTPException,ModelBlocked)):subject.execute_synthetic_test_only(*args)
         assert len(server.requests)==1
 
 
@@ -186,7 +186,7 @@ def test_official_mode_uses_fixed_gateway_policy_with_inprocess_transport(starte
         decoded=[(base64.b64decode(k).lower(),base64.b64decode(v)) for k,v in receipt['header_raw_base64']]
         assert all(k!=b'set-cookie' and b'synthetic-cookie' not in v for k,v in decoded)
         assert db.get(CloudCall,args[-1]).charged_tokens==5
-    with pytest.raises(HTTPException):subject.execute(*args)
+    with pytest.raises((HTTPException,ModelBlocked)):subject.execute(*args)
     assert len(seen)==1
 
 
@@ -198,7 +198,7 @@ def test_malformed_business_answer_still_settles_proven_usage(started):
         assert result['usage_unavailable'] is False and len(server.requests)==1
         with Session(engine()) as db:
             row=db.get(CloudCall,args[-1]);assert row.status=='failed' and row.charged_tokens==5
-        with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+        with pytest.raises((HTTPException,ModelBlocked)):subject.execute_synthetic_test_only(*args)
         assert len(server.requests)==1
 
 
@@ -300,5 +300,34 @@ def test_database_failure_after_complete_spool_recovers_without_resend(started,m
         assert recovered['state']=='settled'
         assert recovery.recover(args[0].workspace_id,args[-1],result['intent_audit_id'],result['permit_audit_id'])['state']=='settled'
         with Session(engine()) as db:assert db.get(CloudCall,args[-1]).charged_tokens==5
-        with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+        with pytest.raises((HTTPException,ModelBlocked)):subject.execute_synthetic_test_only(*args)
         assert len(server.requests)==1
+
+
+def test_full_spool_refuses_before_intent_permit_or_http(started):
+    from uuid import uuid4
+    from generic_agents import same_goal_advice_response_spool_test_v2 as spool
+    from generic_agents import same_goal_advice_transport_intent_candidate_v2 as intents
+    from generic_agents import same_goal_advice_dispatch_permit_candidate_v2 as permits
+    _,args,_=setup(started);port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
+    for _ in range(spool.MAX_SLOTS):
+        with spool.allocate(settings().v2_response_spool_root,str(uuid4())):pass
+    with provider(port) as server:
+        with pytest.raises(ModelBlocked):subject.execute_synthetic_test_only(*args)
+        assert not server.requests
+    with Session(engine()) as db:
+        assert not db.scalar(select(func.count()).select_from(Audit).where(Audit.action.in_([intents.ACTION,permits.ACTION])))
+
+
+def test_spool_creation_failure_refuses_before_intent_permit_or_http(started,monkeypatch):
+    from generic_agents import same_goal_advice_response_spool_test_v2 as spool
+    from generic_agents import same_goal_advice_transport_intent_candidate_v2 as intents
+    from generic_agents import same_goal_advice_dispatch_permit_candidate_v2 as permits
+    _,args,_=setup(started);port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
+    def fail(*_args):raise OSError('synthetic disk failure')
+    monkeypatch.setattr(spool,'_new',fail)
+    with provider(port) as server:
+        with pytest.raises(ModelBlocked):subject.execute_synthetic_test_only(*args)
+        assert not server.requests
+    with Session(engine()) as db:
+        assert not db.scalar(select(func.count()).select_from(Audit).where(Audit.action.in_([intents.ACTION,permits.ACTION])))

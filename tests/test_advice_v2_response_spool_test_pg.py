@@ -77,10 +77,23 @@ def test_failed_completion_fsync_does_not_promote_visible_marker(base,monkeypatc
     root,ctx,receipt=base
     with spool.prepare(root,ctx) as sink:
         sink.begin(receipt);sink.append(b'synthetic')
-        original=spool._new
+        original=spool._replace_reserved
         def fail_after_marker(directory,name,raw):
             original(directory,name,raw)
             if name=='final.json':raise OSError('synthetic sync failure')
-        monkeypatch.setattr(spool,'_new',fail_after_marker)
+        monkeypatch.setattr(spool,'_replace_reserved',fail_after_marker)
         with pytest.raises(OSError):sink.finish()
     with pytest.raises(spool.SpoolError):spool.load(root,ctx)
+
+
+def test_concurrent_slot_claim_is_exclusive_and_abandoned_slot_is_retained(base):
+    from concurrent.futures import ThreadPoolExecutor
+    root,ctx,_=base
+    def claim():
+        try:
+            with spool.allocate(root,ctx['call_id']):return 'claimed'
+        except spool.SpoolError:return 'rejected'
+    with ThreadPoolExecutor(max_workers=4) as pool:result=list(pool.map(lambda _:claim(),range(4)))
+    assert result.count('claimed')==1 and result.count('rejected')==3
+    with pytest.raises(spool.SpoolError):spool.load(root,ctx)
+    with pytest.raises(spool.SpoolError):spool.allocate(root,ctx['call_id'])
