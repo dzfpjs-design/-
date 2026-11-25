@@ -170,10 +170,26 @@ def _saved(db,p,task,plan):
     return prep,job
 
 
-def _inventory(db,p,task):
+def _inventory(db,p,task,*,history_compatible=False):
+    # v2 remains in a separate experimental release. History may ignore it
+    # only after full custody verification, with a Task lock preventing a
+    # cooperative writer from adding it between verification and filtering.
+    has_v2=False
+    if history_compatible:
+        from .same_goal_advice_unlimited_store_v2 import PLAN as V2_PLAN
+        locked=db.scalar(select(Task.id).where(Task.id==task.id,Task.workspace_id==p.workspace_id).with_for_update(read=True))
+        need(locked is not None)
+        has_v2=bool(db.scalar(select(Plan.id).where(Plan.workspace_id==p.workspace_id,
+            Plan.data['schema'].as_string()==V2_PLAN,or_(Plan.task_id==task.id,
+                Plan.data['preparation_snapshot']['scope']['task_id'].as_string()==task.id)).limit(1)))
+        if has_v2:
+            from .same_goal_advice_common_inventory_v2 import read as read_versions
+            read_versions(db,p,task)
     plans=_rows(db,p,Plan,or_(
         (Plan.task_id==task.id)&(Plan.data['schema'].as_string()==c.PLAN),
         Plan.data['preparation_snapshot']['scope']['task_id'].as_string()==task.id))
+    if has_v2:
+        plans=[plan for plan in plans if plan.data.get('schema')==c.PLAN]
     ids=[plan.id for plan in plans];prefix='same-goal-advice-prepare:'+task.id+':'
     jobs=_rows(db,p,Job,or_(
         Job.kind.in_([c.PREPARE_KIND,c.SEND_KIND])&(Job.data['task_id'].as_string()==task.id),
@@ -391,13 +407,13 @@ def prepare(db,p,task_id,body):
 def listing(db,p,task_id):
     _reader(db,p);task=existing._task(db,p,task_id)
     return {'schema':OPERATION+'/list','task_id':task.id,
-        'records':[_view(db,p,task,plan,prep,job) for plan,prep,job in _inventory(db,p,task)]}
+        'records':[_view(db,p,task,plan,prep,job) for plan,prep,job in _inventory(db,p,task,history_compatible=True)]}
 
 
 @checked
 def get(db,p,task_id,plan_id):
     _reader(db,p);task=existing._task(db,p,task_id)
-    found=[value for value in _inventory(db,p,task) if value[0].id==existing._id(plan_id)]
+    found=[value for value in _inventory(db,p,task,history_compatible=True) if value[0].id==existing._id(plan_id)]
     if not found:raise HTTPException(404,'原资料准备操作不存在或不属于当前任务')
     need(len(found)==1);return _view(db,p,task,*found[0])
 
@@ -405,7 +421,7 @@ def get(db,p,task_id,plan_id):
 @checked
 def get_operation(db,p,task_id,request_id):
     _reader(db,p);task=existing._task(db,p,task_id);request_id=existing._id(request_id)
-    found=[value for value in _inventory(db,p,task) if any(op['request_id']==request_id for op in value[0].data['operations'])]
+    found=[value for value in _inventory(db,p,task,history_compatible=True) if any(op['request_id']==request_id for op in value[0].data['operations'])]
     if not found:raise HTTPException(404,'原资料准备请求不存在或不属于当前任务')
     need(len(found)==1);return _view(db,p,task,*found[0])
 
