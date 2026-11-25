@@ -153,7 +153,6 @@ def test_real_mature_approved_source_to_durable_v2_preview(monkeypatch):
         from generic_agents import same_goal_advice_first_response_candidate_v2 as response
         from generic_agents import same_goal_advice_loopback_dispatch_candidate_v2 as dispatch
         from generic_agents import cloud_budget
-        from generic_agents.models import Capability
         from tests.synthetic_deepseek_loopback_v2 import provider
         from tests.test_same_goal_advice_runtime_v308 import _opinion
         with Session(engine()) as db:claims.install(db);storage.install(db);db.commit()
