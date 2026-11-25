@@ -593,6 +593,24 @@ def _cloud_native_report(capability, messages, schema, principal, key, *, on_res
             sink.close()
 
 
+def _resolve_cloud_access(execution):
+    """One server-owned provider allowlist, fixed endpoint and secret policy."""
+    from .cloud_provider_policy import provider_enabled
+    provider = execution.get('provider') if isinstance(execution, dict) else None
+    if not provider_enabled(provider):
+        raise ModelBlocked('该云模型当前未启用，未发送或预留费用')
+    endpoint = {'qwen': 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+                'deepseek': 'https://api.deepseek.com/chat/completions'}.get(provider)
+    expected = {'qwen': 'DASHSCOPE_API_KEY', 'deepseek': 'DEEPSEEK_API_KEY'}.get(provider)
+    if not expected or execution.get('secret_ref') != expected:
+        raise ModelBlocked('密钥引用不属于模型供应商')
+    configured = settings().dashscope_api_key if expected == 'DASHSCOPE_API_KEY' else settings().deepseek_api_key
+    key = os.getenv(expected) or (configured.get_secret_value() if configured else None)
+    if not endpoint or not key:
+        raise ModelBlocked('模型凭证未配置，请由管理员配置密钥引用')
+    return endpoint, key
+
+
 def cloud_json(capability, messages, schema, principal=None, *, on_reserved=None, on_response=None,
                full_report=False, evidence_stage=None, dispatch_identity=None,
                evidence_catalogue=_EVIDENCE_CATALOGUE_UNSET, allocation_evidence=_ALLOCATION_EVIDENCE_UNSET,
@@ -763,15 +781,7 @@ def _cloud_json(capability, messages, schema, principal=None, *, on_reserved=Non
             raise ModelBlocked('TokenPlan独立凭证未配置，未回退到其他供应商地址或密钥')
         return _cloud_native_report(capability, messages, schema, principal, native_key,
             on_reserved=on_reserved, on_response=on_response, full_report=full_report, stage=evidence_stage)
-    endpoint = {"qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-                "deepseek": "https://api.deepseek.com/chat/completions"}.get(execution.get("provider"))
-    expected_secret = {"qwen": "DASHSCOPE_API_KEY", "deepseek": "DEEPSEEK_API_KEY"}.get(execution.get("provider"))
-    if not expected_secret or execution.get("secret_ref") != expected_secret:
-        raise ModelBlocked("密钥引用不属于模型供应商")
-    configured = settings().dashscope_api_key if expected_secret == "DASHSCOPE_API_KEY" else settings().deepseek_api_key
-    key = os.getenv(expected_secret) or (configured.get_secret_value() if configured else None)
-    if not endpoint or not key:
-        raise ModelBlocked("模型凭证未配置，请由管理员配置密钥引用")
+    endpoint, key = _resolve_cloud_access(execution)
     if evidence_stage == 'business-reasoning-v197':
         from .cloud_business_reasoning_v197 import call as reasoning_call
         limited = {'output_token_limit': output_token_limit} if output_token_limit is not None else {}
