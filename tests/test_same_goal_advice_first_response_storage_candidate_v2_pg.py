@@ -38,14 +38,14 @@ def fake_gate(db,w,c,i):
     call=db.get(CloudCall,c,populate_existing=True);intent=db.get(Audit,i,populate_existing=True)
     assert call is not None and intent is not None and call.workspace_id==intent.workspace_id==w
     assert intent.object_id==c and intent.action=='synthetic.intent'
-    return {'actor_id':intent.actor_id,'anchor_hash':digest({'call':c,'intent':i})}
+    return {'actor_id':intent.actor_id,'anchor_hash':digest({'call':c,'intent':i}),'provider':'deepseek','model':'synthetic-model'}
 
 
 def receipt(s):
     return {'call_id':s['call'],'provider':'deepseek','model':'synthetic-model','http_status':200}
 
 
-def test_unconnected_fixed_gate_fails_closed(synthetic):
+def test_missing_original_claim_fails_closed(synthetic):
     with Session(engine()) as db:
         with pytest.raises(HTTPException):
             subject.capture(db,synthetic['workspace'],synthetic['call'],synthetic['intent'],b'{}',receipt(synthetic))

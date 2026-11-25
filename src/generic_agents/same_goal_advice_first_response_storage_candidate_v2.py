@@ -62,6 +62,10 @@ def _require_schema(db):
         'FOREIGN KEY (intent_id) REFERENCES audit_events(id)',
         'FOREIGN KEY (audit_id) REFERENCES audit_events(id)'])
     old.need(defs==expected,'测试首答表的约束不可核对')
+    indices=db.execute(text("SELECT i.indisvalid,i.indisready,i.indislive FROM pg_index i "
+        "JOIN pg_constraint c ON c.conindid=i.indexrelid WHERE "
+        "c.conrelid=to_regclass('public.ga_test_advice_v2_first_response') AND c.contype IN ('p','u')")).all()
+    old.need(len(indices)==3 and all(tuple(row)==(True,True,True) for row in indices))
 
 
 def _original(db, workspace_id, call_id, intent_id):
@@ -69,9 +73,10 @@ def _original(db, workspace_id, call_id, intent_id):
     _id(workspace_id); _id(call_id); _id(intent_id)
     # Fixed service module, never a caller-provided validator or principal.
     pin = gate.check_original(db, workspace_id, call_id, intent_id)
-    old.need(type(pin) is dict and set(pin) == {'actor_id', 'anchor_hash'}
+    old.need(type(pin) is dict and set(pin) == {'actor_id', 'anchor_hash', 'provider', 'model'}
         and type(pin['anchor_hash']) is str and re.fullmatch(r'[0-9a-f]{64}', pin['anchor_hash']) is not None)
     _id(pin['actor_id'])
+    old.need(pin['provider']=='deepseek' and type(pin['model']) is str and bool(pin['model']))
     return pin
 
 
@@ -94,7 +99,8 @@ def _read(db, workspace_id, call_id, intent_id, pin):
         and audit.created_at==instant(value['captured_at'])
         and value['workspace_id']==workspace_id and value['call_id']==call_id
         and value['intent_id']==intent_id and value['audit_id']==audit.id
-        and value['anchor']==pin['anchor_hash'] and value['raw_size']==len(raw)
+        and value['anchor']==pin['anchor_hash'] and value['receipt'].get('provider')==pin['provider']
+        and value['receipt'].get('model')==pin['model'] and value['raw_size']==len(raw)
         and value['raw_sha256']==hashlib.sha256(raw).hexdigest()
         and value['record_hash']==digest({k:v for k,v in value.items() if k!='record_hash'}),
         '原首答、来源或回执不一致；不得重发')
@@ -115,6 +121,7 @@ def capture(db, workspace_id, call_id, intent_id, raw, receipt):
     old.need(db.get_nested_transaction() is None, '测试首答写入不支持调用方保存点')
     pin=_original(db,workspace_id,call_id,intent_id)
     sealed=response.seal(cloud_call_id=call_id,intent_audit_id=intent_id,raw=raw,receipt=receipt)
+    old.need(receipt.get('provider')==pin['provider'] and receipt.get('model')==pin['model'])
     # Serialize even the absence check; a separate unique constraint is a fence
     # against cooperating concurrent writers. Requires a dedicated test DB.
     db.execute(text('LOCK TABLE public.ga_test_advice_v2_first_response, public.audit_events '
