@@ -109,6 +109,31 @@ def _read(db, workspace_id, call_id, intent_id, pin):
 
 
 @old.checked
+def check_no_local_response_for_permit(db, workspace_id, call_id, intent_id):
+    """Check local custody only; this never proves unsent or grants dispatch.
+
+    The test-only permit caller must first authenticate and lock its fixed
+    original intent/reservation. Hold the same table locks as capture until
+    that caller commits, so a concurrent response cannot appear in between.
+    """
+    guard.require_disposable_database(db)
+    old.need(db.get_nested_transaction() is None)
+    _id(workspace_id); _id(call_id); _id(intent_id)
+    db.execute(text('LOCK TABLE public.ga_test_advice_v2_first_response, public.audit_events '
+        'IN SHARE ROW EXCLUSIVE MODE NOWAIT'))
+    _require_schema(db)
+    row=db.execute(text('SELECT 1 FROM public.ga_test_advice_v2_first_response '
+        'WHERE (workspace_id=:w AND call_id=:c) OR intent_id=:i LIMIT 1'),
+        {'w':workspace_id,'c':call_id,'i':intent_id}).first()
+    audits=list(db.scalars(select(Audit.id).where(Audit.workspace_id==workspace_id,or_(
+        (Audit.action==ACTION) & (Audit.object_id==call_id),
+        (Audit.data['schema'].as_string()==SCHEMA) & or_(
+            Audit.data['call_id'].as_string()==call_id,Audit.data['intent_id'].as_string()==intent_id)
+        )).limit(1)))
+    old.need(row is None and not audits, '已有首答或不完整回执；不得创建派发许可')
+
+
+@old.checked
 def read(db, workspace_id, call_id, intent_id):
     """Internal historical read: gate must authenticate saved originals offline."""
     pin=_original(db,workspace_id,call_id,intent_id)
