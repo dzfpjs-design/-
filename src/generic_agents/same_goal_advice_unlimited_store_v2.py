@@ -119,7 +119,8 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
         data = plan.data
         old_store.need(type(prepared) is bool and type(cancelled) is bool and not (prepared and cancelled))
         old_store.need(plan.workspace_id == task.workspace_id == p.workspace_id and plan.task_id == task.id
-            and (plan.status, plan.version) == (('awaiting_consent', 2) if prepared else ('queued', 1))
+            and ((plan.status == 'awaiting_consent' and type(plan.version) is int and plan.version >= 2)
+                if prepared else (plan.status, plan.version) == ('queued', 1))
             and type(data) is dict
             and set(data) == {'schema', 'preparation_snapshot', 'jobs', 'operations', 'document_preparation', 'reviews'}
             and data['schema'] == PLAN and (type(data['document_preparation']) is dict if prepared
@@ -228,7 +229,12 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
             CloudCall.data['same_goal_advice_unlimited_v2']['job_id'].as_string() == job.id))
         if prepared:
             from . import same_goal_advice_prepare_document_candidate_v2 as document
-            document.verify_original(db, p, task, plan, prep, job, events, files)
+            from . import same_goal_advice_unlimited_preview_candidate_v2 as previews
+            document_events = [event for event in events if event.action == DOCUMENT_PREPARED]
+            preview_events = [event for event in events if event.action == previews.ACTION]
+            old_store.need(len(document_events) + len(preview_events) == len(events))
+            receipt = document.verify_original(db, p, task, plan, prep, job, document_events, files)
+            previews.validate_chain(db, p, task, plan, prep, receipt, preview_events)
         elif cancelled:
             old_store.need(len(events) == 1 and events[0].action == CANCELLED_EXPIRED and not files)
             event = events[0]; body = old_contracts.Cancel.model_validate(event.data['body']).model_dump(mode='json')
