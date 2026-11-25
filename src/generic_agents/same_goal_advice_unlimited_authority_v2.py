@@ -22,7 +22,7 @@ from .temporal import instant
 
 
 @store.checked
-def current_policy(db, p, task_id, policy_ref):
+def current_policy(db, p, task_id, policy_ref, *, reserved_plan_test_only=None, intent_test_only=False):
     """Lock and authenticate one real policy against the real current Goal.
 
     The returned value never authorizes preview creation, a reservation or an
@@ -57,11 +57,13 @@ def current_policy(db, p, task_id, policy_ref):
     # published capability/model hashes, current source actors and capacity.
     # A saved pristine v2 preparation is unknown to the v1-only counters in
     # old._configuration. Use the still-unrouted shared reader here; it holds
-    # Task/custody locks and fails closed for any progressed or unknown v2
-    # state. This does not make an existing Plan a send authorization.
+    # Task/custody locks and fails closed for unknown v2 states. The optional
+    # isolated test-only path rechecks one original reservation as the same
+    # prospective slot, not authority for another Plan or an external send.
     from . import goal_budget_versioned_snapshot_candidate_v3 as capacity
     context = old._configuration_base(db, p, task, request)
-    used = capacity.read_locked(db, p, task)
+    used = capacity.read_locked(db, p, task, reserved_plan_test_only=reserved_plan_test_only,
+        intent_test_only=intent_test_only)
     store.need(used['calls'] < context['goal']['spec']['max_tool_calls'],
         '原目标调用额度已用尽，不能增加本次建议额度')
     store.need(used['steps'] < context['goal']['spec']['max_steps'],

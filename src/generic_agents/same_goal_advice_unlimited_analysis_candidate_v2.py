@@ -40,7 +40,9 @@ def build_current(db, p, task, plan, *, started=False, reserved_test_only=False,
             reserved_test_only=reserved_test_only,intent_test_only=intent_test_only)
         prep,job=result[:2]
         store.need(p.role == 'admin' or p.user_id == prep['business_actor_id'])
-        checked = authority.current_policy(reader, p, current.id, prep['budget']['policy_ref'])
+        checked = authority.current_policy(reader, p, current.id, prep['budget']['policy_ref'],
+            reserved_plan_test_only=current_plan.id if reserved_test_only else None,
+            intent_test_only=intent_test_only)
         store.need(checked['scope'] == {key: value for key, value in prep['scope'].items()
                 if key != 'analysis_plan_id'}
             and digest(checked['limits']) == digest(prep['budget'])
