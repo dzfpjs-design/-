@@ -161,7 +161,7 @@ def test_isolated_actual_reservation_binds_one_intent(started):
         with pytest.raises(HTTPException):subject.issue(db,p,s['task_id'],created['plan_id'],owned['job_id'],owned['lease_token'],receipt['cloud_call_id'])
 
 
-@pytest.mark.parametrize('target',['call_tokens','job_version','audit_action'])
+@pytest.mark.parametrize('target',['call_tokens','job_version','audit_action','task_title','plan_version','lease_token'])
 def test_same_transaction_raw_scalar_tampering_rolls_back_intent(reserved,monkeypatch,target):
     from sqlalchemy import text
     monkeypatch.setattr(subject,'_verify_live_reservation',fake_verifier(reserved))
@@ -171,6 +171,12 @@ def test_same_transaction_raw_scalar_tampering_rolls_back_intent(reserved,monkey
             db.execute(text('UPDATE cloud_model_calls SET reserved_tokens=reserved_tokens+1 WHERE id=:id'),{'id':reserved[4]})
         elif target=='job_version':
             db.execute(text('UPDATE jobs SET version=version+1 WHERE id=:id'),{'id':reserved[2]['job_id']})
+        elif target=='task_title':
+            db.execute(text("UPDATE tasks SET title='synthetic changed' WHERE id=:id"),{'id':reserved[0]['task_id']})
+        elif target=='plan_version':
+            db.execute(text('UPDATE plan_versions SET version=version+1 WHERE id=:id'),{'id':reserved[1]['plan_id']})
+        elif target=='lease_token':
+            db.execute(text('UPDATE jobs SET lease_token=:token WHERE id=:id'),{'token':str(uuid4()),'id':reserved[2]['job_id']})
         else:
             db.execute(text("UPDATE audit_events SET action='synthetic.changed' WHERE id=:id"),{'id':intent['intent_audit_id']})
         with pytest.raises(HTTPException):db.commit()
