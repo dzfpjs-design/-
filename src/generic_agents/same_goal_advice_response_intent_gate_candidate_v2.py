@@ -13,6 +13,7 @@ from . import same_goal_advice_prepare_writer_candidate_v2 as guard
 from . import same_goal_advice_store_v302 as store
 from . import same_goal_advice_transport_intent_candidate_v2 as transport_intent
 from . import same_goal_advice_unlimited_contracts_v2 as v2contracts
+from . import same_goal_advice_unlimited_policy_v2 as policy
 from . import same_goal_advice_unlimited_lease_candidate_v2 as lease
 from . import same_goal_advice_unlimited_preview_candidate_v2 as preview
 from . import same_goal_advice_unlimited_start_candidate_v2 as start
@@ -23,6 +24,11 @@ from .temporal import instant
 ACTION=transport_intent.ACTION
 SCHEMA=transport_intent.SCHEMA
 FIELDS=transport_intent._FIELDS
+PERMIT_ACTION='same_goal_advice.unlimited_dispatch_permit_test_v2'
+PERMIT_SCHEMA='same-goal-advice-unlimited-dispatch-permit-test-v2'
+PERMIT_FIELDS={'schema','audit_id','workspace_id','actor_id','task_id','plan_id','job_id','cloud_call_id',
+    'intent_ref','reservation_ref','start_ref','lease_ref','preview_ref','lease_token_hash','model_pin','policy_ref',
+    'request_hash','dispatch_options_hash','token_bound','issued_at','send_before','irrevocable_after_commit','record_hash'}
 RESERVATION_FIELDS={'schema','workspace_id','actor_id','task_id','plan_id','job_id','call_id','audit_id',
     'start_ref','lease_ref','preview_ref','lease_token_hash','model_pin','policy_ref','request_hash',
     'dispatch_options_hash','token_bound','source_recheck_started_at','source_recheck_completed_at',
@@ -52,6 +58,11 @@ def check_original(db, workspace_id, cloud_call_id, intent_audit_id):
     database rows and original receipt links, including original lease times.
     """
     guard.require_disposable_database(db)
+    # Local import avoids a module cycle: the permit writer calls the separate
+    # pre-permit local-absence check from the storage module.
+    from . import same_goal_advice_dispatch_permit_candidate_v2 as permit_contract
+    store.need((PERMIT_ACTION,PERMIT_SCHEMA,PERMIT_FIELDS)==
+        (permit_contract.ACTION,permit_contract.SCHEMA,permit_contract.FIELDS))
     claims.lock_and_check(db)
     intent=_row(db,Audit,workspace_id,intent_audit_id); v=intent.data
     store.need(intent.action==ACTION and type(v) is dict and set(v)==FIELDS and v['schema']==SCHEMA
@@ -136,10 +147,41 @@ def check_original(db, workspace_id, cloud_call_id, intent_audit_id):
     accounting=instant(r['accounting_checked_at']); reserved=instant(r['reserved_at']); when=instant(v['created_at'])
     store.need(initial.created_at<=leased.created_at<=begin<=end<=accounting<=reserved<=when<instant(lv['expires_at'])
         and reserved.astimezone(timezone.utc).date().isoformat()==r['day'])
+    # The irreversible permit must be unique and committed before the one
+    # dispatch. It is a historical record, never a right to send again.
+    permits=list(db.scalars(select(Audit).where(Audit.workspace_id==workspace_id,
+        or_(Audit.action==PERMIT_ACTION,Audit.data['schema'].as_string()==PERMIT_SCHEMA),or_(
+        Audit.object_id==plan.id,Audit.data['cloud_call_id'].as_string()==call.id,
+        Audit.data['job_id'].as_string()==job.id,Audit.data['intent_ref']['id'].as_string()==intent.id))
+        .limit(2).execution_options(populate_existing=True)))
+    store.need(len(permits)==1, '原派发许可缺失或不唯一；保留原答，不得重发')
+    permit=permits[0]; permit_value=permit.data
+    store.need(type(permit_value) is dict and set(permit_value)==PERMIT_FIELDS
+        and permit.action==PERMIT_ACTION and permit_value['schema']==PERMIT_SCHEMA
+        and permit_value['record_hash']==old.record_hash(permit_value)
+        and permit_value['audit_id']==permit.id and permit.workspace_id==workspace_id
+        and permit.actor_id==v['actor_id'] and permit.object_id==plan.id and permit.version==1
+        and permit_value['intent_ref']=={'id':intent.id,'hash':digest(v)}
+        and all(permit_value[key]==v[key] for key in ('workspace_id','actor_id','task_id','plan_id','job_id',
+            'cloud_call_id','reservation_ref','start_ref','lease_ref','preview_ref','lease_token_hash',
+            'model_pin','policy_ref','request_hash','dispatch_options_hash','token_bound'))
+        and permit_value['irrevocable_after_commit'] is True
+        and permit.created_at==instant(permit_value['issued_at']))
+    permit_until=instant(permit_value['send_before'])
+    store.need(when<=permit.created_at<permit_until<=instant(lv['expires_at'])
+        and permit_until<=permit.created_at+timedelta(seconds=permit_contract.MAX_SECONDS))
+    policy_event=_row(db,Audit,workspace_id,v['policy_ref']['id'])
+    store.need(policy_event.action==policy.POLICY and policy_event.object_id==task.id
+        and policy_event.data['schema']==policy.POLICY_SCHEMA
+        and policy_event.data['record_hash']==old.record_hash(policy_event.data)
+        and digest(policy_event.data)==v['policy_ref']['record_hash']
+        and instant(policy_event.data['issued_at'])<=permit.created_at
+        and permit_until<=instant(policy_event.data['expires_at']))
     # Hash only stable original records; mutable status/usage and current roles
     # must not make a paid response unrecoverable after settlement or logout.
     anchor=digest({'workspace':workspace_id,'intent_id':intent.id,'intent_hash':v['record_hash'],
         'reservation_hash':digest(r),'start_hash':digest(sv),'lease_hash':digest(lv),
-        'preview_hash':digest(pv),'call_id':call.id})
+        'preview_hash':digest(pv),'permit_id':permit.id,
+        'permit_hash':permit_value['record_hash'],'call_id':call.id})
     return {'actor_id':v['actor_id'],'anchor_hash':anchor,
         'provider':'deepseek','model':model['execution']['model']}
