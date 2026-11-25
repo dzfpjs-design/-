@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Display-only Goal totals; can be disabled by the server operator.
     # Never used to grant execution or send.
     goal_budget_display_preview_enabled: bool = True
+    # Offline delegation remains opt-in and restricted to disposable test PG.
+    offline_document_delegation_enabled: bool = False
+    offline_document_worker_enabled: bool = False
     model_config = SettingsConfigDict(env_prefix="GA_", env_file=".env", extra="ignore")
     database_url: str
     # Explicit process mode; no_idle closes returned connections immediately.

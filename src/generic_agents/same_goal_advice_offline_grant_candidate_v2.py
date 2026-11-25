@@ -142,7 +142,7 @@ def revoke(db, p, task_id, job_id, grant_id, request_id, reason):
     """Keep the original grant and source; revoke only this local delegation."""
     guard.require_disposable_database(db); _http_actor(db, p); _uuid(request_id); _uuid(grant_id)
     old.need(type(reason) is str and 0 < len(reason.strip()) <= 500); reason = reason.strip()
-    task, plan, job, prep = _original(db, p, task_id, job_id, require_data_actor=False)
+    task, plan, job, prep = _original(db, p, task_id, job_id, allow_prepared=True, require_data_actor=False)
     old.need(p.user_id == prep['data_actor_id'] or p.role == 'admin', '只有原资料岗位或管理员可撤销授权')
     row = db.scalar(select(Audit).where(Audit.workspace_id == p.workspace_id,
         Audit.object_id == plan.id, Audit.id == grant_id, Audit.action == GRANT).with_for_update())
