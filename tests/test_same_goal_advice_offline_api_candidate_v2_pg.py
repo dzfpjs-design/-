@@ -184,6 +184,71 @@ def test_long_worker_heartbeat_tracks_lease_without_renewing(packet_ready,client
     assert client.get(path(s)).json()['items'][0]['background_available'] is False
 
 
+def test_long_worker_keeps_other_workspace_online_without_forging_lease(packet_ready,client,monkeypatch):
+    import threading,time
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import timedelta
+    from sqlalchemy import func
+    from generic_agents import same_goal_advice_offline_worker_candidate_v2 as runner
+    from generic_agents import same_goal_advice_document_lease_candidate_v2 as control
+    from generic_agents.contracts import digest
+    s,created=packet_ready
+    monkeypatch.setattr(settings(),'offline_document_delegation_enabled',True)
+    monkeypatch.setattr(settings(),'offline_document_worker_enabled',True)
+    monkeypatch.setattr(runner,'HEARTBEAT_INTERVAL_SECONDS',0.05)
+    with Session(engine()) as db:
+        other=Workspace(name='合成第二工作区');empty=Workspace(name='合成无任务工作区')
+        db.add_all([other,empty]);db.flush();other_id,empty_id=other.id,empty.id
+        db.add(Job(workspace_id=other_id,kind=control.KIND,status='queued',attempts=0,
+            idempotency_key='synthetic-idle-'+uuid4().hex,
+            data={'actor_id':str(uuid4()),'target':{'plan_id':str(uuid4()),'job_id':str(uuid4())}}))
+        db.commit()
+    issued=client.post(path(s)+'/'+created['job_id']+'/grant',json={'request_id':str(uuid4())});assert issued.status_code==200
+    entered=threading.Event();release=threading.Event();original=grants.process_packet
+    def slow(*args,**kwargs):
+        entered.set();assert release.wait(8);return original(*args,**kwargs)
+    monkeypatch.setattr(grants,'process_packet',slow)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future=pool.submit(runner.tick)
+        try:
+            assert entered.wait(8)
+            with Session(engine()) as db:
+                ctl=db.scalar(select(Job).where(Job.kind==control.KIND,Job.workspace_id==s['principal'].workspace_id))
+                original_until,original_token=ctl.lease_until,ctl.lease_token
+                heart=db.scalar(select(Job).where(Job.workspace_id==other_id,Job.idempotency_key==runner.HEARTBEAT_KEY))
+                assert heart is not None
+                late=Workspace(name='处理过程中加入的合成工作区');db.add(late);db.flush();late_id=late.id
+                db.add(Job(workspace_id=late_id,kind=control.KIND,status='queued',attempts=0,
+                    idempotency_key='synthetic-late-'+uuid4().hex,
+                    data={'actor_id':str(uuid4()),'target':{'plan_id':str(uuid4()),'job_id':str(uuid4())}}))
+                # Simulate the UI's TTL expiring while the first workspace is busy.
+                heart.data={**heart.data,'checked_at':(db.scalar(select(func.clock_timestamp()))-timedelta(seconds=21)).isoformat()};db.commit()
+            deadline=time.monotonic()+3;updated=False
+            while time.monotonic()<deadline:
+                with Session(engine()) as db:
+                    heart=db.scalar(select(Job).where(Job.workspace_id==other_id,Job.idempotency_key==runner.HEARTBEAT_KEY))
+                    clock=db.scalar(select(func.clock_timestamp()))
+                    late_heart=db.scalar(select(Job).where(Job.workspace_id==late_id,Job.idempotency_key==runner.HEARTBEAT_KEY))
+                    if runner.instant(heart.data['checked_at'])>clock-timedelta(seconds=1) and late_heart is not None:
+                        assert heart.data['state']=='idle' and heart.data['control_id'] is None
+                        assert heart.data['lease_hash'] is None and heart.data['lease_until'] is None
+                        assert late_heart.data['state']=='idle' and late_heart.data['lease_hash'] is None
+                        active=db.scalar(select(Job).where(Job.workspace_id==s['principal'].workspace_id,Job.idempotency_key==runner.HEARTBEAT_KEY))
+                        assert active.data['state']=='processing' and active.data['lease_hash']==digest(original_token)
+                        ctl=db.scalar(select(Job).where(Job.kind==control.KIND,Job.workspace_id==s['principal'].workspace_id))
+                        assert ctl.lease_until==original_until and ctl.lease_token==original_token
+                        assert db.scalar(select(Job.id).where(Job.workspace_id==empty_id,Job.kind==runner.HEARTBEAT_KIND)) is None
+                        updated=True;break
+                time.sleep(0.05)
+            assert updated, 'other workspace heartbeat expired while worker was still active'
+        finally:release.set()
+        assert future.result(timeout=30)['completed']==1
+    runner.stop_heartbeat()
+    time.sleep(0.2)
+    with Session(engine()) as db:
+        assert all(row.data['state']=='stopped' for row in db.scalars(select(Job).where(Job.idempotency_key==runner.HEARTBEAT_KEY)))
+
+
 def test_worker_process_sigterm_stops_its_heartbeat(packet_ready,client,monkeypatch):
     import os,subprocess,sys,time
     from generic_agents import same_goal_advice_offline_worker_candidate_v2 as runner
