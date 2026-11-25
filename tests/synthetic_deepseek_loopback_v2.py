@@ -16,7 +16,7 @@ from threading import Thread
 @contextmanager
 def provider(port, *, mode='reply', content='{}', usage=None, on_received=None):
     if type(port) is not int or not 1 <= port <= 65535:raise ValueError('explicit test port required')
-    if mode not in {'reply','drop','http_error','gzip','slow'}:raise ValueError('unsupported synthetic mode')
+    if mode not in {'reply','drop','http_error','gzip','slow','slow_first_byte'}:raise ValueError('unsupported synthetic mode')
     if type(content) is not str:raise ValueError('synthetic content must be text')
     class Server(ThreadingHTTPServer):
         daemon_threads=True
@@ -42,6 +42,7 @@ def provider(port, *, mode='reply', content='{}', usage=None, on_received=None):
             if usage is not None:payload['usage']=usage
             body=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode('utf-8')
             if mode=='gzip':body=gzip.compress(body)
+            if mode=='slow_first_byte':time.sleep(3.3)
             self.send_response(429 if mode=='http_error' else 200)
             self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)))
             self.send_header('Set-Cookie','synthetic-cookie=must-not-be-recorded')

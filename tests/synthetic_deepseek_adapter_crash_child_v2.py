@@ -10,6 +10,8 @@ from generic_agents import same_goal_advice_prepare_document_candidate_v2 as doc
 from generic_agents import same_goal_advice_dispatch_permit_candidate_v2 as permits
 from generic_agents import same_goal_advice_deepseek_adapter_candidate_v2 as adapter
 from generic_agents import same_goal_advice_response_reconcile_candidate_v2 as reconcile
+from generic_agents import same_goal_advice_first_response_storage_candidate_v2 as storage
+from generic_agents import same_goal_advice_response_spool_test_v2 as spool
 
 
 def main():
@@ -22,7 +24,15 @@ def main():
     preview._verify_evaluation=lambda *_:None
     preview.frame_builder.build_current=lambda *_,**__:copy.deepcopy(frame)
     document.sources.resolve_documents=lambda *_:copy.deepcopy(resolved)
-    reconcile.reconcile=lambda *_:os._exit(76)
+    mode=os.environ.get("GA_SYNTHETIC_CRASH_POINT","after_capture")
+    if mode=="after_capture":reconcile.reconcile=lambda *_:os._exit(76)
+    elif mode=="after_spool":storage.capture=lambda *_:os._exit(77)
+    elif mode=="mid_stream":
+        original=spool.Sink.append
+        def append_and_exit(self,raw):
+            original(self,raw);os._exit(78)
+        spool.Sink.append=append_and_exit
+    else:raise ValueError("invalid synthetic crash point")
     principal=Principal(**payload['principal'])
     adapter.execute_synthetic_test_only(principal,*payload['arguments'])
     os._exit(91)

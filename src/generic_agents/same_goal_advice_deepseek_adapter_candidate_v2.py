@@ -7,6 +7,7 @@ The existing v2 permit/custody still reject non-disposable databases, so this
 candidate cannot be enabled as a production deployment by setting a flag.
 """
 import copy
+import asyncio
 import os
 import re
 import time
@@ -20,6 +21,8 @@ from . import same_goal_advice_first_response_storage_candidate_v2 as storage
 from . import same_goal_advice_loopback_dispatch_candidate_v2 as loopback
 from . import same_goal_advice_prepare_writer_candidate_v2 as guard
 from . import same_goal_advice_response_reconcile_candidate_v2 as reconcile
+from . import same_goal_advice_response_spool_test_v2 as spool
+from . import same_goal_advice_spool_recovery_candidate_v2 as spool_recovery
 from . import same_goal_advice_store_v302 as store
 from . import same_goal_advice_transport_intent_candidate_v2 as intents
 from . import same_goal_advice_unlimited_store_v2 as custody
@@ -30,8 +33,6 @@ from .models import Capability,Plan,Task
 
 _PRODUCTION=object()
 _SYNTHETIC=object()
-MAX_STREAM_SECONDS=15.0
-READ_TIMEOUT_SECONDS=3.0
 MAX_WIRE_BYTES=16*1024*1024
 
 
@@ -75,6 +76,13 @@ def _execute(p,task_id,plan_id,job_id,lease_token,call_id,mode):
     store.need(mode is _PRODUCTION or mode is _SYNTHETIC)
     if mode is _PRODUCTION and settings().v2_deepseek_dispatch_enabled is not True:
         raise gateway.ModelBlocked('V2 DeepSeek 派发尚未启用')
+    if settings().v2_response_spool_enabled is not True or settings().v2_response_spool_root is None:
+        raise gateway.ModelBlocked('业务建议首答暂存未启用')
+    try:spool.validate_root(settings().v2_response_spool_root)
+    except (OSError,spool.SpoolError):raise gateway.ModelBlocked('业务建议首答暂存不可用') from None
+    try:asyncio.get_running_loop()
+    except RuntimeError:pass
+    else:raise gateway.ModelBlocked('当前执行环境不支持同步派发；未创建发送申请')
     if mode is _PRODUCTION:
         # Preflight credentials before creating an irreversible intent.
         with Session(engine()) as db:
@@ -109,34 +117,44 @@ def _execute(p,task_id,plan_id,job_id,lease_token,call_id,mode):
         endpoint,key=_test_endpoint(),'synthetic-loopback-only'
     prepared=permission['prepared'];model=permission['model'];send_by=permission['monotonic_send_before']
     try:
-        with httpx.Client(trust_env=False,follow_redirects=False,timeout=httpx.Timeout(READ_TIMEOUT_SECONDS)) as client:
-            if time.monotonic()>=send_by:
-                return {'state':'unknown','retry_authorized':False,'intent_audit_id':intent_id}
-            until=time.monotonic()+MAX_STREAM_SECONDS
-            with client.stream('POST',endpoint,headers={'Authorization':'Bearer '+key,'Accept-Encoding':'identity'},
+        context=spool_recovery.current_context(p.workspace_id,call_id,intent_id,permission['permit_audit_id'])
+        with spool.prepare(settings().v2_response_spool_root,context) as sink:
+            asyncio.run(_post_to_spool(endpoint,key,prepared,model,call_id,send_by,sink))
+    except (httpx.HTTPError,httpx.StreamError,OSError,ValueError,TimeoutError,spool.SpoolError):
+        return {'state':'unknown','retry_authorized':False,'intent_audit_id':intent_id}
+    # Full authenticated spool exists before the first DB capture attempt.
+    # A DB outage leaves it available for explicit, no-send recovery.
+    try:result=spool_recovery.recover(p.workspace_id,call_id,intent_id,permission['permit_audit_id'])
+    except Exception:
+        return {'state':'capture_pending','retry_authorized':False,'intent_audit_id':intent_id,
+            'permit_audit_id':permission['permit_audit_id']}
+    return {**result,'intent_audit_id':intent_id}
+
+
+async def _post_to_spool(endpoint,key,prepared,model,call_id,send_by,sink):
+    connect=settings().v2_deepseek_connect_timeout_seconds
+    read=settings().v2_deepseek_read_timeout_seconds
+    total=settings().v2_deepseek_total_timeout_seconds
+    store.need(all(type(x) in (int,float) and not isinstance(x,bool) for x in (connect,read,total))
+        and 1<=connect<=60 and 1<=read<=600 and 1<=total<=1800)
+    timeout=httpx.Timeout(connect=min(connect,total),read=min(read,total),write=min(30,total),pool=min(10,total))
+    async with asyncio.timeout(total):
+        async with httpx.AsyncClient(trust_env=False,follow_redirects=False,timeout=timeout) as client:
+            if time.monotonic()>=send_by:raise ValueError('permit expired before send')
+            async with client.stream('POST',endpoint,headers={'Authorization':'Bearer '+key,'Accept-Encoding':'identity'},
                 json={**prepared['options'],'messages':prepared['messages']}) as response:
                 headers,request_id,encoding_unverified=loopback._safe_headers(response.headers.raw)
-                chunks=[];size=0
-                for chunk in response.iter_raw():
-                    size+=len(chunk)
-                    if size>MAX_WIRE_BYTES or time.monotonic()>until:
-                        raise ValueError('response exceeds capture bound')
-                    chunks.append(chunk)
-                if time.monotonic()>until:raise ValueError('response exceeds capture time')
-                raw=b''.join(chunks)
                 receipt={'provider':'deepseek','model':model,'call_id':call_id,'request_id':request_id,
                     'http_status':response.status_code,'header_raw_base64':headers,
                     'encoding_unverified':encoding_unverified,'usage':{},'usage_unavailable':True,
                     'usage_unavailable_reason':'unparsed_original_http','finish_reason':None,
                     'response_choice_count':None,'stage':wire.STAGE}
-    except (httpx.HTTPError,httpx.StreamError,OSError,ValueError):
-        return {'state':'unknown','retry_authorized':False,'intent_audit_id':intent_id}
-    # Paid bytes are preserved before parse or settlement, even after a role or
-    # lease change. A capture/settlement crash is never grounds to POST again.
-    with Session(engine()) as db:
-        storage.capture(db,p.workspace_id,call_id,intent_id,raw,receipt);db.commit()
-    result=reconcile.reconcile(p.workspace_id,call_id,intent_id)
-    return {**result,'intent_audit_id':intent_id}
+                sink.begin(receipt);size=0
+                async for chunk in response.aiter_raw():
+                    size+=len(chunk)
+                    if size>MAX_WIRE_BYTES:raise ValueError('response exceeds capture bound')
+                    sink.append(chunk)
+                sink.finish()
 
 
 def _production_access_after_permit(db,p,plan_id):
