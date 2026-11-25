@@ -109,8 +109,10 @@ def _candidates(db):
 @contextmanager
 def _keep_heartbeat(workspace):
     # Actual source validation may take minutes; do not claim the worker is
-    # offline solely because one legitimate job is still processing.
-    stop=Event();state={'lease':None}
+    # offline solely because one legitimate job is still processing. While
+    # busy, refresh every workspace that actually has a control job; a worker
+    # serving one workspace is still available to another queued workspace.
+    stop=Event();state={'lease':None};commit_lock=Lock()
     def pulse():
         while not stop.wait(HEARTBEAT_INTERVAL_SECONDS):
             try:
@@ -118,13 +120,30 @@ def _keep_heartbeat(workspace):
                     _check(db)
                     db.execute(text("SET LOCAL lock_timeout = '1s'"))
                     db.execute(text("SET LOCAL statement_timeout = '2s'"))
-                    _heartbeat(db,workspace,state['lease']);db.commit()
+                    workspaces=list(db.scalars(select(Job.workspace_id).where(Job.kind==control.KIND).distinct()))
             except Exception:
-                pass
+                continue
+            for target in workspaces:
+                if stop.is_set():break
+                try:
+                    with Session(engine()) as db:
+                        _check(db)
+                        db.execute(text("SET LOCAL lock_timeout = '1s'"))
+                        db.execute(text("SET LOCAL statement_timeout = '2s'"))
+                        lease=state['lease'] if target==workspace else None
+                        _heartbeat(db,target,lease)
+                        with commit_lock:
+                            if stop.is_set():db.rollback();break
+                            db.commit()
+                except Exception:
+                    continue
     thread=Thread(target=pulse,daemon=True);thread.start()
     try:yield state
     finally:
-        stop.set();thread.join(timeout=3)
+        # Serialize shutdown with commit so a late pulse cannot resurrect a
+        # stopped worker's heartbeat after this context has exited.
+        with commit_lock:stop.set()
+        thread.join(timeout=3)
 
 
 def tick():
