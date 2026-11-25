@@ -170,10 +170,17 @@ def _saved(db,p,task,plan):
     return prep,job
 
 
-def _inventory(db,p,task,*,history_compatible=False):
+def _inventory(db,p,task,*,history_compatible=False,reserved_plan_test_only=None,intent_test_only=False):
     # v2 remains in a separate experimental release. History may ignore it
     # only after full custody verification, with a Task lock preventing a
     # cooperative writer from adding it between verification and filtering.
+    need(type(intent_test_only) is bool and (not intent_test_only or reserved_plan_test_only is not None))
+    if reserved_plan_test_only is not None:
+        # This is a proof experiment, not an input to a production API.
+        # It does not authorize a mutation, provider call, or retry.
+        from .same_goal_advice_cloud_claim_test_v2 import require_test_database
+        require_test_database(db)
+        need(history_compatible and type(reserved_plan_test_only) is str)
     has_v2=False
     if history_compatible:
         from .same_goal_advice_unlimited_store_v2 import PLAN as V2_PLAN
@@ -184,7 +191,13 @@ def _inventory(db,p,task,*,history_compatible=False):
                 Plan.data['preparation_snapshot']['scope']['task_id'].as_string()==task.id)).limit(1)))
         if has_v2:
             from .same_goal_advice_common_inventory_v2 import read as read_versions
-            read_versions(db,p,task)
+            if reserved_plan_test_only is None and intent_test_only is False:
+                read_versions(db,p,task)
+            else:
+                read_versions(db,p,task,reserved_plan_test_only=reserved_plan_test_only,
+                    intent_test_only=intent_test_only)
+    if reserved_plan_test_only is not None:
+        need(has_v2, '指定的原始预留不存在，未按空历史读取')
     plans=_rows(db,p,Plan,or_(
         (Plan.task_id==task.id)&(Plan.data['schema'].as_string()==c.PLAN),
         Plan.data['preparation_snapshot']['scope']['task_id'].as_string()==task.id))
@@ -369,10 +382,11 @@ def _view(db,p,task,plan,prep,job):
 
 
 @checked
-def prepare(db,p,task_id,body):
+def prepare(db,p,task_id,body,*,reserved_plan_test_only=None,intent_test_only=False):
     body=c.Prepare.model_validate(body).model_dump(mode='json');_reader(db,p,write=True)
     command_nonce.acquire(db,p,action=ACCEPTED,task_id=task_id,body=body)
-    task=existing._task(db,p,task_id,lock=True);lock_current_actor(db,p);inventory=_inventory(db,p,task,history_compatible=True)
+    task=existing._task(db,p,task_id,lock=True);lock_current_actor(db,p);inventory=_inventory(db,p,task,history_compatible=True,
+        reserved_plan_test_only=reserved_plan_test_only,intent_test_only=intent_test_only)
     previous=[value for value in inventory if any(op['request_id']==body['request_id'] for op in value[0].data['operations'])]
     need(len(previous)<=1)
     if previous:
@@ -407,33 +421,37 @@ def prepare(db,p,task_id,body):
 
 
 @checked
-def listing(db,p,task_id):
+def listing(db,p,task_id,*,reserved_plan_test_only=None,intent_test_only=False):
     _reader(db,p);task=existing._task(db,p,task_id)
     return {'schema':OPERATION+'/list','task_id':task.id,
-        'records':[_view(db,p,task,plan,prep,job) for plan,prep,job in _inventory(db,p,task,history_compatible=True)]}
+        'records':[_view(db,p,task,plan,prep,job) for plan,prep,job in _inventory(db,p,task,history_compatible=True,
+            reserved_plan_test_only=reserved_plan_test_only,intent_test_only=intent_test_only)]}
 
 
 @checked
-def get(db,p,task_id,plan_id):
+def get(db,p,task_id,plan_id,*,reserved_plan_test_only=None,intent_test_only=False):
     _reader(db,p);task=existing._task(db,p,task_id)
-    found=[value for value in _inventory(db,p,task,history_compatible=True) if value[0].id==existing._id(plan_id)]
+    found=[value for value in _inventory(db,p,task,history_compatible=True,
+        reserved_plan_test_only=reserved_plan_test_only,intent_test_only=intent_test_only) if value[0].id==existing._id(plan_id)]
     if not found:raise HTTPException(404,'原资料准备操作不存在或不属于当前任务')
     need(len(found)==1);return _view(db,p,task,*found[0])
 
 
 @checked
-def get_operation(db,p,task_id,request_id):
+def get_operation(db,p,task_id,request_id,*,reserved_plan_test_only=None,intent_test_only=False):
     _reader(db,p);task=existing._task(db,p,task_id);request_id=existing._id(request_id)
-    found=[value for value in _inventory(db,p,task,history_compatible=True) if any(op['request_id']==request_id for op in value[0].data['operations'])]
+    found=[value for value in _inventory(db,p,task,history_compatible=True,
+        reserved_plan_test_only=reserved_plan_test_only,intent_test_only=intent_test_only) if any(op['request_id']==request_id for op in value[0].data['operations'])]
     if not found:raise HTTPException(404,'原资料准备请求不存在或不属于当前任务')
     need(len(found)==1);return _view(db,p,task,*found[0])
 
 
 @checked
-def cancel(db,p,task_id,plan_id,body):
+def cancel(db,p,task_id,plan_id,body,*,reserved_plan_test_only=None,intent_test_only=False):
     body=c.Cancel.model_validate(body).model_dump(mode='json');_reader(db,p,write=True)
     command_nonce.acquire(db,p,action=CANCELLED,task_id=task_id,body=body,subject_id=plan_id)
-    task=existing._task(db,p,task_id,lock=True);lock_current_actor(db,p);inventory=_inventory(db,p,task,history_compatible=True)
+    task=existing._task(db,p,task_id,lock=True);lock_current_actor(db,p);inventory=_inventory(db,p,task,history_compatible=True,
+        reserved_plan_test_only=reserved_plan_test_only,intent_test_only=intent_test_only)
     found=[value for value in inventory if value[0].id==existing._id(plan_id)]
     need(len(found)==1);plan,prep,job=found[0]
     need(p.role=='admin' or p.user_id in {prep['requested_by'],prep['data_actor_id'],prep['business_actor_id']})

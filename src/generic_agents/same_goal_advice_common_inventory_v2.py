@@ -17,7 +17,7 @@ from .models import Audit, AuthSession, CloudCall, Evidence, Invocation, Job, Pl
 
 
 @old.checked
-def read(db, p, task):
+def read(db, p, task, *, reserved_plan_test_only=None, intent_test_only=False):
     """Return validated v1 reservations and the number of open v2 plans.
 
     The Task lock precedes all custody reads. Callers that mutate commands
@@ -25,7 +25,10 @@ def read(db, p, task):
     reader itself does not take that lock or authorize a future mutation.
     """
     with read_session.isolated(db, task.id) as reader:
-        return _read(reader, p, task.id)
+        if reserved_plan_test_only is None and intent_test_only is False:
+            return _read(reader, p, task.id)
+        return _read(reader, p, task.id, reserved_plan_test_only=reserved_plan_test_only,
+            intent_test_only=intent_test_only)
 
 
 @old.checked
