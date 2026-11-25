@@ -12,6 +12,12 @@ from . import same_goal_advice_intent_index_migration_candidate_v2 as migration
 from . import same_goal_advice_store_v302 as old
 
 
+class GateBusy(HTTPException):
+    """Only a proven PostgreSQL lock-not-available conflict, never a policy error."""
+    def __init__(self):
+        super().__init__(409, '资料索引正在维护或被占用；未写入资料，请稍后重试')
+
+
 @old.checked
 def require(db, workspace_id):
     """Hold the index DDL fence through this transaction and check structure.
@@ -26,7 +32,7 @@ def require(db, workspace_id):
         db.execute(text('LOCK TABLE public.audit_events IN SHARE UPDATE EXCLUSIVE MODE NOWAIT'))
     except DBAPIError as exc:
         if getattr(exc.orig,'sqlstate',None)=='55P03':
-            raise HTTPException(409,'资料索引正在维护或被占用；未写入资料，请稍后重试') from None
+            raise GateBusy() from None
         raise HTTPException(503,'无法核对资料索引；未写入资料') from None
     conn=db.connection()
     version=int(conn.scalar(text("SELECT current_setting('server_version_num')")))
