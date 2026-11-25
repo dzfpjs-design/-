@@ -1,0 +1,59 @@
+"""Optional long synthetic Goal/approval checkpoint; never real workspace data.
+
+Run only on an exclusive disposable test cluster with network egress denied,
+empty cloud credentials and a private GA_SYNTHETIC_FRESH_GOAL_CHECKPOINT.  A
+passing checkpoint is not offline-delegation, real device or model evidence.
+"""
+import copy
+import os
+import pytest
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+from generic_agents.db import engine
+from generic_agents.instance_compiler import identifier
+from generic_agents.models import CloudCall
+from generic_agents.runtime_task_document_models_v207 import RuntimeTaskDocumentSourceSet, WorkflowDocumentPacketV207
+from tests import test_auto_evaluation_real_journey_fixture_v356 as journey
+from tests import test_same_goal_advice_manual_append_pg as manual
+from tests.synthetic_fresh_mature_checkpoint_candidate import save
+from tests.test_same_goal_advice_manual_append_pg import matured_manual_case, managed, scene, reject_non_loopback_network
+
+
+@pytest.fixture
+def deepseek_3600_publication(managed, monkeypatch):
+    """Submit explicit, compatible synthetic user configuration before adoption.
+
+    The candidate's output pointer and target field both carry the actual
+    compiled object-field key. The real preview and release checks are kept.
+    """
+    original = journey.prepared_decision
+    def mapped(value):
+        body, *rest = original(value)
+        body = copy.deepcopy(body)
+        aliases = {'temperature_c': '气温', 'relative_humidity_pct': '相对湿度'}
+        for spec in body['candidate_specs']:
+            for pin in spec['capability_pins']:
+                if pin['delivery'] == 'requested_observation':
+                    for port in pin['ports']:
+                        port['field'] = identifier('field', aliases[port['field']])
+                        port['pointer'] = '/requested_observation/' + port['field']
+        return (body, *rest)
+    monkeypatch.setattr(journey, 'prepared_decision', mapped)
+    return manual.deepseek_3600_publication.__wrapped__(managed, monkeypatch)
+
+
+@pytest.mark.skipif(not os.environ.get('GA_SYNTHETIC_FRESH_GOAL_CHECKPOINT'),
+    reason='explicit private synthetic checkpoint required; this is a long journey')
+def test_synthetic_real_maturity_and_approved_source_checkpoint(matured_manual_case):
+    case = matured_manual_case
+    with Session(engine()) as db:
+        sources = db.scalar(select(func.count()).select_from(RuntimeTaskDocumentSourceSet).where(
+            RuntimeTaskDocumentSourceSet.workspace_id == case.workspace_id,
+            RuntimeTaskDocumentSourceSet.task_id == case.task_id))
+        packets = db.scalar(select(func.count()).select_from(WorkflowDocumentPacketV207).where(
+            WorkflowDocumentPacketV207.workspace_id == case.workspace_id,
+            WorkflowDocumentPacketV207.task_id == case.task_id))
+        assert sources == 1 and case.head['generation'] >= 2
+        assert db.scalar(select(func.count()).select_from(CloudCall)) == 0
+        print('SYNTHETIC_APPROVED_SOURCE_SETS=' + str(sources) + ' PACKETS=' + str(packets), flush=True)
+    save(case.task_id, case.publication.scene.key)
