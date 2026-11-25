@@ -309,3 +309,16 @@ test('permission denial hides all sensitive successful branches even during a pr
  assert.equal(h.container.querySelector('[aria-label="保存本次人工决定"]'),null);assert.equal(h.container.querySelector('textarea'),null);
  assert.deepEqual(h.commands,[]);
 }));
+
+
+test('failed advice explains recovery according to the saved cancellation permission',{concurrency:false},async()=>harness(async h=>{
+ h.view.plan.phase='needs_review';h.view.plan.cancel_available=true;h.view.preview=null;h.view.documents=null;await h.render();
+ let guidance=h.container.querySelector('[aria-label="原申请恢复指引"]');assert.ok(guidance);
+ assert.match(guidance.textContent,/当前记录允许取消/);assert.match(guidance.textContent,/取消时系统会再次核对是否已有模型调用/);
+ assert.equal(h.button('确认取消并保留原记录').disabled,true);
+ await h.edit('取消本次申请的原因','核对后取消原申请。');await h.click(h.button('确认取消并保留原记录'));
+ assert.deepEqual(h.commands,[['cancel']]);
+ h.view.plan.cancel_available=false;await h.render();guidance=h.container.querySelector('[aria-label="原申请恢复指引"]');
+ assert.match(guidance.textContent,/当前不能直接取消/);assert.match(guidance.textContent,/系统不会自动重新发送/);
+ assert.equal(h.button('确认取消并保留原记录'),undefined);
+}));

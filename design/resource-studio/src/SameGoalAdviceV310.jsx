@@ -196,6 +196,7 @@ export function SameGoalAdviceContentV310({view,account,Btn,onAction,onDraft}){
    <Button Btn={Btn} primary disabled={blocked||permissions.can_prepare!==true||selection<0||!draft.prepare_reason?.trim()} onClick={()=>onAction('prepare')}>{phase==='reviewed'?'新增下一份资料整理申请':'整理批准资料'}</Button>
   </Stage>}
   {plan&&<p role="status"><strong>{PHASES[phase]||'原记录状态需要核对'}</strong>{plan.data_as_of?' · 本建议资料截至 '+clock(plan.data_as_of):''}</p>}
+  {phase==='needs_review'&&<aside className="info" aria-label="原申请恢复指引"><strong>这份申请需要先核对</strong>{canCancel?<p>当前记录允许取消。请先核对原申请；确认后可在下方取消并重新整理资料，原资料和记录会保留。取消时系统会再次核对是否已有模型调用。</p>:<p>当前不能直接取消。请先核对原申请的处理和调用状态，或联系有权限的人员处理；系统不会自动重新发送。</p>}</aside>}
   {['queued','preparing'].includes(phase)&&<p>资料准备在后台继续，完成后会显示原文与指定模型；刷新或离开页面不会另建一份申请。</p>}
   {plan&&!['queued','preparing'].includes(phase)&&<Stage number={2} title="核对原文与指定模型授权">
    <ReadStatus state={reads.documents} label="原资料全文读取状态" loading="正在读取这份原申请的资料全文，原答可先查看；读取完成前暂不能授权或保存审核。" failed="这份原申请的资料全文暂未读回；原答与已填写的理由仍保留，请刷新原记录核对。"/>
