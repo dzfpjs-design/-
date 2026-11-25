@@ -136,33 +136,82 @@ def _lock(fd,exclusive=True):
     except OSError:raise SpoolError('spool_busy') from None
 
 
-def prepare(root_path,context):
-    """One exclusive response slot, created before a single test-only POST."""
-    context=_check_context(context);root=lockfd=stage=body=None
+def allocate(root_path,call_id):
+    """Claim and durably pre-create all four private files before intent/permit.
+
+    A crash leaves an occupied unbound slot. It does not establish whether a
+    request was sent, and never authorizes a retry or automatic cleanup.
+    """
+    try:_need(type(call_id) is str and str(UUID(call_id))==call_id)
+    except (ValueError,TypeError,AttributeError):raise SpoolError('spool_invalid') from None
+    root=lockfd=stage=body=None
     try:
         root=_root(root_path)
         lockfd=os.open('spool.lock',os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600,dir_fd=root)
-        _owned(lockfd);_lock(lockfd)
-        key=_key(root,True)
+        _owned(lockfd);_lock(lockfd);key=_key(root,True)
         names=set(os.listdir(root));_need(names >= {'spool.key','spool.lock'},'spool_storage_unsafe')
         slots=names-{'spool.key','spool.lock'}
         _need(all(re.fullmatch(r'[a-f0-9-]{36}',name) for name in slots),'spool_storage_unsafe')
+        _need(call_id not in slots,'spool_already_claimed')
         _need(len(slots)<MAX_SLOTS,'spool_capacity_reached')
-        try:os.mkdir(context['call_id'],0o700,dir_fd=root)
-        except FileExistsError:raise SpoolError('spool_already_claimed') from None
-        os.fsync(root)
-        stage=os.open(context['call_id'],_DIR,dir_fd=root);_owned(stage,True)
-        nonce=os.urandom(12);metadata={'context':context,'nonce':base64.b64encode(nonce).decode('ascii')}
-        _new(stage,'context.json',_json(metadata));_new(stage,'body.bin',b'')
-        body=os.open('body.bin',os.O_WRONLY|os.O_APPEND|os.O_NOFOLLOW,dir_fd=stage);info=_owned(body);_lock(body)
-        enc,_mac=_keys(key);writer=Cipher(algorithms.AES(enc),modes.GCM(nonce)).encryptor()
-        writer.authenticate_additional_data(_json(context))
-        sink=Sink(root_path,os.dup(stage),body,(info.st_dev,info.st_ino),context,key,writer,nonce)
-        body=None;return sink
+        os.mkdir(call_id,0o700,dir_fd=root);os.fsync(root)
+        stage=os.open(call_id,_DIR,dir_fd=root);_owned(stage,True)
+        for name in sorted(_FILES):_new(stage,name,b'')
+        body=os.open('body.bin',os.O_WRONLY|os.O_APPEND|os.O_NOFOLLOW,dir_fd=stage)
+        info=_owned(body);_lock(body)
+        # Reopen every private entry, verify ownership, mode and persistent empty
+        # state; this is not a reservation of 16 MiB of future free space.
+        for name in sorted(_FILES):_need(_read(stage,name,1)==b'','spool_storage_unsafe')
+        os.fsync(stage);os.fsync(root)
+        reservation=Reservation(root_path,os.dup(stage),body,(info.st_dev,info.st_ino),call_id,key)
+        body=None;return reservation
     except OSError:raise SpoolError('spool_storage_unsafe') from None
     finally:
         for fd in (body,stage,lockfd,root):
             if fd is not None:os.close(fd)
+
+
+def _replace_reserved(stage,name,raw):
+    fd=os.open(name,os.O_WRONLY|os.O_NOFOLLOW,dir_fd=stage)
+    try:
+        _owned(fd);_need(os.fstat(fd).st_size==0,'spool_changed')
+        _write(fd,raw);os.fsync(fd)
+    finally:os.close(fd)
+    os.fsync(stage)
+
+
+class Reservation:
+    def __init__(self,root,stage,body,identity,call_id,key):
+        self.root=root;self.stage=stage;self.body=body;self.identity=identity
+        self.call_id=call_id;self.key=key;self.closed=False;self.bound=False
+
+    def bind(self,context):
+        _need(not self.closed and not self.bound,'spool_closed')
+        context=_check_context(context);_need(context['call_id']==self.call_id)
+        _need(set(os.listdir(self.stage))==_FILES,'spool_changed')
+        for name in ('context.json','headers.json','final.json'):_need(_read(self.stage,name,1)==b'','spool_changed')
+        nonce=os.urandom(12);metadata={'context':context,'nonce':base64.b64encode(nonce).decode('ascii')}
+        _replace_reserved(self.stage,'context.json',_json(metadata))
+        enc,_mac=_keys(self.key);writer=Cipher(algorithms.AES(enc),modes.GCM(nonce)).encryptor()
+        writer.authenticate_additional_data(_json(context));self.bound=True
+        sink=Sink(self.root,self.stage,self.body,self.identity,context,self.key,writer,nonce)
+        self.stage=None;self.body=None;return sink
+
+    def close(self):
+        if not self.closed:
+            self.closed=True
+            for fd in (self.body,self.stage):
+                if fd is not None:os.close(fd)
+
+    def __enter__(self):return self
+    def __exit__(self,*_):self.close();return False
+
+
+def prepare(root_path,context):
+    """Convenience for file-only tests; dispatch must allocate before intent."""
+    context=_check_context(context)
+    with allocate(root_path,context['call_id']) as reservation:
+        return reservation.bind(context)
 
 
 class Sink:
@@ -174,13 +223,13 @@ class Sink:
         _need(not self.closed and not self.poisoned and self.body is not None,'spool_closed')
         before=_owned(self.body);named=os.stat('body.bin',dir_fd=self.stage,follow_symlinks=False)
         _need((before.st_dev,before.st_ino)==self.identity==(named.st_dev,named.st_ino),'spool_changed')
-        _need(set(os.listdir(self.stage)) <= _FILES and 'final.json' not in os.listdir(self.stage),'spool_changed')
+        _need(set(os.listdir(self.stage))==_FILES and _read(self.stage,'final.json',1)==b'','spool_changed')
 
     def begin(self,receipt):
         try:
             self._active();_need(self.headers is None)
             responses.seal(cloud_call_id=self.context['call_id'],intent_audit_id=self.context['intent_id'],raw=b'',receipt=receipt)
-            self.headers=copy.deepcopy(receipt);_new(self.stage,'headers.json',_json(self.headers))
+            self.headers=copy.deepcopy(receipt);_replace_reserved(self.stage,'headers.json',_json(self.headers))
         except BaseException:
             self.poisoned=True
             raise
@@ -205,7 +254,7 @@ class Sink:
                 'tag':base64.b64encode(self.writer.tag).decode('ascii'),
                 'headers_hash':hashlib.sha256(_json(self.headers)).hexdigest()}
             _enc,mac=_keys(self.key);value['mac']=hmac.new(mac,_json(value),hashlib.sha256).hexdigest()
-            _new(self.stage,'final.json',_json(value))
+            _replace_reserved(self.stage,'final.json',_json(value))
         except BaseException:
             self.poisoned=True
             # A failed fsync may leave a visible final file. Remove it on a

@@ -92,6 +92,15 @@ def _execute(p,task_id,plan_id,job_id,lease_token,call_id,mode):
         with Session(engine()) as db:guard.require_disposable_database(db)
         _test_endpoint()
         execution=None
+    # Reserve and fsync the private slot and all four files before any intent
+    # or irrevocable permit. A failed/abandoned slot is retained for review.
+    try:reservation=spool.allocate(settings().v2_response_spool_root,call_id)
+    except spool.SpoolError as error:raise gateway.ModelBlocked('业务建议首答暂存不可用，当前派发已拒绝，请核查已有记录：'+error.code) from None
+    with reservation:
+        return _execute_reserved(p,task_id,plan_id,job_id,lease_token,call_id,mode,execution,reservation)
+
+
+def _execute_reserved(p,task_id,plan_id,job_id,lease_token,call_id,mode,execution,reservation):
     with Session(engine()) as db:
         guard.require_disposable_database(db)
         made=intents.issue(db,p,task_id,plan_id,job_id,lease_token,call_id)
@@ -118,7 +127,7 @@ def _execute(p,task_id,plan_id,job_id,lease_token,call_id,mode):
     prepared=permission['prepared'];model=permission['model'];send_by=permission['monotonic_send_before']
     try:
         context=spool_recovery.current_context(p.workspace_id,call_id,intent_id,permission['permit_audit_id'])
-        with spool.prepare(settings().v2_response_spool_root,context) as sink:
+        with reservation.bind(context) as sink:
             asyncio.run(_post_to_spool(endpoint,key,prepared,model,call_id,send_by,sink))
     except (httpx.HTTPError,httpx.StreamError,OSError,ValueError,TimeoutError,spool.SpoolError):
         return {'state':'unknown','retry_authorized':False,'intent_audit_id':intent_id}
