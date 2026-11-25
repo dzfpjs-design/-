@@ -39,3 +39,11 @@ pytest -q -s -p tests.advice_preview_profile_plugin tests/test_advice_v2_real_fr
 ```
 
 本记录保留实验数据，不代表任何真实用户业务流程、上线准备、权限或业务价值验收已完成。
+
+## 批量读取负例（独立 PostgreSQL 17）
+
+热路径 `_acks` 中，source 和 extractor 的 Capability 原来分别执行 `populate_existing` 读取。在 READ COMMITTED 下，两次读取有各自的语句快照；第二次读取还能刷新同 ID 的 ORM 对象。`tests/test_goal_ack_batch_read_safety_pg.py` 仅把一次 `IN` 查询作为测试对照，不改业务实现。
+
+无并发时，对照查询可将该单个读取对从两条 SELECT 降为一条，并得到同样的值；但当 extractor 在两次原始查询之间被另一事务更新时，原实现读到更新后的摘要并拒绝旧 pin，一次性预取可能继续拿到旧值。测试分别覆盖两个不同 ID 和相同 ID 的 ORM 别名；另一事务撤销角色后也确认重新认证会失败。测试全部通过，证实简单批量化会改变安全结论，故未接入。该对照仅量化单个读取对的语句数量，不能推算整个预览的性能收益。
+
+在已经持有全部相关行锁的特定调用路径中，批量读取或有可能可行；目前尚未证明热路径普遍持有这些锁、所有写者遵守相同锁协议或锁序安全。因此保留现有读取，不通过缓存、跳过完整 payload 或提前预取绕过这一问题。
