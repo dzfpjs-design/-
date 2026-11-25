@@ -13,6 +13,7 @@ from . import same_goal_advice_unlimited_store_v2 as custody
 from . import same_goal_advice_unlimited_preview_candidate_v2 as preview
 from . import same_goal_advice_prepare_writer_candidate_v2 as guard
 from . import same_goal_advice_file_intent_candidate_v2 as current_guard
+from . import same_goal_advice_start_safety_candidate_v2 as safety
 from . import workspace_advice_nonce_candidate_v2 as nonces
 from . import workspace_command_nonce_lock_v312 as nonce_records
 from .contracts import digest
@@ -105,9 +106,9 @@ def begin(db,p,task_id,plan_id,body):
         and body['preview_hash']==event.data['preview_record']['preview_hash']
         and body['expected_goal_hash']==prep['scope']['goal_hash']
         and body['expected_mature_head_hash']==prep['mature_head']['head_hash'])
+    safety.lock_current(db,p,task,prep,event.data['preview_record'])
     frame=preview.verify_current_for_start(db,p,task,plan,prep,event)
     current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'])
-    current_guard._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'])
     advice=store._fresh(db,p,Capability,prep['advice_capability_ref']['id'])
     snapshot=contracts.seal_plan({'schema':contracts.EXECUTION,'scope':copy.deepcopy(prep['scope']),
         'preparation_snapshot_hash':prep['record_hash'],'source_record':copy.deepcopy(frame['source_record']),
@@ -124,9 +125,18 @@ def begin(db,p,task_id,plan_id,body):
     value['record_hash']=old.record_hash(value)
     audit=Audit(id=value['audit_id'],workspace_id=p.workspace_id,actor_id=p.user_id,action=ACTION,
         object_id=plan.id,created_at=now,data=value)
-    with db.begin_nested():
-        db.add_all([job,audit]);plan.data={**plan.data,POINTER:{'audit_id':audit.id,'preview_id':event.id,
-            'preview_record_hash':event.data['record_hash'],'job_id':job.id}}
-        plan.status='awaiting_dispatch';plan.version+=1;db.flush()
-        custody.read_started(db,p,task,plan)
+    previous_file_guard=db.info.get('v2_file_intent_commit_guard')
+    previous_goal_guard=db.info.get('v2_start_goal_commit_guard')
+    try:
+        current_guard._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'])
+        safety.bind_commit_guard(db,p,task.id,prep,event.data['preview_record'])
+        with db.begin_nested():
+            db.add_all([job,audit]);plan.data={**plan.data,POINTER:{'audit_id':audit.id,'preview_id':event.id,
+                'preview_record_hash':event.data['record_hash'],'job_id':job.id}}
+            plan.status='awaiting_dispatch';plan.version+=1;db.flush()
+            custody.read_started(db,p,task,plan)
+    except BaseException:
+        if previous_file_guard is None:current_guard._unbind_commit_guard(db)
+        if previous_goal_guard is None:safety.unbind_commit_guard(db)
+        raise
     return _view(value)

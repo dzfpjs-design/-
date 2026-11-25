@@ -34,6 +34,25 @@ def _check_current(db, p, task_id, policy_ref):
     saved, _ = policy.policy_shape(row, clock)
     old.need(policy.instant(saved['expires_at']) > clock, '原政策已到期；未登记或继续写入资料')
 
+def _unbind_commit_guard(db):
+    prior=db.info.pop('v2_file_intent_commit_guard',None)
+    if prior is not None and event.contains(db,'before_commit',prior[1]):
+        event.remove(db,'before_commit',prior[1])
+
+
+def _clear_guard_after_root(session, transaction):
+    if transaction.parent is None: _unbind_commit_guard(session)
+
+
+def _clear_guard_after_rollback(session, transaction):
+    prior=session.info.get('v2_file_intent_commit_guard')
+    current=prior[2] if prior is not None else None
+    while current is not None:
+        if current is transaction:
+            _unbind_commit_guard(session);return
+        current=current.parent
+
+
 def _bind_commit_guard(db, p, task_id, policy_ref):
     # A source read or filesystem operation may cross the expiry boundary.
     # Keep the exact original pinned and recheck the DB clock at commit.
@@ -42,8 +61,12 @@ def _bind_commit_guard(db, p, task_id, policy_ref):
     if prior is not None:
         old.need(prior[0] == identity and event.contains(db, 'before_commit', prior[1])); return
     def check(session): _check_current(session, p, task_id, policy_ref)
+    if not db.info.get('v2_file_intent_guard_cleanup_installed'):
+        event.listen(db,'after_transaction_end',_clear_guard_after_root)
+        event.listen(db,'after_soft_rollback',_clear_guard_after_rollback)
+        db.info['v2_file_intent_guard_cleanup_installed']=True
     event.listen(db, 'before_commit', check)
-    db.info['v2_file_intent_commit_guard'] = (identity, check)
+    db.info['v2_file_intent_commit_guard'] = (identity, check, db.get_nested_transaction() or db.get_transaction())
 
 def _key(job_id):
     return 'advice-v2-file-intent:' + job_id
