@@ -42,6 +42,11 @@ def test_real_mature_approved_source_to_durable_v2_preview(monkeypatch):
     monkeypatch.setattr(settings(),'cloud_allowed_providers','')
     task_id=restore_to_disposable_test_db(os.environ['GA_SYNTHETIC_FRESH_CHECKPOINT'])
     print('RESTORED_PRIVATE_CHECKPOINT',flush=True)
+    # The restored checkpoint predates the v2 file-intent index. Rehearse the
+    # migration only after the disposable-database identity check in restore;
+    # the production database is never touched by this fixture.
+    from generic_agents.same_goal_advice_intent_index_migration_candidate_v2 import rehearse
+    assert rehearse()['status'] in {'installed', 'already_installed'}
     login=json.loads((settings().storage_dir/'__synthetic_checkpoint_login__.json').read_text())
     with TestClient(app) as client:
         auth=client.post('/api/login',json={'username':login['username'],'password':login['password']})
