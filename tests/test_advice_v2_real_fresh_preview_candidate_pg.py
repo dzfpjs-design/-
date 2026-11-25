@@ -121,7 +121,9 @@ def test_real_mature_approved_source_to_durable_v2_preview(monkeypatch):
             with Session(engine()) as editor:
                 row=editor.get(model,identity);setattr(row,field,changed);editor.flush()
                 with Session(engine()) as first_db:
-                    with pytest.raises(HTTPException):safety.lock_current(first_db,p,first_db.get(Task,task_id),prep,saved_preview)
+                    with pytest.raises(HTTPException) as refused:
+                        safety.lock_current(first_db,p,first_db.get(Task,task_id),prep,saved_preview)
+                    assert refused.value.status_code==409 and '正在修改' in refused.value.detail
                     first_db.rollback()
                 editor.rollback()
         print('SOURCE_AND_APPROVAL_CONFLICTS_REFUSED',flush=True)
