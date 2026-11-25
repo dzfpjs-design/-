@@ -116,7 +116,7 @@ def prepared_preview(synthetic_custody,monkeypatch,request):
     frame['evidence_ids']=[data_ref['evidence_id'],doc_ref['evidence_id']]
     rows=frame['decision_input']['sources'];rows[0].update(source_id=prep['mature_head']['evaluation_ref']['id'],content_hash=data_ref['sha256'],text=data_text)
     rows[1].update(source_id=doc_ref['evidence_id'],content_hash=doc_ref['sha256'],text=doc_text)
-    monkeypatch.setattr(preview.frame_builder,'build_current',lambda *_:copy.deepcopy(frame))
+    monkeypatch.setattr(preview.frame_builder,'build_current',lambda *_,**__:copy.deepcopy(frame))
     monkeypatch.setattr(preview,'_verify_evaluation',lambda *_:None)
     # This local PG fixture has no genuine Goal evaluation or approval rows.
     monkeypatch.setattr(start_safety,'_lock_approved_sources',lambda *_:None)

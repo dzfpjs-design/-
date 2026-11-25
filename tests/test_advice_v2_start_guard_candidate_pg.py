@@ -526,3 +526,21 @@ def test_concurrent_lease_is_the_same_original(prepared_preview):
     with Session(engine()) as db:
         assert len(list(db.scalars(select(Audit).where(Audit.action==lease.ACTION))))==1
         assert not list(db.scalars(select(CloudCall)))
+
+
+def test_started_original_must_still_pass_current_preview_check(prepared_preview):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents import same_goal_advice_unlimited_lease_candidate_v2 as lease
+    s,created,request,frame=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成发送前重验'}
+    with Session(engine()) as db:start.begin(db,p,s['task_id'],created['plan_id'],body);db.commit()
+    with Session(engine()) as db:lease.acquire(db,p,s['task_id'],created['plan_id']);db.commit()
+    with Session(engine()) as db:
+        task=db.get(Task,s['task_id']);plan=db.get(Plan,created['plan_id'])
+        prep,_=custody.read_started(db,p,task,plan)
+        event=db.scalar(select(Audit).where(Audit.action==subject.ACTION,Audit.object_id==plan.id))
+        assert subject.verify_current_for_start(db,p,task,plan,prep,event,started=True)==frame
+        assert not list(db.scalars(select(CloudCall)))
