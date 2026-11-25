@@ -241,11 +241,13 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
             from . import same_goal_advice_prepare_document_candidate_v2 as document
             from . import same_goal_advice_unlimited_preview_candidate_v2 as previews
             from . import same_goal_advice_unlimited_start_candidate_v2 as starts
+            from . import same_goal_advice_unlimited_lease_candidate_v2 as leases
             document_events = [event for event in events if event.action == DOCUMENT_PREPARED]
             preview_events = [event for event in events if event.action == previews.ACTION]
             start_events = [event for event in events if event.action == starts.ACTION]
+            lease_events = [event for event in events if event.action == leases.ACTION]
             old_store.need(len(start_events)==(1 if started else 0)
-                and len(document_events)+len(preview_events)+len(start_events)==len(events))
+                and len(document_events)+len(preview_events)+len(start_events)+len(lease_events)==len(events))
             receipt = document.verify_original(db, p, task, plan, prep, job, document_events, files)
             previews.validate_chain(db, p, task, plan, prep, receipt, preview_events)
             if started:
@@ -255,6 +257,9 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
                 send_job=db.scalar(query.execution_options(populate_existing=True))
                 old_store.need(send_job is not None)
                 starts.verify(db,p,task,plan,prep,start_events[0],send_job,preview_events)
+                old_store.need(len(lease_events)==(1 if send_job.status=='running' else 0))
+                if lease_events: leases.verify(db,p,task,plan,send_job,start_events[0],lease_events[0])
+            else: old_store.need(not lease_events)
         elif cancelled:
             old_store.need(len(events) == 1 and events[0].action == CANCELLED_EXPIRED and not files)
             event = events[0]; body = old_contracts.Cancel.model_validate(event.data['body']).model_dump(mode='json')

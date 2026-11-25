@@ -82,7 +82,7 @@ def verify_original(db, p, task, plan, prep, job, events, files):
 
 
 @old.checked
-def cold_read(db, p, task, plan):
+def cold_read(db, p, task, plan, *, started=False):
     """Recover authenticated v2 document bytes for server-side assembly only.
 
     This grants no preview, consent, Start, or send. Task/Plan/Job/actor and
@@ -91,9 +91,9 @@ def cold_read(db, p, task, plan):
     """
     from .security import Principal
     old.need(type(p) is Principal and type(task) is Task and type(plan) is Plan)
-    old.need(p.role in {'admin','operator'})
+    old.need(p.role in {'admin','operator'} and type(started) is bool)
     with read_session.isolated(db, task.id) as reader:
-        prep, job = v2._read_queued(reader, p, task.id, plan.id, prepared=True)
+        prep, job = v2._read_queued(reader, p, task.id, plan.id, prepared=True, started=started)
         old.need(p.role == 'admin' or p.user_id in {
             prep['requested_by'], prep['data_actor_id'], prep['business_actor_id']})
         current_task = old._fresh(reader, p, Task, task.id)

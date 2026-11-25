@@ -62,8 +62,9 @@ def verify(db,p,task,plan,prep,event,send_job,preview_events):
         and ptr=={'audit_id':event.id,'preview_id':value['preview_ref']['id'],
             'preview_record_hash':value['preview_ref']['record_hash'],'job_id':send_job.id}
         and send_job.workspace_id==p.workspace_id and send_job.kind==KIND and send_job.idempotency_key==key
-        and send_job.status=='queued' and send_job.attempts==0 and send_job.lease_token is None
-        and send_job.lease_until is None and send_job.available_at==custody.UNAVAILABLE_TO_GENERAL_WORKERS
+        and ((send_job.status=='queued' and send_job.attempts==0 and send_job.lease_token is None
+            and send_job.lease_until is None) or (send_job.status=='running' and send_job.attempts==1))
+        and send_job.available_at==custody.UNAVAILABLE_TO_GENERAL_WORKERS
         and send_job.data==job_data(plan,prep,snapshot)
         and event.created_at==send_job.created_at==instant(value['started_at'])
         and plan.status=='awaiting_dispatch' and plan.version==body['expected_plan_version']+1)
