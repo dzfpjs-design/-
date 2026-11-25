@@ -12,6 +12,7 @@ import ApprovalSettingsV175 from './ApprovalSettingsV175';
 import SimulationIntegrationV176 from './SimulationIntegrationV176';
 import TaskApprovalPanelV175 from './TaskApprovalPanelV175';
 import SameGoalAdviceV310 from './SameGoalAdviceV310.jsx';
+import OfflineDocumentDelegationV2 from './OfflineDocumentDelegationV2.jsx';
 import {isManagedApprovalTask,approvalExecutionAllowed} from './layered-approval-v175.mjs';
 import {readWorkspaceBuckets} from './graph-task-controller.mjs';
 import {createWorkspaceReadCoalescerV142,WORKSPACE_READ_STALE_V142} from './workspace-read-coalescer-v142.mjs';
@@ -497,6 +498,7 @@ export default function BusinessWorkspace({instanceId,account,Btn,Field,onBack,o
  {task&&<WorkflowTaskSound key={account.user_id+':'+account.workspace_id+':sound:'+task.id} account={taskAccount} taskId={task.id} taskVersion={task.version} Btn={Btn} onReload={()=>refreshCurrentTask(task.id)} onRegisterGuard={registerSoundResultGuard}/>}
  {task&&<TaskPixelResultsV250 key={account.user_id+':'+account.workspace_id+':pixel:'+task.id} account={taskAccount} instanceId={instanceId} taskId={task.id} Btn={Btn} onChanged={()=>refreshCurrentTask(task.id)} onRegisterGuard={registerPixelResultsGuard}/>}
  {task&&isManagedApprovalTask(task)&&<TaskApprovalPanelV175 key={account.user_id+':'+account.workspace_id+':approval:'+task.id} task={task} api={json} account={taskAccount} onSaved={graphTaskSaved} onRegisterGuard={registerApprovalTaskGuard}/>}
+ {task&&<OfflineDocumentDelegationV2 key={account.user_id+':'+account.workspace_id+':offline-document:'+task.id} account={taskAccount} task={task} requestJSON={json}/>}
  {task&&<SameGoalAdviceV310 key={account.user_id+':'+account.workspace_id+':business-advice:'+task.id} account={taskAccount} task={task} Btn={Btn} requestJSON={json} onRegisterGuard={registerSameGoalAdviceGuard} onSaved={()=>refreshCurrentTask(task.id)}/> }
  {task?.graph_runtime&&<GraphHumanBudgetPanel task={task} account={taskAccount} request={json} Btn={Btn}
   onSaved={()=>refreshCurrentTask(task.id)} onRegisterGuard={registerGraphHumanBudgetGuard}/>}
