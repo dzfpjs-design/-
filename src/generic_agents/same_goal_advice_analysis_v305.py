@@ -46,7 +46,8 @@ def _current_scope(db,p,task,plan,prep):
     return _match_scope(db,p,task,plan,prep,context)
 
 
-def _match_scope(db,p,task,plan,prep,context):
+def _match_scope_facts(db,p,task,plan,prep,context):
+    # Shared source identity checks do not grant policy or dispatch authority.
     selected=provider.binding(db,p,task);need(selected is not None)
     nodes={node['id']:node for node in selected['binding']['graph']['nodes']}
     reasoning,data=nodes['reasoning'],nodes['packet']
@@ -58,9 +59,14 @@ def _match_scope(db,p,task,plan,prep,context):
         and store._pin(context['model'])==prep['model_pin']
         and context['source'].data['specification']['instruction']==prep['instruction']
         and {**context['scope'],'analysis_plan_id':plan.id}==prep['scope'])
+    need(queries.query_ref(provider._q0(db,p,task))==prep['original_query_ref'])
+    return selected
+
+
+def _match_scope(db,p,task,plan,prep,context):
+    selected=_match_scope_facts(db,p,task,plan,prep,context)
     budget=store._policy(db,p,task,prep['scope'],context['source'],context['advice'],context['model'])
-    need(digest(budget)==digest(prep['budget'])
-        and queries.query_ref(provider._q0(db,p,task))==prep['original_query_ref'])
+    need(digest(budget)==digest(prep['budget']))
     return selected
 
 
@@ -104,6 +110,12 @@ def resolve_current(db,p,task,plan):
 def verified_sources(db,p,task,plan,prep,prepare_job,selected):
     """Fixed server readers share source IO, not permission or a cached verdict."""
     document=documents.cold_read(db,p,task,plan)
+    return _verified_sources(db,p,task,plan,prep,prepare_job,selected,document,c.seal_source)
+
+
+def _verified_sources(db,p,task,plan,prep,prepare_job,selected,document,seal_source):
+    # Private mechanical assembly only: fixed version-specific entry points
+    # must authenticate the original document, policy and actor beforehand.
     need(document is not None and document['marker']==plan.data['document_preparation']
         and document['prepare_job_id']==prepare_job.id
         and document['preparation_snapshot_hash']==prep['record_hash']
@@ -141,7 +153,7 @@ def verified_sources(db,p,task,plan,prep,prepare_job,selected):
     if row.generation == 1:
         raise EvaluationGenerationRequired()
     need(row.generation >= 2)
-    source=c.seal_source({'schema':c.SOURCE,'plan_id':plan.id,'mature_head':copy.deepcopy(expected),
+    source=seal_source({'schema':c.SOURCE,'plan_id':plan.id,'mature_head':copy.deepcopy(expected),
         'original_query_ref':copy.deepcopy(record['original_query_ref']),
         'evaluation_query_ref':copy.deepcopy(record['evaluation_query_ref']),
         'evaluation_cut':record['cut_at'],'evaluation_generation':record['generation'],
