@@ -544,3 +544,60 @@ def test_started_original_must_still_pass_current_preview_check(prepared_preview
         event=db.scalar(select(Audit).where(Audit.action==subject.ACTION,Audit.object_id==plan.id))
         assert subject.verify_current_for_start(db,p,task,plan,prep,event,started=True)==frame
         assert not list(db.scalars(select(CloudCall)))
+
+
+def test_lease_expiring_before_root_commit_is_rolled_back(prepared_preview,monkeypatch):
+    import time
+    from sqlalchemy import func
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents import same_goal_advice_unlimited_lease_candidate_v2 as lease
+    from generic_agents.models import Job
+    from generic_agents.temporal import instant
+    monkeypatch.setattr(lease,'SECONDS',2)
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成租约提交到期'}
+    with Session(engine()) as db:first=start.begin(db,p,s['task_id'],created['plan_id'],body);db.commit()
+    with Session(engine()) as db:
+        saved=lease.acquire(db,p,s['task_id'],created['plan_id'])
+        delay=(instant(saved['expires_at'])-db.scalar(select(func.clock_timestamp()))).total_seconds()
+        time.sleep(max(0,delay)+.2)
+        with pytest.raises(HTTPException):db.commit()
+        db.rollback()
+    with Session(engine()) as db:
+        job=db.get(Job,first['job_id']);assert job.status=='queued' and job.attempts==0 and job.lease_token is None
+        assert not list(db.scalars(select(Audit).where(Audit.action==lease.ACTION)))
+        assert not list(db.scalars(select(CloudCall)))
+
+
+@pytest.mark.parametrize('finish',['rollback_savepoint','release_savepoint'])
+def test_lease_outer_savepoint_guard_lifetime(prepared_preview,monkeypatch,finish):
+    import time
+    from sqlalchemy import func
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents import same_goal_advice_unlimited_lease_candidate_v2 as lease
+    from generic_agents.models import Job
+    from generic_agents.temporal import instant
+    monkeypatch.setattr(lease,'SECONDS',2)
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成租约保存点'}
+    with Session(engine()) as db:first=start.begin(db,p,s['task_id'],created['plan_id'],body);db.commit()
+    with Session(engine()) as db:
+        outer=db.begin_nested();saved=lease.acquire(db,p,s['task_id'],created['plan_id'])
+        if finish=='rollback_savepoint':outer.rollback()
+        else:outer.commit()
+        delay=(instant(saved['expires_at'])-db.scalar(select(func.clock_timestamp()))).total_seconds()
+        time.sleep(max(0,delay)+.2)
+        db.add(Audit(workspace_id=p.workspace_id,actor_id=p.user_id,action='synthetic.unrelated',object_id=s['task_id'],data={}))
+        if finish=='rollback_savepoint':db.commit()
+        else:
+            with pytest.raises(HTTPException):db.commit()
+            db.rollback()
+    with Session(engine()) as db:
+        job=db.get(Job,first['job_id']);assert job.status=='queued' and job.lease_token is None
+        assert not list(db.scalars(select(Audit).where(Audit.action==lease.ACTION)))
