@@ -23,18 +23,20 @@ from generic_agents import same_goal_advice_prepare_writer_candidate_v2 as write
 from generic_agents import same_goal_advice_prepare_document_candidate_v2 as document
 from generic_agents import same_goal_advice_file_intent_candidate_v2 as intents
 from generic_agents import same_goal_advice_unlimited_preview_candidate_v2 as preview
+from generic_agents import same_goal_advice_start_safety_candidate_v2 as start_safety
 from generic_agents import same_goal_advice_common_inventory_v2 as common
 from generic_agents.contracts import Manifest, digest
 from generic_agents.db import engine
-from generic_agents.models import Audit, Capability, CloudCall, Evidence, Invocation, Job, Plan, Task, uid
+from generic_agents.models import Audit, Capability, CloudCall, DomainInstance, Evidence, InstanceRelease, Invocation, Job, Plan, Task, uid
 from tests.test_same_goal_advice_contracts_v302 import scene as contract_scene
 from tests.test_same_goal_advice_projection_v307 import scene as projection_scene
 from tests.test_same_goal_advice_unlimited_store_v2_pg import synthetic_custody
 
 
 @pytest.fixture
-def prepared_preview(synthetic_custody,monkeypatch):
+def prepared_preview(synthetic_custody,monkeypatch,request):
     s=synthetic_custody;p=s['principal'];prep=copy.deepcopy(s['prep']);sample=contract_scene()
+    deadline_seconds=getattr(request,'param',300)
     with monkeypatch.context() as m:
         frame=copy.deepcopy(projection_scene.__wrapped__(m)['frame'])
     data_text=frame['decision_input']['sources'][0]['text'];doc_text=frame['decision_input']['sources'][1]['text']
@@ -51,16 +53,36 @@ def prepared_preview(synthetic_custody,monkeypatch):
     prep.pop('record_hash')
     with Session(engine(),expire_on_commit=False) as db:
         task=db.get(Task,s['task_id']);cap=db.get(Capability,prep['advice_capability_ref']['id'])
+        instance=DomainInstance(id=prep['scope']['instance_id'],workspace_id=p.workspace_id,
+            namespace='synthetic_preview',status='partially_active',active_release_id=None,data={})
+        db.add(instance);db.flush()
+        release=InstanceRelease(id=prep['scope']['release_id'],workspace_id=p.workspace_id,instance_id=instance.id,
+            release_number=1,configuration_hash='c'*64,package_id=prep['scope']['package_id'],
+            actor_id=p.user_id,status='published',data={})
+        db.add(release);db.flush();instance.active_release_id=release.id
+        now=db.scalar(select(func.clock_timestamp()))
+        goal_spec={'deadline':(now+timedelta(seconds=deadline_seconds)).isoformat()}
+        goal_hash=digest(goal_spec)
+        goal={'version':1,'hash':goal_hash,'spec':goal_spec,'time':{}}
+        task.data={**task.data,'goal_confirmed_by':p.user_id,'goal_version':1,'goal_hash':goal_hash,
+            'goal_spec':goal_spec,'goal_window':{}}
+        prep['scope'].update(goal_version=1,goal_hash=goal_hash,goal_snapshot_hash=digest(goal))
+        prep['request']['expected_goal_hash']=goal_hash;prep['request_hash']=digest(prep['request'])
         cap.data=manifest;cap.content_hash=cap.validated_hash=digest(manifest)
         model=Capability(id=prep['model_pin']['id'],workspace_id=p.workspace_id,namespace='preview_fixture',
             name='fixed_model',release_version='1.0.0',kind='foundation_model',status='published',
             content_hash=digest(model_data),validated_hash=digest(model_data),data=model_data)
         db.add(model)
+        db.add(Capability(id=source_pin['id'],workspace_id=p.workspace_id,namespace='preview_source_fixture',
+            name='source',release_version=source_pin['release_version'],kind='tool',status='published',
+            content_hash=digest(source_manifest),validated_hash=digest(source_manifest),data=source_manifest))
         pol=db.get(Audit,s['policy_id']);value=copy.deepcopy(pol.data)
+        value['scope']={key:copy.deepcopy(item) for key,item in prep['scope'].items() if key!='analysis_plan_id'}
         for name in ('source_business_capability_ref','advice_capability_ref','model_pin'):value[name]=copy.deepcopy(prep[name])
         value['record_hash']=old.record_hash(value);pol.data=value
         auth=db.scalar(select(Audit).where(Audit.object_id==task.id,Audit.action==policy.AUTHORIZATION))
-        auth.data=policy._auth_body(task,p,auth.data['body'],pol)
+        auth_body={**auth.data['body'],'expected_goal_hash':goal_hash}
+        auth.data=policy._auth_body(task,p,auth_body,pol)
         prep['budget']['policy_ref']={'id':pol.id,'record_hash':digest(value)}
         prep=contracts.seal_preparation(prep,manifest=manifest);s['prep']=prep
         db.delete(db.get(Job,s['job_id']));db.delete(db.get(Audit,s['accepted_id']));db.delete(db.get(Plan,s['plan_id']))
@@ -88,11 +110,17 @@ def prepared_preview(synthetic_custody,monkeypatch):
         'evaluation_query_ref':prep['evaluation_query_ref'],'evaluation_cut':prep['evaluation_cut'],
         'evaluation_generation':2,'data_evidence_ref':data_ref,'document':doc['document']},preparation=prep,manifest=manifest)
     frame['source_record']=source;frame['model_pin']=prep['model_pin'];frame['instruction']=prep['instruction']
+    frame['decision_input']['scope']['goal_snapshot_hash']=prep['scope']['goal_snapshot_hash']
+    frame['capability_pins']['goal_snapshot_hash']=prep['scope']['goal_snapshot_hash']
+    frame['capability_pins']['pins_hash']=digest({k:v for k,v in frame['capability_pins'].items() if k!='pins_hash'})
     frame['evidence_ids']=[data_ref['evidence_id'],doc_ref['evidence_id']]
     rows=frame['decision_input']['sources'];rows[0].update(source_id=prep['mature_head']['evaluation_ref']['id'],content_hash=data_ref['sha256'],text=data_text)
     rows[1].update(source_id=doc_ref['evidence_id'],content_hash=doc_ref['sha256'],text=doc_text)
     monkeypatch.setattr(preview.frame_builder,'build_current',lambda *_:copy.deepcopy(frame))
     monkeypatch.setattr(preview,'_verify_evaluation',lambda *_:None)
+    # This local PG fixture has no genuine Goal evaluation or approval rows.
+    monkeypatch.setattr(start_safety,'_lock_approved_sources',lambda *_:None)
+    monkeypatch.setattr(start_safety,'check_freshness',lambda *_:None)
     request={'request_id':uid(),'expected_plan_version':2,'expected_goal_hash':prep['scope']['goal_hash'],
         'expected_mature_head_hash':prep['mature_head']['head_hash'],'reason':'合成预览'}
     return s,created,request,frame

@@ -7,6 +7,7 @@ import json, os, re
 from datetime import timedelta
 from uuid import uuid4
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -28,6 +29,9 @@ from generic_agents import same_goal_advice_file_intent_candidate_v2 as intent
 from generic_agents import same_goal_advice_unlimited_store_v2 as store
 from generic_agents import same_goal_advice_unlimited_analysis_candidate_v2 as frame
 from generic_agents import same_goal_advice_unlimited_preview_candidate_v2 as preview
+from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+from generic_agents import same_goal_advice_start_safety_candidate_v2 as safety
+from generic_agents.layered_approval_models_v175 import ApprovalManagedTaskV175
 from tests.synthetic_advice_fresh_checkpoint_restore import restore_to_disposable_test_db
 
 
@@ -100,3 +104,34 @@ def test_real_mature_approved_source_to_durable_v2_preview(monkeypatch):
             assert db.get(Plan,created['plan_id']).version==3
             assert db.scalar(select(func.count()).select_from(Audit).where(Audit.action==preview.ACTION))==1
             assert db.scalar(select(func.count()).select_from(CloudCall))==0
+
+        # Real synthetic source/approval rows must not race a Start. The
+        # competing writes are rolled back; the original approvals stay intact.
+        with Session(engine()) as db:
+            task,plan=db.get(Task,task_id),db.get(Plan,created['plan_id'])
+            prep,_=store.read_prepared(db,p,task,plan)
+            event=db.scalar(select(Audit).where(Audit.action==preview.ACTION,Audit.object_id==plan.id))
+            saved_preview=event.data['preview_record']
+            managed_id=db.scalar(select(ApprovalManagedTaskV175.id).where(ApprovalManagedTaskV175.task_id==task_id))
+            assert managed_id is not None
+        for model,identity,field,changed in [
+            (RuntimeTaskDocumentSourceSet,source_ref['source_set_ref']['source_set_id'],'source_set_hash','0'*64),
+            (ApprovalManagedTaskV175,managed_id,'status','withdrawn')]:
+            with Session(engine()) as editor:
+                row=editor.get(model,identity);setattr(row,field,changed);editor.flush()
+                with Session(engine()) as first_db:
+                    with pytest.raises(HTTPException):safety.lock_current(first_db,p,first_db.get(Task,task_id),prep,saved_preview)
+                    first_db.rollback()
+                editor.rollback()
+        print('SOURCE_AND_APPROVAL_CONFLICTS_REFUSED',flush=True)
+        start_body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':body['expected_goal_hash'],
+            'expected_mature_head_hash':body['expected_mature_head_hash'],'preview_hash':first['preview_hash'],
+            'cloud_authorized':True,'reason':'合成测试开始'}
+        with Session(engine()) as db:started=start.begin(db,p,task_id,created['plan_id'],start_body);db.commit()
+        print('START_AND_PARKED_JOB_SAVED',flush=True)
+        engine().dispose()
+        with Session(engine()) as db:
+            assert start.begin(db,p,task_id,created['plan_id'],start_body)==started
+            assert db.get(Job,started['job_id']).available_at==store.UNAVAILABLE_TO_GENERAL_WORKERS
+            assert db.scalar(select(func.count()).select_from(CloudCall))==0
+        print('START_ORIGINAL_REPLAYED',flush=True)

@@ -179,3 +179,254 @@ def test_old_receipt_still_replays_after_v2_start(prepared_preview,client,monkey
     with Session(engine()) as db:
         assert len(list(db.scalars(select(Job).where(Job.kind==start.KIND))))==1
         assert not list(db.scalars(select(CloudCall))) and not list(db.scalars(select(Invocation)))
+
+
+def test_start_serializes_with_evidence_revocation(prepared_preview):
+    from queue import Queue
+    from threading import Thread
+    from time import monotonic, sleep
+    from sqlalchemy import func, text
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    s,created,request,_=prepared_preview;p=s['principal'];pidq=Queue();errors=[]
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成并发撤权'}
+    with Session(engine()) as db:
+        event=db.scalar(select(Audit).where(Audit.action==subject.ACTION));identity=event.data['preview_record']['evidence_pins'][0]['evidence_id']
+    def revoke():
+        try:
+            with Session(engine()) as db:
+                pidq.put(db.scalar(select(func.pg_backend_pid())))
+                item=db.get(Evidence,identity);item.data={**item.data,'cloud_model_ids':[]};item.version+=1;db.commit()
+        except Exception as e:errors.append(e)
+    with Session(engine()) as first:
+        first_pid=first.scalar(select(func.pg_backend_pid()));start.begin(first,p,s['task_id'],created['plan_id'],body)
+        thread=Thread(target=revoke,daemon=True);thread.start();pid=pidq.get(timeout=5)
+        try:
+            deadline=monotonic()+5;blocked=False
+            while monotonic()<deadline:
+                with engine().connect() as observer:blocked=first_pid in observer.scalar(text('SELECT pg_blocking_pids(:pid)'),{'pid':pid})
+                if blocked:break
+                sleep(.05)
+            assert blocked
+        finally:first.commit()
+        thread.join(timeout=10);assert not thread.is_alive() and not errors
+    with Session(engine()) as db:
+        assert db.get(Evidence,identity).data['cloud_model_ids']==[]
+        assert not list(db.scalars(select(CloudCall)))
+
+
+def test_uncommitted_revocation_refuses_start_without_job(prepared_preview):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents.models import Job
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成并发撤权'}
+    with Session(engine()) as revoke:
+        event=revoke.scalar(select(Audit).where(Audit.action==subject.ACTION));identity=event.data['preview_record']['evidence_pins'][0]['evidence_id']
+        item=revoke.get(Evidence,identity);item.data={**item.data,'cloud_model_ids':[]};item.version+=1;revoke.flush()
+        with Session(engine()) as first:
+            with pytest.raises(HTTPException):start.begin(first,p,s['task_id'],created['plan_id'],body)
+            first.rollback()
+        revoke.commit()
+    with Session(engine()) as db:
+        with pytest.raises(HTTPException):start.begin(db,p,s['task_id'],created['plan_id'],body)
+        db.rollback()
+        assert not list(db.scalars(select(Audit).where(Audit.action==start.ACTION)))
+        assert not list(db.scalars(select(Job).where(Job.kind==start.KIND))) and not list(db.scalars(select(CloudCall)))
+
+
+@pytest.mark.parametrize('prepared_preview',[8],indirect=True)
+def test_repro_goal_deadline_expires_before_start_commit(prepared_preview):
+    import time
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents.temporal import instant
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成目标到期重现'}
+    with Session(engine()) as db:
+        start.begin(db,p,s['task_id'],created['plan_id'],body)
+        until=instant(db.get(Task,s['task_id']).data['goal_spec']['deadline'])
+        delay=(until-db.scalar(select(__import__('sqlalchemy').func.clock_timestamp()))).total_seconds()
+        time.sleep(max(0,delay)+.2)
+        with pytest.raises(HTTPException):db.commit()
+        db.rollback()
+    from generic_agents.models import Job
+    with Session(engine()) as db:
+        assert not list(db.scalars(select(Audit).where(Audit.action==start.ACTION)))
+        assert not list(db.scalars(select(Job).where(Job.kind==start.KIND))) and not list(db.scalars(select(CloudCall)))
+
+
+@pytest.mark.parametrize('which',['model','source'])
+def test_uncommitted_capability_change_refuses_start(prepared_preview,which):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents.models import Capability, Job
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成能力并发变更'}
+    cap_id=s['prep']['model_pin' if which=='model' else 'source_business_capability_ref']['id']
+    with Session(engine()) as editor:
+        cap=editor.get(Capability,cap_id);cap.status='retired';editor.flush()
+        with Session(engine()) as first:
+            with pytest.raises(HTTPException):start.begin(first,p,s['task_id'],created['plan_id'],body)
+            first.rollback()
+        editor.commit()
+    with Session(engine()) as db:
+        assert not list(db.scalars(select(Audit).where(Audit.action==start.ACTION)))
+        assert not list(db.scalars(select(Job).where(Job.kind==start.KIND))) and not list(db.scalars(select(CloudCall)))
+
+
+def test_altered_evidence_bytes_before_commit_roll_back_start(prepared_preview):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents.config import settings
+    from generic_agents.models import Job
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成文件并发变更'}
+    with Session(engine()) as db:
+        start.begin(db,p,s['task_id'],created['plan_id'],body)
+        event=db.scalar(select(Audit).where(Audit.action==subject.ACTION))
+        identity=event.data['preview_record']['evidence_pins'][0]['evidence_id']
+        path=settings().storage_dir / db.get(Evidence,identity).storage_key
+        path.write_bytes(b'changed synthetic bytes')
+        with pytest.raises(HTTPException):db.commit()
+        db.rollback()
+    with Session(engine()) as db:
+        assert not list(db.scalars(select(Audit).where(Audit.action==start.ACTION)))
+        assert not list(db.scalars(select(Job).where(Job.kind==start.KIND))) and not list(db.scalars(select(CloudCall)))
+
+
+@pytest.mark.parametrize('field',['status','active_release_id'])
+def test_uncommitted_instance_pause_or_release_change_refuses_start(prepared_preview,field):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents.models import DomainInstance, Job
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成实例并发变更'}
+    with Session(engine()) as editor:
+        row=editor.get(DomainInstance,s['prep']['scope']['instance_id'])
+        setattr(row,field,'paused' if field=='status' else None);editor.flush()
+        with Session(engine()) as first:
+            with pytest.raises(HTTPException):start.begin(first,p,s['task_id'],created['plan_id'],body)
+            first.rollback()
+        editor.commit()
+    with Session(engine()) as db:
+        with pytest.raises(HTTPException):start.begin(db,p,s['task_id'],created['plan_id'],body)
+        db.rollback()
+        assert not list(db.scalars(select(Audit).where(Audit.action==start.ACTION)))
+        assert not list(db.scalars(select(Job).where(Job.kind==start.KIND))) and not list(db.scalars(select(CloudCall)))
+
+
+def test_instance_pause_waits_for_started_transaction(prepared_preview):
+    from queue import Queue
+    from threading import Thread
+    from time import monotonic, sleep
+    from sqlalchemy import func,text
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents.models import DomainInstance
+    s,created,request,_=prepared_preview;p=s['principal'];pidq=Queue();errors=[]
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成实例暂停'}
+    def pause():
+        try:
+            with Session(engine()) as db:
+                pidq.put(db.scalar(select(func.pg_backend_pid())))
+                db.get(DomainInstance,s['prep']['scope']['instance_id']).status='paused';db.commit()
+        except Exception as e:errors.append(e)
+    with Session(engine()) as first:
+        owner=first.scalar(select(func.pg_backend_pid()));start.begin(first,p,s['task_id'],created['plan_id'],body)
+        thread=Thread(target=pause,daemon=True);thread.start();pid=pidq.get(timeout=5)
+        try:
+            until=monotonic()+5;blocked=False
+            while monotonic()<until:
+                with engine().connect() as obs:blocked=owner in obs.scalar(text('SELECT pg_blocking_pids(:pid)'),{'pid':pid})
+                if blocked:break
+                sleep(.05)
+            assert blocked
+        finally:first.commit()
+        thread.join(timeout=10);assert not thread.is_alive() and not errors
+
+
+@pytest.mark.parametrize('finish',['commit','rollback','savepoint_failure'])
+def test_commit_guards_do_not_leak_into_unrelated_session_work(prepared_preview,monkeypatch,finish):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents.config import settings
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成事务复用'}
+    with Session(engine()) as db:
+        if finish=='savepoint_failure':
+            with monkeypatch.context() as m:
+                m.setattr(custody,'read_started',lambda *_: (_ for _ in ()).throw(HTTPException(409,'synthetic')))
+                with pytest.raises(HTTPException):start.begin(db,p,s['task_id'],created['plan_id'],body)
+        else:
+            start.begin(db,p,s['task_id'],created['plan_id'],body)
+            db.commit() if finish=='commit' else db.rollback()
+        event=db.scalar(select(Audit).where(Audit.action==subject.ACTION))
+        identity=event.data['preview_record']['evidence_pins'][0]['evidence_id']
+        (settings().storage_dir/db.get(Evidence,identity).storage_key).write_bytes(b'changed after original transaction')
+        other=Task(id=str(uuid4()),workspace_id=p.workspace_id,owner_id=p.user_id,
+            package_id=s['prep']['scope']['package_id'],status='workflow_active',title='unrelated synthetic task',data={})
+        db.add(other);db.flush()
+        db.add(Audit(workspace_id=p.workspace_id,actor_id=p.user_id,action='synthetic.unrelated',object_id=other.id,data={}))
+        db.commit()
+        assert db.info.get('v2_start_goal_commit_guard') is None
+        assert db.info.get('v2_file_intent_commit_guard') is None
+
+
+@pytest.mark.parametrize('finish',['rollback_savepoint','release_savepoint'])
+def test_outer_savepoint_guard_lifetime(prepared_preview,finish):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents.config import settings
+    from generic_agents.models import Job
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成外层保存点'}
+    with Session(engine()) as db:
+        outer=db.begin_nested();start.begin(db,p,s['task_id'],created['plan_id'],body)
+        if finish=='rollback_savepoint':outer.rollback()
+        else:outer.commit()
+        event=db.scalar(select(Audit).where(Audit.action==subject.ACTION))
+        identity=event.data['preview_record']['evidence_pins'][0]['evidence_id']
+        (settings().storage_dir/db.get(Evidence,identity).storage_key).write_bytes(b'changed after savepoint')
+        db.add(Audit(workspace_id=p.workspace_id,actor_id=p.user_id,action='synthetic.unrelated',object_id=s['task_id'],data={}))
+        if finish=='rollback_savepoint':
+            db.commit()
+        else:
+            with pytest.raises(HTTPException):db.commit()
+            db.rollback()
+    with Session(engine()) as db:
+        assert not list(db.scalars(select(Audit).where(Audit.action==start.ACTION)))
+        assert not list(db.scalars(select(Job).where(Job.kind==start.KIND))) and not list(db.scalars(select(CloudCall)))
+
+
+def test_start_restores_caller_lock_timeout(prepared_preview):
+    from sqlalchemy import text
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成锁超时设置'}
+    with Session(engine()) as db:
+        db.execute(text("SET LOCAL lock_timeout = '7s'"))
+        start.begin(db,p,s['task_id'],created['plan_id'],body)
+        assert db.scalar(text("SELECT current_setting('lock_timeout')"))=='7s'
+        db.commit()
