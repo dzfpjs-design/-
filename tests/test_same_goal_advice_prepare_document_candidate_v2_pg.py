@@ -24,6 +24,10 @@ from tests.test_same_goal_advice_unlimited_store_v2_pg import synthetic_custody
 
 @pytest.fixture
 def ready(empty_original, monkeypatch):
+    # The v2 intent writer now requires its action-specific unique index.
+    # This is a fresh disposable PG fixture only; no production migration.
+    from generic_agents.same_goal_advice_intent_index_migration_candidate_v2 import rehearse
+    status=rehearse(); assert status['status'] in {'installed','already_installed'}
     s = empty_original; prep = s['prep']; source = prep['request']['document_source']['source_set_ref']
     raw = '合成测试摘录：用于验证事务恢复。'.encode('utf-8')
     resolved = {'selection': copy.deepcopy(prep['request']['document_source']),

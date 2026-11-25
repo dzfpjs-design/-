@@ -151,6 +151,14 @@ def test_uncooperative_audit_phantom_is_not_blocked_by_existing_row_locks(ready,
     """Known blocker: read-committed row locks do not lock the missing row."""
     s,created,resolved=ready;p=s['principal'];control,token=start(s,created)
     external=create_engine(settings().database_url,hide_parameters=True);original=evidence.save_evidence
+    # Reproduce the older unfenced experiment only. The real new gate is
+    # tested separately and rejects this absent-index state before writing.
+    from generic_agents import same_goal_advice_intent_index_gate_candidate_v2 as index_gate
+    from generic_agents import same_goal_advice_intent_index_migration_candidate_v2 as migration
+    with Session(engine()) as db:
+        for name in migration.NAMES:db.execute(__import__('sqlalchemy').text('DROP INDEX IF EXISTS public.'+name))
+        db.commit()
+    monkeypatch.setattr(index_gate,'require',lambda *_: None)
     def insert_uncooperative_duplicate(*args,**kwargs):
         with Session(external) as db:
             record=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,
