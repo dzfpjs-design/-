@@ -26,17 +26,9 @@ from .security import Principal
 from .temporal import instant
 
 
-@store.checked
-def derive_candidate(db, p, task_id, body, policy_ref):
-    """Derive only from current locked originals; all authorization flags false.
-
-    The isolated child Session shares the caller's transaction and locks. It
-    never refreshes or flushes the caller's identity map; relevant pending or
-    untracked changes fail closed before and after reading source documents.
-    """
-    store.need(type(p) is Principal)
-    try: UUID(p.session_id)
-    except (ValueError, TypeError, AttributeError): store.need(False, '必须使用当前真实用户会话')
+def _derive_core(db, p, task_id, body, policy_ref, requested_by):
+    # Result is never authority. Callers must separately prove a current HTTP
+    # session or a fenced durable grant tied to the original saved Plan.
     request = c.Prepare.model_validate(body).model_dump(mode='json')
     reference = c._parse(c.Ref, policy_ref)
     task_id = store.existing._id(task_id)
@@ -70,11 +62,33 @@ def derive_candidate(db, p, task_id, body, policy_ref):
                 'memory_id': mature['memory'].id, 'report_hash': mature['report_hash']},
             'evaluation_query_ref': record['evaluation_query_ref'], 'evaluation_cut': record['cut_at'],
             'instruction': context['source'].data['specification']['instruction'], 'budget': policy['limits'],
-            'request': request, 'request_hash': digest(request), 'requested_by': p.user_id}, manifest=manifest)
+            'request': request, 'request_hash': digest(request), 'requested_by': requested_by}, manifest=manifest)
         pending._extra_state(db, reader, p.workspace_id)
         result = {'preparation_candidate': copy.deepcopy(prep), 'policy_ref': copy.deepcopy(reference),
             'plan_write_authorized': False, 'prepare_job_authorized': False,
             'preview_authorized': False, 'cloud_send_authorized': False}
+    return result
+
+
+@store.checked
+def derive_delegated(db, p, task_id, job_id, body, policy_ref, grant_id):
+    from . import same_goal_advice_offline_grant_candidate_v2 as delegation
+    proof = delegation.check_worker(db, p, task_id, job_id, grant_id)
+    result = _derive_core(db, p, task_id, body, policy_ref, proof['requested_by'])
+    # Recheck authorization and source after all current-configuration reads.
+    delegation.check_worker(db, p, task_id, job_id, grant_id)
+    return result
+
+
+@store.checked
+def derive_candidate(db, p, task_id, body, policy_ref):
+    """Derive a read-only proposal from the real current HTTP session."""
+    store.need(type(p) is Principal)
+    try: UUID(p.session_id)
+    except (ValueError, TypeError, AttributeError): store.need(False, '必须使用当前真实用户会话')
+    result = _derive_core(db, p, task_id, body, policy_ref, p.user_id)
+    reference = c._parse(c.Ref, policy_ref)
+    task_id = store.existing._id(task_id)
     # Both the policy and real session can naturally expire during source
     # checking. Revalidate after the caller-state postcheck, in the same
     # locked transaction; this still grants no write or dispatch authority.
