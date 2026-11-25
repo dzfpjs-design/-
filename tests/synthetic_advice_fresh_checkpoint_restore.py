@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import tempfile
 from uuid import UUID
@@ -24,6 +25,34 @@ from tests.synthetic_advice_checkpoint import pg_program, require
 
 def _sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _copy_private_tree(source, target, expected):
+    """Copy only authenticated regular files into a private test directory."""
+    os.chmod(target, 0o700)
+    for item in sorted(source.rglob('*')):
+        relative = item.relative_to(source)
+        destination = target / relative
+        require(not item.is_symlink())
+        if item.is_dir():
+            destination.mkdir(mode=0o700)
+            os.chmod(destination, 0o700)
+            continue
+        require(item.is_file() and item.stat().st_nlink == 1)
+        source_fd = os.open(item, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            source_stat = os.fstat(source_fd)
+            require(stat.S_ISREG(source_stat.st_mode) and source_stat.st_uid == os.getuid() and source_stat.st_nlink == 1)
+            target_fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            try:
+                os.fchmod(target_fd, 0o600)
+                with os.fdopen(source_fd, 'rb', closefd=False) as inp, os.fdopen(target_fd, 'wb', closefd=False) as out:
+                    shutil.copyfileobj(inp, out)
+            finally:
+                os.close(target_fd)
+        finally:
+            os.close(source_fd)
+        require(_sha(destination) == expected[str(relative)])
 
 
 def restore_to_disposable_test_db(root_name):
@@ -78,9 +107,6 @@ def restore_to_disposable_test_db(root_name):
             '--dbname', url.database, '--single-transaction', '--clean', '--if-exists', '--exit-on-error',
             '--no-owner', '--no-privileges', str(dump)], check=True, timeout=180,
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        for item in source.iterdir():
-            destination = target / item.name
-            if item.is_dir(): shutil.copytree(item, destination, symlinks=False)
-            else: shutil.copyfile(item, destination)
+        _copy_private_tree(source, target, manifest['files'])
         settings().device_gateway_key_file = key
     return manifest['task_id']
