@@ -7,10 +7,11 @@ The generic worker must remain stopped/isolated; this is not deployable yet.
 """
 import copy
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from . import evidence
 from . import same_goal_advice_preparation_v304 as legacy
+from . import same_goal_advice_read_session_v2 as read_session
 from . import same_goal_advice_sources_v302 as sources
 from . import same_goal_advice_store_v302 as old
 from . import same_goal_advice_unlimited_contracts_v2 as c
@@ -78,6 +79,49 @@ def verify_original(db, p, task, plan, prep, job, events, files):
     upload = legacy._upload(db, p, actual, uploader)
     old.need(value['upload_audit_ref'] == {'id': upload.id, 'record_hash': legacy._fingerprint(upload)})
     return copy.deepcopy(value)
+
+
+@old.checked
+def cold_read(db, p, task, plan):
+    """Recover authenticated v2 document bytes for server-side assembly only.
+
+    This grants no preview, consent, Start, or send. Task/Plan/Job/actor and
+    originals stay under one caller-owned transaction and the isolated reader
+    rejects pending edits instead of refreshing over the user's work.
+    """
+    from .security import Principal
+    old.need(type(p) is Principal and type(task) is Task and type(plan) is Plan)
+    old.need(p.role in {'admin','operator'})
+    with read_session.isolated(db, task.id) as reader:
+        prep, job = v2._read_queued(reader, p, task.id, plan.id, prepared=True)
+        old.need(p.role == 'admin' or p.user_id in {
+            prep['requested_by'], prep['data_actor_id'], prep['business_actor_id']})
+        current_task = old._fresh(reader, p, Task, task.id)
+        current_plan = old._fresh(reader, p, Plan, plan.id)
+        events = old._rows(reader, p, Audit, Audit.action == v2.DOCUMENT_PREPARED,
+            or_(Audit.object_id == current_plan.id, Audit.data['plan_id'].as_string() == current_plan.id,
+                Audit.data['prepare_job_id'].as_string() == job.id))
+        files = old._rows(reader, p, Evidence, or_(
+            Evidence.data[v2.DOCUMENT_KEY]['plan_id'].as_string() == current_plan.id,
+            Evidence.data[v2.DOCUMENT_KEY]['prepare_job_id'].as_string() == job.id))
+        receipt = verify_original(reader, p, current_task, current_plan, prep, job, events, files)
+        ref = c.old._parse(c.old.EvidenceRef, receipt['evidence_ref'])
+        file, raw = evidence.evidence_bytes(reader, p, ref['evidence_id'])
+        old.need(file.workspace_id == p.workspace_id and digest(sources._text(file, raw)) == digest(ref))
+        selection = prep['request']['document_source']
+        if selection['kind'] == 'approved_source_set':
+            document_receipt = {'id': receipt['receipt_id'], 'record_hash': receipt['record_hash']}
+        else:
+            packet = legacy._fresh(reader, p, sources.packets.Packet, selection['packet']['id'])
+            document_receipt = {'id': packet.id, 'record_hash': receipt['original_packet_receipt']['producer_hash']}
+        return {'marker': copy.deepcopy(current_plan.data['document_preparation']),
+            'receipt': copy.deepcopy(receipt),
+            'receipt_ref': {'id': receipt['receipt_id'], 'record_hash': receipt['record_hash']},
+            'evidence_ref': copy.deepcopy(ref), 'prepare_job_id': job.id,
+            'preparation_snapshot_hash': prep['record_hash'],
+            'document': {'selection': copy.deepcopy(selection),
+                'approved_selection': copy.deepcopy(receipt['approved_selection']),
+                'evidence_ref': copy.deepcopy(ref), 'receipt_ref': document_receipt}, 'content': raw}
 
 
 @old.checked
