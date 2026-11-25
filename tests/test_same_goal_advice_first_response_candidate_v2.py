@@ -54,7 +54,7 @@ def test_http_error_and_oversized_metadata_are_not_silently_discarded():
     with pytest.raises(ModelBlocked):capture.parse_saved(saved,cloud_call_id=call,intent_audit_id=intent,schema={'type':'object'})
     assert capture.check(saved,cloud_call_id=call,intent_audit_id=intent)==b'rate limited'
     with pytest.raises((HTTPException,ValueError)):
-        capture.seal(cloud_call_id=call,intent_audit_id=intent,raw=b'',receipt={**metadata,'message':'x'*70000})
+        capture.seal(cloud_call_id=call,intent_audit_id=intent,raw=b'',receipt={**metadata,'request_id':'x'*70000})
 
 
 def test_inconsistent_usage_never_becomes_zero_charge():
@@ -67,3 +67,21 @@ def test_inconsistent_usage_never_becomes_zero_charge():
         assert actual['usage_unavailable'] is True and actual.get('usage',{})=={}
     except ModelBlocked:
         assert capture.check(saved,cloud_call_id=call,intent_audit_id=intent)==raw
+
+
+def test_gzip_expansion_limit_preserves_original_and_rejects_parse():
+    import base64,gzip
+    call,intent=str(uuid4()),str(uuid4());raw=gzip.compress(b'x'*(1024*1024+1))
+    metadata={**receipt(call),'header_raw_base64':[[base64.b64encode(b'Content-Encoding').decode(),
+        base64.b64encode(b'gzip').decode()]]}
+    saved=capture.seal(cloud_call_id=call,intent_audit_id=intent,raw=raw,receipt=metadata)
+    with pytest.raises(ModelBlocked):capture.parse_saved(saved,cloud_call_id=call,intent_audit_id=intent,schema={'type':'object'})
+    assert capture.check(saved,cloud_call_id=call,intent_audit_id=intent)==raw
+
+
+def test_sensitive_header_is_rejected_from_receipt():
+    import base64
+    call,intent=str(uuid4()),str(uuid4())
+    pair=[base64.b64encode(b'Set-Cookie').decode(),base64.b64encode(b'synthetic=secret').decode()]
+    with pytest.raises((HTTPException,ValueError)):
+        capture.seal(cloud_call_id=call,intent_audit_id=intent,raw=b'{}',receipt={**receipt(call),'header_raw_base64':[pair]})
