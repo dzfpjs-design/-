@@ -89,6 +89,9 @@ def verify(db,p,row,extractor_id,*,execution=True,lock=False):
 
 def reconcile(db,p,source_id,day):
     source=scoped(db,Capability,source_id,p)
+    # A missing source date is not a business day and cannot identify a daily
+    # event. Preserve the observation and any review without inventing one.
+    if day is None:return
     rows=list(db.scalars(select(Observation).where(Observation.workspace_id==p.workspace_id,Observation.source_id==source_id,
         Observation.business_day==day,Observation.data['candidate_only'].as_boolean()==True).order_by(Observation.id)))
     if not rows:return
@@ -172,6 +175,9 @@ def schedule(workspace_id=None):
     with Session(engine()) as db:
         query=select(Observation.workspace_id,Observation.source_id,Observation.business_day).where(
             Observation.data['candidate_only'].as_boolean()==True,
+            # Unclocked sensor candidates have no defensible business day.
+            # Exclude them before LIMIT so they cannot crash or starve dated groups.
+            Observation.business_day.is_not(None),
             Observation.data['native_instance_id'].as_string().is_(None))
         if workspace_id is not None:query=query.where(Observation.workspace_id==workspace_id)
         groups=db.execute(query.distinct().limit(100)).all()
