@@ -87,9 +87,7 @@ def check(value,*,cloud_call_id,intent_audit_id):
     return raw
 
 
-def parse_saved(value,*,cloud_call_id,intent_audit_id,schema):
-    """Interpret captured bytes offline; never contacts a model or settles money."""
-    raw=check(value,cloud_call_id=cloud_call_id,intent_audit_id=intent_audit_id)
+def _decoded_text(value,raw):
     if value['receipt'].get('encoding_unverified') is True:
         raise transport._blocked('原回答的内容编码无法核对；原始字节已保留且不重发')
     decoded=_headers(value['receipt'])
@@ -110,7 +108,26 @@ def parse_saved(value,*,cloud_call_id,intent_audit_id,schema):
             raw=decoded_body
         except (ValueError,zlib.error):
             raise transport._blocked('原回答压缩数据无效或解压超限；原始字节已保留且不重发') from None
-    text=raw.decode('utf-8',errors='surrogateescape')
+    return raw.decode('utf-8',errors='surrogateescape')
+
+
+def proven_receipt(value,*,cloud_call_id,intent_audit_id):
+    """Derive only provider usage proven by the captured body, never zero-fill."""
+    raw=check(value,cloud_call_id=cloud_call_id,intent_audit_id=intent_audit_id)
+    # Never trust any caller-supplied receipt usage; seal normally forces it
+    # empty, and this independent reset makes the accounting boundary explicit.
+    base={**copy.deepcopy(value['receipt']),'usage':{},'usage_unavailable':True,
+        'usage_unavailable_reason':'unparsed_original_http'}
+    from .gateway import ModelBlocked
+    try:text=_decoded_text(value,raw)
+    except ModelBlocked:return base
+    return transport.response_receipt(text,base)
+
+
+def parse_saved(value,*,cloud_call_id,intent_audit_id,schema):
+    """Interpret captured bytes offline; never contacts a model or settles money."""
+    raw=check(value,cloud_call_id=cloud_call_id,intent_audit_id=intent_audit_id)
+    text=_decoded_text(value,raw)
     receipt=transport.response_receipt(text,value['receipt'])
     result,receipt=transport.parse_response(text,schema,receipt)
     return result,receipt

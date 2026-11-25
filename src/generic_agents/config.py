@@ -7,6 +7,8 @@ from pydantic import Field, SecretStr, field_validator
 
 
 class Settings(BaseSettings):
+    # Candidate only: even if enabled it remains guarded to a disposable DB.
+    v2_deepseek_dispatch_enabled: bool = False
     # Synthetic evidence may exercise real rule selection only in an explicit
     # verification service. No workspace request can change this boundary.
     threshold_policy_environment: Literal['production','verification'] = 'production'
