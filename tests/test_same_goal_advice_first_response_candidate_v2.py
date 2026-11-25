@@ -55,3 +55,15 @@ def test_http_error_and_oversized_metadata_are_not_silently_discarded():
     assert capture.check(saved,cloud_call_id=call,intent_audit_id=intent)==b'rate limited'
     with pytest.raises((HTTPException,ValueError)):
         capture.seal(cloud_call_id=call,intent_audit_id=intent,raw=b'',receipt={**metadata,'message':'x'*70000})
+
+
+def test_inconsistent_usage_never_becomes_zero_charge():
+    call,intent=str(uuid4()),str(uuid4())
+    raw=json.dumps({'choices':[{'finish_reason':'stop','message':{'content':'{}'}}],
+        'usage':{'prompt_tokens':3,'completion_tokens':2,'total_tokens':0}}).encode()
+    saved=capture.seal(cloud_call_id=call,intent_audit_id=intent,raw=raw,receipt=receipt(call))
+    try:
+        _,actual=capture.parse_saved(saved,cloud_call_id=call,intent_audit_id=intent,schema={'type':'object'})
+        assert actual['usage_unavailable'] is True and actual.get('usage',{})=={}
+    except ModelBlocked:
+        assert capture.check(saved,cloud_call_id=call,intent_audit_id=intent)==raw
