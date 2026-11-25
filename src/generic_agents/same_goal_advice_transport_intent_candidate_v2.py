@@ -51,6 +51,28 @@ def _view(value,*,replayed):
         'replayed':replayed,'send_outcome':'unknown','transport_authorized':False}
 
 
+@store.checked
+def verify_saved_links(db,p,task,plan,job,prep,preview,reservation,call,intent):
+    """Check intent only after its caller has checked all v2 custody originals."""
+    value=intent.data;data=reservation.data
+    store.need(type(value) is dict and set(value)==_FIELDS and value['schema']==SCHEMA
+        and intent.action==ACTION and intent.id==value['audit_id'] and intent.actor_id==value['actor_id']
+        and intent.workspace_id==value['workspace_id']==p.workspace_id and intent.object_id==plan.id
+        and value['task_id']==task.id and value['plan_id']==plan.id and value['job_id']==job.id
+        and value['cloud_call_id']==call.id and value['actor_id']==reservation.actor_id
+        and value['reservation_ref']=={'id':reservation.id,'hash':digest(data)}
+        and value['preview_ref']=={'id':preview.id,'hash':digest(preview.data)}
+        and all(value[key]==data[key] for key in ('start_ref','lease_ref','preview_ref','lease_token_hash',
+            'model_pin','policy_ref','request_hash','dispatch_options_hash','token_bound'))
+        and value['policy_ref']==prep['budget']['policy_ref'] and value['model_pin']==prep['model_pin']
+        and value['lease_token_hash']==digest(job.lease_token) and call.id==data['call_id']
+        and call.data.get('same_goal_advice_unlimited_v2')==data and call.status=='reserved'
+        and intent.created_at==instant(value['created_at']) and intent.created_at>=reservation.created_at
+        and intent.created_at<job.lease_until and value['record_hash']==contracts.record_hash(value))
+    return {'schema':SCHEMA,'intent_audit_id':intent.id,'cloud_call_id':call.id,
+        'intent_hash':digest(value),'transport_authorized':False,'send_outcome':'unknown'}
+
+
 def _unbind(db):
     previous=db.info.pop('v2_transport_intent_test_guard',None)
     if previous is not None and sa_event.contains(db,'before_commit',previous):

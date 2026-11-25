@@ -23,9 +23,10 @@ from .temporal import instant
 
 
 @store.checked
-def build_current(db, p, task, plan, *, started=False, reserved_test_only=False):
+def build_current(db, p, task, plan, *, started=False, reserved_test_only=False, intent_test_only=False):
     """Read current originals for the authenticated business actor only."""
-    store.need(type(started) is bool and type(reserved_test_only) is bool and (not reserved_test_only or started)
+    store.need(type(started) is bool and type(reserved_test_only) is bool and type(intent_test_only) is bool
+        and (not reserved_test_only or started) and (not intent_test_only or reserved_test_only)
         and type(p) is Principal and p.role in {'admin', 'operator'}
         and type(task) is Task and type(plan) is Plan)
     try: UUID(p.session_id)
@@ -36,7 +37,7 @@ def build_current(db, p, task, plan, *, started=False, reserved_test_only=False)
         store.need(current_plan.task_id == current.id and current_plan.status ==
             ('awaiting_dispatch' if started else 'awaiting_consent'))
         result = custody._read_queued(reader, p, current.id, current_plan.id, prepared=True, started=started,
-            reserved_test_only=reserved_test_only)
+            reserved_test_only=reserved_test_only,intent_test_only=intent_test_only)
         prep,job=result[:2]
         store.need(p.role == 'admin' or p.user_id == prep['business_actor_id'])
         checked = authority.current_policy(reader, p, current.id, prep['budget']['policy_ref'])
@@ -48,7 +49,7 @@ def build_current(db, p, task, plan, *, started=False, reserved_test_only=False)
         context = quota._configuration_base(reader, p, current, prep['request'])
         selected = analysis._match_scope_facts(reader, p, current, current_plan, prep, context)
         document = documents.cold_read(reader, p, current, current_plan, started=started,
-            reserved_test_only=reserved_test_only)
+            reserved_test_only=reserved_test_only,intent_test_only=intent_test_only)
         resolved = analysis._verified_sources(reader, p, current, current_plan, prep, job,
             selected, document, contracts.seal_source)
         frame = frames.from_resolved(reader, p, current, current_plan, resolved)
