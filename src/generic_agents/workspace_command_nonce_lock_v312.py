@@ -18,6 +18,7 @@ MAX_ROWS = 1000
 ACTIONS = frozenset({'same_goal_advice.preparation_accepted_v302',
     'same_goal_advice.unlimited_preparation_accepted_v2',
     'same_goal_advice.unlimited_preview_prepared_v2',
+    'same_goal_advice.unlimited_started_v2',
     'same_goal_advice.unlimited_expired_preparation_cancelled_v2',
     'same_goal_advice.preparation_cancelled_v302', 'same_goal_advice.preview_prepared_v307',
     'same_goal_advice.started_v308', 'same_goal_advice.human_reviewed_v308',

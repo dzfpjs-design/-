@@ -139,7 +139,8 @@ def validate_chain(db,p,task,plan,prep,document_receipt,events):
         store.need(value['previous_preview_record_hash']==(previous['record_hash'] if previous else None)
             and value['plan_version_before']==(2 if previous is None else previous['plan_version_after']))
         previous=value
-    store.need(plan.version==(previous['plan_version_after'] if previous else 2))
+    expected_version=previous['plan_version_after'] if previous else 2
+    store.need(plan.version==expected_version+(1 if plan.status=='awaiting_dispatch' else 0))
     return values
 
 
