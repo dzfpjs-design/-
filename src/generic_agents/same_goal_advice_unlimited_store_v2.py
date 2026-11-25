@@ -103,13 +103,27 @@ def read_started(db, p, task, plan):
 
 
 @old_store.checked
+def read_reserved_test_only(db, p, task, plan):
+    """Strict isolated accounting custody; never an intent or send grant."""
+    from . import same_goal_advice_prepare_writer_candidate_v2 as test_guard
+    test_guard.require_disposable_database(db)
+    old_store.need(type(p) is Principal and type(task) is Task and type(plan) is Plan)
+    with read_session.isolated(db, task.id) as reader:
+        return _read_queued(reader, p, task.id, plan.id, prepared=True, started=True, reserved_test_only=True)
+
+
+@old_store.checked
 def read_expired_cancelled(db, p, task, plan):
     """Authenticate an expired cancellation without reviving its original Job."""
     with read_session.isolated(db, task.id) as reader:
         return _read_queued(reader, p, task.id, plan.id, cancelled=True)
 
 
-def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelled=False, started=False):
+def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelled=False, started=False, reserved_test_only=False):
+    old_store.need(not reserved_test_only or (lock and prepared and started and not cancelled))
+    if reserved_test_only:
+        from . import same_goal_advice_cloud_claim_test_v2 as test_claims
+        test_claims.require_test_database(db)
     with db.no_autoflush:
         # Writers take the Task lock before actor/Plan/Job locks. Holding a
         # compatible read lock in that same order prevents an in-flight
@@ -242,12 +256,15 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
             from . import same_goal_advice_unlimited_preview_candidate_v2 as previews
             from . import same_goal_advice_unlimited_start_candidate_v2 as starts
             from . import same_goal_advice_unlimited_lease_candidate_v2 as leases
+            from . import same_goal_advice_cloud_claim_test_v2 as claims
             document_events = [event for event in events if event.action == DOCUMENT_PREPARED]
             preview_events = [event for event in events if event.action == previews.ACTION]
             start_events = [event for event in events if event.action == starts.ACTION]
             lease_events = [event for event in events if event.action == leases.ACTION]
+            reservation_events = [event for event in events if event.action == claims.ACTION]
             old_store.need(len(start_events)==(1 if started else 0)
-                and len(document_events)+len(preview_events)+len(start_events)+len(lease_events)==len(events))
+                and len(reservation_events)==(1 if reserved_test_only else 0)
+                and len(document_events)+len(preview_events)+len(start_events)+len(lease_events)+len(reservation_events)==len(events))
             receipt = document.verify_original(db, p, task, plan, prep, job, document_events, files)
             previews.validate_chain(db, p, task, plan, prep, receipt, preview_events)
             if started:
@@ -260,6 +277,11 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
                 old_store.need(len(lease_events)==(1 if send_job.status=='running' else 0))
                 if lease_events: leases.verify(db,p,task,plan,send_job,start_events[0],lease_events[0])
             else: old_store.need(not lease_events)
+            if reserved_test_only:
+                from . import same_goal_advice_cloud_reservation_candidate_v2 as reservations
+                old_store.need(len(lease_events)==1 and len(cloud)==1)
+                reservation=reservations.verify_saved_links(db,p,task,plan,prep,send_job,start_events[0],
+                    lease_events[0],preview_events,reservation_events[0],cloud[0])
         elif cancelled:
             old_store.need(len(events) == 1 and events[0].action == CANCELLED_EXPIRED and not files)
             event = events[0]; body = old_contracts.Cancel.model_validate(event.data['body']).model_dump(mode='json')
@@ -283,7 +305,7 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
                 Plan.data['revisions'].contains([{'request_id': cancel_nonce}])))
             old_store.need(len(cancel_events) == 1 and cancel_events[0].id == event.id and not cancel_plans,
                 '原取消编号与其他申请冲突，保留全部记录等待核对')
-        old_store.need((prepared or cancelled or not events and not files) and not cloud,
+        old_store.need((prepared or cancelled or not events and not files) and (not cloud or reserved_test_only),
             'v2 准备任务存在未归档的资料或调用记录，保留原记录等待核对')
         if http_session:
             # Row locks prevent revocation changes, but cannot stop a session
@@ -292,4 +314,5 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
                 AuthSession.user_id == p.user_id, AuthSession.revoked.is_(False),
                 AuthSession.expires_at > func.clock_timestamp()))
             old_store.need(valid == p.session_id, '当前会话已过期；未读取资料')
+        if reserved_test_only:return prep, job, reservation
         return prep, job
