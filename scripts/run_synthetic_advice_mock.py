@@ -20,6 +20,14 @@ def call(args, **kw):
     return subprocess.run([str(a) for a in args], check=True, **kw)
 
 
+def safe_environment(pg):
+    # Do not copy the parent environment: it may contain real credentials or
+    # an application PG URL. Keep only runtime basics and force our PATH.
+    env = {key:os.environ[key] for key in ('TMPDIR','LANG','LC_ALL') if key in os.environ}
+    env['PATH'] = str(pg) + ':/usr/bin:/bin:/usr/sbin:/sbin'
+    return env
+
+
 def metadata(root, value):
     temporary = root / 'status.tmp'
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -46,6 +54,9 @@ def main():
     if not Path('/usr/bin/sandbox-exec').is_file():
         raise RuntimeError('this offline harness requires macOS sandbox-exec')
     repo = Path(__file__).resolve().parents[1]
+    if os.path.lexists(repo/'.env'):
+        raise RuntimeError('run only in a clean isolated worktree without .env')
+    base_env = safe_environment(pg)
     root = Path(tempfile.mkdtemp(prefix='advice-race-pg-'))
     evidence = Path(tempfile.mkdtemp(prefix='ga-test-evidence-'))
     spool = Path(tempfile.mkdtemp(prefix='advice-v2-response-spool-'))
@@ -60,20 +71,20 @@ def main():
     data = root / 'data'; running = False
     try:
         call([pg/'initdb', '-D', data, '-U', 'advice_test', '-A', 'trust', '--no-locale', '-E', 'UTF8'],
-             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60, env=base_env)
         def start():
             call([pg/'pg_ctl','-D',data,'-l',root/'postgres.log','-o',f'-h 127.0.0.1 -p {port} -k {root}','-w','start'],
-                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60, env=base_env)
         def stop():
             call([pg/'pg_ctl','-D',data,'-m','fast','-w','stop'],
-                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60, env=base_env)
         start(); running = True
         psql = [pg/'psql','-h','127.0.0.1','-p',str(port),'-U','advice_test','-d','postgres']
-        sid = subprocess.check_output([str(a) for a in psql]+['-Atc','select system_identifier from pg_control_system()'], text=True).strip()
+        sid = subprocess.check_output([str(a) for a in psql]+['-Atc','select system_identifier from pg_control_system()'], text=True, env=base_env).strip()
         status['system_identifier'] = sid
         metadata(root, status)
-        call(psql + ['-v','ON_ERROR_STOP=1','-c',f'CREATE DATABASE "{database}"'], stdout=subprocess.DEVNULL)
-        environment = os.environ.copy()
+        call(psql + ['-v','ON_ERROR_STOP=1','-c',f'CREATE DATABASE "{database}"'], stdout=subprocess.DEVNULL, env=base_env)
+        environment = dict(base_env)
         environment.update(GA_TEST_DATABASE_URL=f'postgresql+psycopg://advice_test@127.0.0.1:{port}/postgres',
             GA_DATABASE_URL=f'postgresql+psycopg://advice_test@127.0.0.1:{port}/{database}',
             GA_TEST_PG_DATA_DIR=str(data), GA_TEST_PG_SYSTEM_IDENTIFIER=sid, GA_STORAGE_DIR=str(evidence),
@@ -81,7 +92,7 @@ def main():
             GA_SYNTHETIC_RUN_ID=run_id, GA_SYNTHETIC_SPOOL=str(spool), GA_V2_RESPONSE_SPOOL_ROOT=str(spool),
             GA_V2_RESPONSE_SPOOL_ENABLED='true', GA_COOKIE_SECURE='false', GA_CLOUD_ALLOWED_PROVIDERS='',
             GA_REDIS_URL='redis://127.0.0.1:1/0', DEEPSEEK_API_KEY='', DASHSCOPE_API_KEY='',
-            PATH=str(pg)+':'+os.environ.get('PATH',''), PYTHONPATH=str(repo/'src')+':'+str(repo))
+            PYTHONPATH=str(repo/'src')+':'+str(repo))
         profile = f'(version 1) (allow default) (deny network*) (allow network-outbound (remote ip "localhost:{port}"))'
         def child(module, logfile):
             with (root/logfile).open('w') as log:
