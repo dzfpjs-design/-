@@ -81,7 +81,7 @@ def verify_original(db, p, task, plan, prep, job, events, files):
 
 
 @old.checked
-def process(db, p, task_id, job_id):
+def process(db, p, task_id, job_id, *, delegation_id=None):
     """Run only the fixed v2 kind, with a caller-owned atomic transaction."""
     writer.require_disposable_database(db)
     old._reader(db, p, write=True)
@@ -102,7 +102,15 @@ def process(db, p, task_id, job_id):
     old.need(original.id == job.id and p.user_id == prep['data_actor_id'])
     # Re-derive the actual current policy, Goal, source and actor just before
     # local processing. Candidate-generated Plan IDs have no authority.
-    proposal = candidate.derive_candidate(db, p, task.id, prep['request'], prep['budget']['policy_ref'])
+    if delegation_id is None:
+        proposal = candidate.derive_candidate(db, p, task.id, prep['request'], prep['budget']['policy_ref'])
+    else:
+        # First usable slice: adopt an existing, approved V207 packet without
+        # creating a shared file. Source-set file writes remain disabled.
+        old.need(prep['request']['document_source']['kind'] == 'document_packet_v207',
+            '离线处理需先准备并批准原资料包；未写入新文件')
+        proposal = candidate.derive_delegated(db, p, task.id, job.id, prep['request'],
+            prep['budget']['policy_ref'], delegation_id)
     fresh = copy.deepcopy(proposal['preparation_candidate']); fresh.pop('record_hash')
     fresh['scope']['analysis_plan_id'] = plan.id
     cap = old._fresh(db, p, old.Capability, prep['advice_capability_ref']['id'])
