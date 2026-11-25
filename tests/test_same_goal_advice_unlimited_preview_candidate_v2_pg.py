@@ -35,6 +35,9 @@ from tests.test_same_goal_advice_unlimited_store_v2_pg import synthetic_custody
 
 @pytest.fixture
 def prepared_preview(synthetic_custody,monkeypatch,request):
+    # The integrated file-intent gate requires its unique index in the disposable PG.
+    from generic_agents.same_goal_advice_intent_index_migration_candidate_v2 import rehearse
+    assert rehearse()['status'] in {'installed','already_installed'}
     s=synthetic_custody;p=s['principal'];prep=copy.deepcopy(s['prep']);sample=contract_scene()
     deadline_seconds=getattr(request,'param',300)
     with monkeypatch.context() as m:
