@@ -153,7 +153,10 @@ def _read(db, p, task_id, *, lock=True):
         expected_audits |= {event.id for plan, _, _ in queued if plan.status in {'awaiting_consent','awaiting_dispatch'}
             for event in old._rows(db, p, Audit, Audit.action == previews.ACTION, Audit.object_id == plan.id)}
         from . import same_goal_advice_unlimited_start_candidate_v2 as starts
+        from . import same_goal_advice_unlimited_lease_candidate_v2 as leases
         expected_audits |= {plan.data[starts.POINTER]['audit_id'] for plan, _, _ in queued if plan.status=='awaiting_dispatch'}
+        expected_audits |= {event.id for plan, _, _ in queued if plan.status=='awaiting_dispatch'
+            for event in old._rows(db,p,Audit,Audit.action==leases.ACTION,Audit.object_id==plan.id)}
         expected_jobs = {row[2].id for row in v2records} | {
             plan.data[starts.POINTER]['job_id'] for plan, _, _ in queued if plan.status=='awaiting_dispatch'}
         old.need({job.id for job in v2jobs} == expected_jobs
