@@ -38,7 +38,10 @@ def scene(monkeypatch):
     class DB:
         def scalar(self,statement):
             if 'clock_timestamp' in str(statement):return state.clock
-            assert statement.column_descriptions[0]['entity'] is s.Task
+            entity=statement.column_descriptions[0]['entity']
+            if entity is s.Plan:
+                return next((row.id for row in state.rows[s.Plan] if predicate(statement.whereclause,row)),None)
+            assert entity is s.Task
             state.locks.append(statement._for_update_arg is not None)
             return task if predicate(statement.whereclause,task) else None
         def scalars(self,statement):
