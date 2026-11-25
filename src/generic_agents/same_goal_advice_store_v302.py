@@ -372,13 +372,16 @@ def _view(db,p,task,plan,prep,job):
 def prepare(db,p,task_id,body):
     body=c.Prepare.model_validate(body).model_dump(mode='json');_reader(db,p,write=True)
     command_nonce.acquire(db,p,action=ACCEPTED,task_id=task_id,body=body)
-    task=existing._task(db,p,task_id,lock=True);lock_current_actor(db,p);inventory=_inventory(db,p,task)
+    task=existing._task(db,p,task_id,lock=True);lock_current_actor(db,p);inventory=_inventory(db,p,task,history_compatible=True)
     previous=[value for value in inventory if any(op['request_id']==body['request_id'] for op in value[0].data['operations'])]
     need(len(previous)<=1)
     if previous:
         plan,prep,job=previous[0]
         need(prep['request']['request_id']==body['request_id'] and prep['request_hash']==digest(body) and prep['requested_by']==p.user_id)
         return _view(db,p,task,plan,prep,job)
+    # Only a proved original may replay across versions.  Preserve the strict
+    # v1 inventory for every new mutation until all writers migrate together.
+    _inventory(db,p,task)
     need(not any(_preparation_open(plan) for plan,_,_ in inventory),
         '原分析申请尚未结清，请先核对原进度或完成审核')
     plan_id,job_id,audit_id=uid(),uid(),uid();context=_scope(db,p,task,body,plan_id)
@@ -430,7 +433,7 @@ def get_operation(db,p,task_id,request_id):
 def cancel(db,p,task_id,plan_id,body):
     body=c.Cancel.model_validate(body).model_dump(mode='json');_reader(db,p,write=True)
     command_nonce.acquire(db,p,action=CANCELLED,task_id=task_id,body=body,subject_id=plan_id)
-    task=existing._task(db,p,task_id,lock=True);lock_current_actor(db,p);inventory=_inventory(db,p,task)
+    task=existing._task(db,p,task_id,lock=True);lock_current_actor(db,p);inventory=_inventory(db,p,task,history_compatible=True)
     found=[value for value in inventory if value[0].id==existing._id(plan_id)]
     need(len(found)==1);plan,prep,job=found[0]
     need(p.role=='admin' or p.user_id in {prep['requested_by'],prep['data_actor_id'],prep['business_actor_id']})
@@ -439,6 +442,9 @@ def cancel(db,p,task_id,plan_id,body):
         need(len(prior)==1 and prior[0] in operations and prior[0]['operation']=='cancel'
             and prior[0]['actor_id']==p.user_id and prior[0]['body_hash']==digest(body))
         return _view(db,p,task,plan,prep,job)
+    # A replay has no side effects; a new cancellation retains the old
+    # fail-closed gate when v2 records exist.
+    _inventory(db,p,task)
     if EXECUTION_KEY in plan.data:
         from .same_goal_advice_execution_v308 import checked as execution_state
         state=execution_state(db,p,task,plan,prep,job);need(state is not None)
