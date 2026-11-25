@@ -48,7 +48,7 @@ def main():
         raise RuntimeError('run only in a clean isolated worktree without .env')
     control=subprocess.check_output([str(pg/'pg_controldata'),str(data)],text=True,env=env,timeout=30)
     match=re.search(r'^Database system identifier:\s*(\d+)\s*$',control,re.MULTILINE)
-    if not match or (state.get('system_identifier') and state['system_identifier']!=match.group(1)):
+    if not match or not str(state.get('system_identifier','')).isdecimal() or state['system_identifier']!=match.group(1):
         raise RuntimeError('synthetic database identity mismatch')
     sid=match.group(1); sock=socket.socket();sock.bind(('127.0.0.1',0));port=sock.getsockname()[1];sock.close()
     subprocess.run([str(pg/'pg_ctl'),'-D',str(data),'-l',str(root/'postgres.log'),'-o',f'-h 127.0.0.1 -p {port} -k {root}','-w','start'],
