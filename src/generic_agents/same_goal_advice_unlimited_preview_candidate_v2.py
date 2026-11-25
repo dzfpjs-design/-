@@ -154,14 +154,15 @@ def _public(plan,prep,value):
 
 
 @store.checked
-def verify_current_for_start(db,p,task,plan,prep,event):
+def verify_current_for_start(db,p,task,plan,prep,event,*,started=False):
     """Recheck the saved preview against current originals, without starting.
 
     Callers must authenticate the preview chain and hold the task/actor locks.
     A successful return is not a dispatch grant or a substitute for commit-time
     session, policy, worker lease, and durable intent checks.
     """
-    checked,_=custody.read_prepared(db,p,task,plan)
+    store.need(type(started) is bool)
+    checked,_=(custody.read_started(db,p,task,plan) if started else custody.read_prepared(db,p,task,plan))
     store.need(digest(checked)==digest(prep) and (p.role=='admin' or p.user_id==prep['business_actor_id']))
     events=store._rows(db,p,Audit,Audit.action==ACTION,Audit.object_id==plan.id)
     store.need(bool(events) and event.action==ACTION and event.object_id==plan.id)
@@ -170,7 +171,8 @@ def verify_current_for_start(db,p,task,plan,prep,event):
         and saved_event.data['preview_generation']==len(events))
     original=saved_event.data
     current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'])
-    frame=frame_builder.build_current(db,p,task,plan)
+    frame=(frame_builder.build_current(db,p,task,plan,started=True) if started
+        else frame_builder.build_current(db,p,task,plan))
     store.need(digest(frame)==digest(original['frame_snapshot'])
         and frame['source_record']==original['source_record'] and frame['model_pin']==prep['model_pin'])
     model=legacy._model(db,p,prep,live=True)
