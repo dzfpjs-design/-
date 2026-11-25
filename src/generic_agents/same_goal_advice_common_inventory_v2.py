@@ -147,6 +147,9 @@ def _read(db, p, task_id, *, lock=True):
             for row in v2records if row[0].status == 'awaiting_consent'}
         expected_audits |= {event.id for plan, _, _ in closed for event in old._rows(db, p, Audit,
             Audit.action == v2.CANCELLED_EXPIRED, Audit.object_id == plan.id)}
+        from . import same_goal_advice_unlimited_preview_candidate_v2 as previews
+        expected_audits |= {event.id for plan, _, _ in queued if plan.status == 'awaiting_consent'
+            for event in old._rows(db, p, Audit, Audit.action == previews.ACTION, Audit.object_id == plan.id)}
         old.need({job.id for job in v2jobs} == {row[2].id for row in v2records}
             and {event.id for event in v2audits} == expected_audits,
             '业务建议存在未识别的任务或凭据，保留原记录等待核对')
