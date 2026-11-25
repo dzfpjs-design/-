@@ -17,6 +17,22 @@ from .db import engine
 from .models import Job
 
 
+def process_or_defer(p, control_id, lease_token):
+    """Run once or report only the proven gate conflict after full rollback.
+
+    No loop, new job, delegation, cloud request or claim is created here.
+    Retry uses the same control and lease while valid; after expiry a caller
+    must explicitly claim that same control again under the original checks.
+    All authorization, policy and other errors propagate unchanged.
+    """
+    from .same_goal_advice_intent_index_gate_candidate_v2 import GateBusy
+    try:
+        result = process(p, control_id, lease_token)
+    except GateBusy:
+        return {'state': 'retry_later', 'control_id': control_id}
+    return {'state': 'processed', 'control_id': control_id, 'result': result}
+
+
 @old.checked
 def process(p, control_id, lease_token):
     """Read committed intent, release connection, then run exact fenced Job.
