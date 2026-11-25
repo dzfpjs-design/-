@@ -159,7 +159,7 @@ def test_source_change_before_grant_commit_does_not_save_authorization(ready,mon
 
 
 @pytest.fixture
-def packet_ready(empty_original,monkeypatch):
+def packet_ready(empty_original,monkeypatch,request):
     """Persist evidence/worker/receipts; packet origin and Goal are test doubles."""
     import copy
     from types import SimpleNamespace
@@ -180,7 +180,17 @@ def packet_ready(empty_original,monkeypatch):
     selected={'kind':'document_packet_v207','packet':{'id':packet_id,'version':1,'evidence_id':file_id,
         'sha256':sha,'source_set_id':source_id,'source_set_hash':'b'*64}}
     prep=copy.deepcopy(s['prep']);prep.pop('record_hash');prep['request']['document_source']=selected
+    business = p
+    if getattr(request, 'param', False):
+        from generic_agents.models import User
+        from generic_agents.security import Principal, new_session, password_hash
+        with Session(engine()) as db:
+            user=User(username='synthetic_business_'+uuid4().hex[:10], password_hash=password_hash('synthetic-long-password'))
+            db.add(user);db.flush();db.add(Membership(user_id=user.id,workspace_id=p.workspace_id,role='operator'))
+            session,_,_=new_session(db,user);business=Principal(user.id,p.workspace_id,'operator',session.id);db.commit()
+        prep['requested_by']=business.user_id;prep['business_actor_id']=business.user_id
     prep['request_hash']=digest(prep['request']);prep=contract.seal_preparation(prep,manifest=manifest);s['prep']=prep
+    s['business_principal']=business
     resolved={'selection':selected,'approved_selection':{'source_set_id':source_id,'source_set_hash':'b'*64,
         'submission_id':str(uuid4()),'submission_hash':'c'*64,'input_key':'runtime_document_sources'},
         'source_set':{'source_snapshot_hash':'d'*64},'content':raw,'sha256':sha,'size_bytes':len(raw),
@@ -190,9 +200,12 @@ def packet_ready(empty_original,monkeypatch):
     monkeypatch.setattr(legacy,'_fresh',lambda db,principal,model,identity,*args,**kw:
         SimpleNamespace(actor_id=p.user_id) if model is document.sources.packets.Packet else original_fresh(db,principal,model,identity,*args,**kw))
     monkeypatch.setattr(writer.candidate,'derive_candidate',lambda *_:{'preparation_candidate':copy.deepcopy(prep)})
-    monkeypatch.setattr(candidate,'_derive_core',lambda *_:{'preparation_candidate':copy.deepcopy(prep)})
+    def derive_with_original_requester(db,principal,task_id,body,ref,requested_by):
+        assert requested_by == prep['requested_by']
+        return {'preparation_candidate':copy.deepcopy(prep)}
+    monkeypatch.setattr(candidate,'_derive_core',derive_with_original_requester)
     with Session(engine()) as db:
-        created=writer.prepare(db,p,s['task_id'],prep['request'],prep['budget']['policy_ref']);db.commit()
+        created=writer.prepare(db,business,s['task_id'],prep['request'],prep['budget']['policy_ref']);db.commit()
     return s,created
 
 
@@ -325,3 +338,29 @@ def test_grant_commit_rechecks_natural_http_session_expiry(ready):
         db.rollback()
     with Session(engine()) as db:
         assert db.scalar(select(func.count()).select_from(Audit).where(Audit.action==subject.GRANT))==0
+
+
+@pytest.mark.parametrize('packet_ready',[True],indirect=True)
+def test_distinct_business_requester_and_data_role_keep_original_requester(packet_ready):
+    from generic_agents.models import Plan
+    s,created=packet_ready;p=s['principal'];business=s['business_principal']
+    assert business.user_id != p.user_id
+    grant=issue(s,created)
+    with Session(engine()) as db:
+        control_id=control.register(db,p,s['task_id'],created['job_id']);db.commit()
+    with Session(engine()) as db:
+        db.get(AuthSession,p.session_id).revoked=True;db.commit()
+    with Session(engine()) as db:
+        lease=subject.claim_worker(db,control_id,grant['grant_id']);db.commit()
+    with Session(engine()) as source:actor=base_worker.actor(source,p.workspace_id,p.user_id)
+    with Session(engine()) as db:
+        db.info['worker_actor']=actor;leases.attach(db,control_id,lease['lease_token'])
+        assert subject.process_packet(db,actor,control_id,lease['lease_token'],grant['grant_id'])['replayed'] is False
+        db.commit()
+    with Session(engine()) as db:
+        plan=db.get(Plan,created['plan_id'])
+        assert plan.data['preparation_snapshot']['requested_by']==business.user_id
+        assert plan.data['preparation_snapshot']['data_actor_id']==p.user_id
+        event=db.get(Audit,grant['grant_id'])
+        assert event.data['requested_by']==business.user_id and event.actor_id==p.user_id
+        assert not list(db.scalars(select(CloudCall)))
