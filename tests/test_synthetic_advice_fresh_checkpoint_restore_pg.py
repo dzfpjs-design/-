@@ -36,8 +36,10 @@ def checkpoint(monkeypatch):
         with engine().begin() as db:db.execute(text('DELETE FROM synthetic_checkpoint_probe'))
         key=root/'synthetic-test-gateway.key';key.write_text('only-synthetic-test-material');os.chmod(key,0o600)
         source=root/'evidence';source.mkdir(mode=0o700);(source/'original.txt').write_text('synthetic evidence')
+        nested=source/'workspace';nested.mkdir(mode=0o700);(nested/'nested.txt').write_text('nested synthetic evidence')
         task_id=str(uuid4());manifest={'schema':'isolated-synthetic-fresh-mature-checkpoint-v1','task_id':task_id,
-            'dump_sha256':sha(dump),'key_sha256':sha(key),'files':{'original.txt':sha(source/'original.txt')}}
+            'dump_sha256':sha(dump),'key_sha256':sha(key),'files':{'original.txt':sha(source/'original.txt'),
+                'workspace/nested.txt':sha(nested/'nested.txt')}}
         (root/'manifest.json').write_text(json.dumps(manifest));os.chmod(root/'manifest.json',0o600)
         yield root,task_id
     finally:
@@ -46,11 +48,20 @@ def checkpoint(monkeypatch):
         shutil.rmtree(root);evidence_dir.cleanup()
 
 
-def test_restore_real_dump_and_synthetic_files(checkpoint):
+@pytest.mark.parametrize('mask',[0o000,0o777])
+def test_restore_real_dump_and_synthetic_files(checkpoint,mask):
     root,identity=checkpoint
-    assert restore_to_disposable_test_db(root)==identity
+    previous=os.umask(mask)
+    try:assert restore_to_disposable_test_db(root)==identity
+    finally:os.umask(previous)
     with engine().connect() as db:assert db.scalar(text('SELECT value FROM synthetic_checkpoint_probe'))==17
-    assert (Path(settings().storage_dir)/'original.txt').read_text()=='synthetic evidence'
+    destination=Path(settings().storage_dir)
+    assert (destination/'original.txt').read_text()=='synthetic evidence'
+    assert (destination/'workspace'/'nested.txt').read_text()=='nested synthetic evidence'
+    assert (destination.stat().st_mode & 0o777)==0o700
+    assert ((destination/'workspace').stat().st_mode & 0o777)==0o700
+    for file in [destination/'original.txt',destination/'workspace'/'nested.txt']:
+        assert (file.stat().st_mode & 0o777)==0o600
 
 
 @pytest.mark.parametrize('fault',['tampered_dump','tampered_file','wrong_manifest','bad_cluster','cloud_credential','occupied_target','other_client','symlink','hardlink'])
