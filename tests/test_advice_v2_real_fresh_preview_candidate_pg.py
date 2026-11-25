@@ -36,7 +36,8 @@ from generic_agents.layered_approval_models_v175 import ApprovalManagedTaskV175
 from tests.synthetic_advice_fresh_checkpoint_restore import restore_to_disposable_test_db
 
 
-@pytest.mark.skipif(not os.environ.get('GA_SYNTHETIC_FRESH_CHECKPOINT'), reason='requires isolated synthetic fresh checkpoint')
+@pytest.mark.skipif(not os.environ.get('GA_SYNTHETIC_FRESH_CHECKPOINT') or not os.environ.get('GA_TEST_SYNTHETIC_PROVIDER_PORT'),
+    reason='requires isolated synthetic fresh checkpoint and loopback provider')
 def test_real_mature_approved_source_to_durable_v2_preview(monkeypatch):
     monkeypatch.setattr(settings(),'cloud_allowed_providers','')
     task_id=restore_to_disposable_test_db(os.environ['GA_SYNTHETIC_FRESH_CHECKPOINT'])
@@ -73,7 +74,7 @@ def test_real_mature_approved_source_to_durable_v2_preview(monkeypatch):
             body={'request_id':str(uuid4()),'expected_goal_hash':task.data['goal_hash'],
                 'expected_mature_head_hash':head['head_hash'],
                 'limits':{'max_tokens':512,'max_request_bytes':50000,'max_evidence_items':2},
-                'expires_at':(now+timedelta(minutes=20)).isoformat(),'reason':'合成测试政策'}
+                'expires_at':(now+timedelta(hours=2)).isoformat(),'reason':'合成测试政策'}
             issued=policy.authorize(db,p,task_id,body);db.commit()
             print('AUTHORIZED_SYNTHETIC_POLICY',flush=True)
             source_ref={'kind':'approved_source_set','source_set_ref':{'source_set_id':source.id,'source_set_hash':source.source_set_hash}}
@@ -145,3 +146,47 @@ def test_real_mature_approved_source_to_durable_v2_preview(monkeypatch):
             assert lease.acquire(db,p,task_id,created['plan_id'])==leased
             assert db.scalar(select(func.count()).select_from(CloudCall))==0
         print('ISOLATED_LEASE_ORIGINAL_REPLAYED',flush=True)
+        from generic_agents import same_goal_advice_cloud_claim_test_v2 as claims
+        from generic_agents import same_goal_advice_unlimited_contracts_v2 as unlimited_contracts
+        from generic_agents import same_goal_advice_cloud_reservation_candidate_v2 as reserve
+        from generic_agents import same_goal_advice_first_response_storage_candidate_v2 as storage
+        from generic_agents import same_goal_advice_first_response_candidate_v2 as response
+        from generic_agents import same_goal_advice_loopback_dispatch_candidate_v2 as dispatch
+        from generic_agents import cloud_budget
+        from generic_agents.models import Capability
+        from tests.synthetic_deepseek_loopback_v2 import provider
+        from tests.test_same_goal_advice_runtime_v308 import _opinion
+        with Session(engine()) as db:claims.install(db);storage.install(db);db.commit()
+        with Session(engine()) as db:
+            allocated=reserve.reserve(db,p,task_id,created['plan_id'],leased['job_id'],leased['lease_token']);db.commit()
+        print('SYNTHETIC_CLOUDCALL_RESERVED',flush=True)
+        with Session(engine()) as db:
+            shown=db.scalar(select(Audit).where(Audit.action==preview.ACTION,Audit.object_id==created['plan_id']))
+            opinion=_opinion(shown.data['preview_record']['cloud_request']['decision_input'])
+        port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
+        with provider(port,content=json.dumps(opinion),usage={'prompt_tokens':3,'completion_tokens':2,'total_tokens':5}) as server:
+            result=dispatch.execute_once(p,task_id,created['plan_id'],leased['job_id'],leased['lease_token'],allocated['cloud_call_id'])
+            assert result['state']=='captured' and result['retry_authorized'] is False and len(server.requests)==1
+            print('ONE_SYNTHETIC_HTTP_RESPONSE_SAVED',flush=True)
+            engine().dispose()
+            with Session(engine()) as db:
+                raw,receipt,sealed=storage.read(db,p.workspace_id,allocated['cloud_call_id'],result['intent_audit_id'])
+                value,proven=response.parse_saved(sealed,cloud_call_id=allocated['cloud_call_id'],
+                    intent_audit_id=result['intent_audit_id'],schema=contracts.model_value_schema())
+                initial=db.scalar(select(Audit).where(Audit.action==start.ACTION,Audit.object_id==created['plan_id']))
+                plan=db.get(Plan,created['plan_id']);prep=plan.data['preparation_snapshot']
+                advice=db.get(Capability,prep['advice_capability_ref']['id'])
+                assert unlimited_contracts.derive_result(initial.data['snapshot'],value,preparation=prep,manifest=advice.data)['review_state']=='ready_for_review'
+                call=db.get(CloudCall,allocated['cloud_call_id']);anchor=call.data[reserve.KEY]
+                expected={'workspace_id':p.workspace_id,'capability_id':call.capability_id,'actor_id':p.user_id,
+                    'request_hash':anchor['request_hash'],'dispatch_options_hash':anchor['dispatch_options_hash'],
+                    'provider':'deepseek','model':receipt['model']}
+                cloud_budget.settle_paid_response(db,call.id,proven,expected,'succeeded');db.commit()
+            engine().dispose()
+            with Session(engine()) as db:
+                assert storage.read(db,p.workspace_id,allocated['cloud_call_id'],result['intent_audit_id'])[0]==raw
+                assert db.get(CloudCall,allocated['cloud_call_id']).charged_tokens==5
+            with pytest.raises(HTTPException):
+                dispatch.execute_once(p,task_id,created['plan_id'],leased['job_id'],leased['lease_token'],allocated['cloud_call_id'])
+            assert len(server.requests)==1
+        print('SYNTHETIC_ORIGINAL_SETTLED_AND_NO_REPEAT',flush=True)
