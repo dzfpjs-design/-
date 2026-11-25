@@ -81,6 +81,9 @@ def _load(db, p, job_id, target, *, lock):
 def register(db, p, task_id, job_id):
     """Record intended bytes; caller must commit before attempting processing."""
     guard.require_disposable_database(db); old._reader(db, p, write=True)
+    # Fence schema DDL before taking Task locks, matching other intent writers.
+    from . import same_goal_advice_intent_index_gate_candidate_v2 as index_gate
+    index_gate.require(db, p.workspace_id)
     task = old.existing._task(db, p, task_id, lock=True); lock_current_actor(db, p)
     job = db.scalar(select(Job).where(Job.workspace_id == p.workspace_id, Job.id == job_id).with_for_update())
     old.need(job is not None and job.kind == v2.PREPARE_KIND and job.available_at == guard.UNAVAILABLE_TO_GENERAL_WORKERS)
@@ -132,6 +135,8 @@ def _snapshot(db, p, job_id, target, *, lock):
 def require_committed(db, p, task, plan, job, prep, resolved):
     """Require exact prior durable originals, never same-transaction inserts."""
     target = _target(p, task, plan, job, prep, resolved)
+    from . import same_goal_advice_intent_index_gate_candidate_v2 as index_gate
+    index_gate.require(db, p.workspace_id)
     witness = _verified_preflight.get()
     if witness is not None:
         # Only a new Session owned by the coordinator is eligible. Refuse any
