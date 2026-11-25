@@ -154,15 +154,16 @@ def _public(plan,prep,value):
 
 
 @store.checked
-def verify_current_for_start(db,p,task,plan,prep,event,*,started=False):
+def verify_current_for_start(db,p,task,plan,prep,event,*,started=False,reserved_test_only=False):
     """Recheck the saved preview against current originals, without starting.
 
     Callers must authenticate the preview chain and hold the task/actor locks.
     A successful return is not a dispatch grant or a substitute for commit-time
     session, policy, worker lease, and durable intent checks.
     """
-    store.need(type(started) is bool)
-    checked,_=(custody.read_started(db,p,task,plan) if started else custody.read_prepared(db,p,task,plan))
+    store.need(type(started) is bool and type(reserved_test_only) is bool and (not reserved_test_only or started))
+    if reserved_test_only:checked,_,_=custody.read_reserved_test_only(db,p,task,plan)
+    else:checked,_=(custody.read_started(db,p,task,plan) if started else custody.read_prepared(db,p,task,plan))
     store.need(digest(checked)==digest(prep) and (p.role=='admin' or p.user_id==prep['business_actor_id']))
     events=store._rows(db,p,Audit,Audit.action==ACTION,Audit.object_id==plan.id)
     store.need(bool(events) and event.action==ACTION and event.object_id==plan.id)
@@ -171,7 +172,7 @@ def verify_current_for_start(db,p,task,plan,prep,event,*,started=False):
         and saved_event.data['preview_generation']==len(events))
     original=saved_event.data
     current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'])
-    frame=(frame_builder.build_current(db,p,task,plan,started=True) if started
+    frame=(frame_builder.build_current(db,p,task,plan,started=True,reserved_test_only=reserved_test_only) if started
         else frame_builder.build_current(db,p,task,plan))
     store.need(digest(frame)==digest(original['frame_snapshot'])
         and frame['source_record']==original['source_record'] and frame['model_pin']==prep['model_pin'])
