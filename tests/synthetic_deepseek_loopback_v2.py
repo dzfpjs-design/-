@@ -4,17 +4,19 @@ It is not a model, credential, application endpoint or production adapter.
 Only SHA-256 of incoming bytes and the count are kept, never request text.
 """
 import hashlib
+import gzip
 import json
 import socket
+import time
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 
 
 @contextmanager
-def provider(port, *, mode='reply', content='{}', usage=None):
+def provider(port, *, mode='reply', content='{}', usage=None, on_received=None):
     if type(port) is not int or not 1 <= port <= 65535:raise ValueError('explicit test port required')
-    if mode not in {'reply','drop','http_error'}:raise ValueError('unsupported synthetic mode')
+    if mode not in {'reply','drop','http_error','gzip','slow'}:raise ValueError('unsupported synthetic mode')
     if type(content) is not str:raise ValueError('synthetic content must be text')
     class Server(ThreadingHTTPServer):
         daemon_threads=True
@@ -30,6 +32,7 @@ def provider(port, *, mode='reply', content='{}', usage=None):
                 if len(raw)!=size:raise ValueError()
             except (ValueError,TypeError):self.send_error(400);return
             self.server.requests.append(hashlib.sha256(raw).hexdigest())
+            if on_received is not None:on_received()
             if mode=='drop':
                 self.close_connection=True
                 self.connection.shutdown(socket.SHUT_RDWR)
@@ -38,9 +41,18 @@ def provider(port, *, mode='reply', content='{}', usage=None):
                 'message':{'role':'assistant','content':content}}]}
             if usage is not None:payload['usage']=usage
             body=json.dumps(payload,ensure_ascii=False,separators=(',',':')).encode('utf-8')
+            if mode=='gzip':body=gzip.compress(body)
             self.send_response(429 if mode=='http_error' else 200)
             self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)))
-            self.end_headers();self.wfile.write(body)
+            self.send_header('Set-Cookie','synthetic-cookie=must-not-be-recorded')
+            if mode=='gzip':self.send_header('Content-Encoding','gzip')
+            self.end_headers()
+            try:
+                if mode=='slow':
+                    for byte in body:
+                        self.wfile.write(bytes([byte]));self.wfile.flush();time.sleep(.05)
+                else:self.wfile.write(body)
+            except (BrokenPipeError,ConnectionResetError):pass
     server=Server(('127.0.0.1',port),Handler);server.requests=[]
     thread=Thread(target=server.serve_forever,daemon=True);thread.start()
     try:yield server
