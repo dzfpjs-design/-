@@ -108,6 +108,7 @@ def _read(db, workspace_id, call_id, intent_id, pin):
     return raw, copy.deepcopy(value['receipt']), sealed
 
 
+@old.checked
 def read(db, workspace_id, call_id, intent_id):
     """Internal historical read: gate must authenticate saved originals offline."""
     pin=_original(db,workspace_id,call_id,intent_id)
@@ -116,6 +117,7 @@ def read(db, workspace_id, call_id, intent_id):
     return value if value is not None else {'state': 'unknown', 'retry_authorized': False}
 
 
+@old.checked
 def capture(db, workspace_id, call_id, intent_id, raw, receipt):
     """Store exact bytes atomically; no send, retry, settlement or cloud call."""
     old.need(db.get_nested_transaction() is None, '测试首答写入不支持调用方保存点')

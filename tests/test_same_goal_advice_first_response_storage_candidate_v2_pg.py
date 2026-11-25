@@ -154,3 +154,55 @@ def test_completed_transaction_does_not_attach_guard_to_later_commit(synthetic,m
     with Session(engine()) as db:
         with pytest.raises(HTTPException):subject.read(db,s['workspace'],s['call'],s['intent'])
         db.rollback()
+
+
+def test_header_whitelist_keeps_only_safe_metadata_out_of_audit(synthetic,monkeypatch):
+    import base64
+    monkeypatch.setattr(gate,'check_original',fake_gate);s=synthetic
+    encoded=lambda value:base64.b64encode(value).decode('ascii')
+    selected={**receipt(s),'request_id':'request-123',
+        'header_raw_base64':[[encoded(b'content-type'),encoded(b'application/json')],
+            [encoded(b'content-encoding'),encoded(b'gzip')],
+            [encoded(b'x-request-id'),encoded(b'request-123')]]}
+    with Session(engine()) as db:
+        saved=subject.capture(db,s['workspace'],s['call'],s['intent'],b'compressed',selected);db.commit()
+    with Session(engine()) as db:
+        assert subject.read(db,s['workspace'],s['call'],s['intent'])==saved
+        audit=db.scalar(select(Audit).where(Audit.action==subject.ACTION))
+        assert 'SYNTHETIC_COOKIE_SENTINEL' not in str(audit.data)
+
+
+@pytest.mark.parametrize('kind',['cookie_header','arbitrary_receipt','request_id'])
+def test_sensitive_receipt_cannot_be_persisted(synthetic,monkeypatch,kind):
+    import base64
+    monkeypatch.setattr(gate,'check_original',fake_gate);s=synthetic
+    encode=lambda value:base64.b64encode(value).decode('ascii')
+    bad=receipt(s)
+    if kind=='cookie_header':
+        bad['header_raw_base64']=[[encode(b'set-cookie'),encode(b'SYNTHETIC_COOKIE_SENTINEL')]]
+    elif kind=='arbitrary_receipt':bad['cookie']='SYNTHETIC_COOKIE_SENTINEL'
+    else:bad['request_id']='cookie=SYNTHETIC_COOKIE_SENTINEL;'
+    with Session(engine()) as db:
+        with pytest.raises(HTTPException):subject.capture(db,s['workspace'],s['call'],s['intent'],b'answer',bad)
+        db.rollback()
+    with Session(engine()) as db:
+        assert db.scalar(select(__import__('sqlalchemy').func.count()).select_from(Audit).where(Audit.action==subject.ACTION))==0
+        assert not db.scalar(text('SELECT EXISTS(SELECT 1 FROM ga_test_advice_v2_first_response)'))
+
+
+def test_historical_unsafe_receipt_rejects_without_rewriting(synthetic,monkeypatch):
+    import base64
+    monkeypatch.setattr(gate,'check_original',fake_gate);s=synthetic
+    with Session(engine()) as db:
+        saved=subject.capture(db,s['workspace'],s['call'],s['intent'],b'answer',receipt(s));db.commit()
+    with Session(engine()) as db:
+        audit=db.scalar(select(Audit).where(Audit.action==subject.ACTION))
+        original=copy.deepcopy(audit.data);tampered=copy.deepcopy(original)
+        encode=lambda value:base64.b64encode(value).decode('ascii')
+        tampered['receipt']['header_raw_base64']=[[encode(b'set-cookie'),encode(b'SYNTHETIC_COOKIE_SENTINEL')]]
+        tampered['record_hash']=digest({key:value for key,value in tampered.items() if key!='record_hash'})
+        audit.data=tampered;db.flush()
+        with pytest.raises(HTTPException):subject.read(db,s['workspace'],s['call'],s['intent'])
+        assert audit.data==tampered
+        db.rollback()
+    with Session(engine()) as db:assert subject.read(db,s['workspace'],s['call'],s['intent'])==saved
