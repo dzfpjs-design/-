@@ -36,6 +36,9 @@ def ready(empty_original, monkeypatch):
     with Session(engine()) as db:
         result = writer.prepare(db, s['principal'], s['task_id'], prep['request'], prep['budget']['policy_ref'])
         db.commit()
+    from generic_agents.same_goal_advice_file_intent_candidate_v2 import register
+    with Session(engine()) as db:
+        register(db, s['principal'], s['task_id'], result['job_id']); db.commit()
     return s, result, resolved
 
 
