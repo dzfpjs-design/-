@@ -430,3 +430,117 @@ def test_start_restores_caller_lock_timeout(prepared_preview):
         start.begin(db,p,s['task_id'],created['plan_id'],body)
         assert db.scalar(text("SELECT current_setting('lock_timeout')"))=='7s'
         db.commit()
+
+
+def test_started_document_cold_read_requires_explicit_versioned_state(prepared_preview):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents import same_goal_advice_prepare_document_candidate_v2 as document
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成开始测试'}
+    with Session(engine()) as db:start.begin(db,p,s['task_id'],created['plan_id'],body);db.commit()
+    with Session(engine()) as db:
+        task=db.get(Task,s['task_id']);plan=db.get(Plan,created['plan_id'])
+        with pytest.raises(HTTPException):document.cold_read(db,p,task,plan)
+        assert document.cold_read(db,p,task,plan,started=True)['document']['evidence_ref']['evidence_id']
+        assert not list(db.scalars(select(CloudCall)))
+
+
+def test_lease_original_is_unique_and_old_worker_never_claims(prepared_preview):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents import same_goal_advice_unlimited_lease_candidate_v2 as lease
+    from generic_agents.models import Job
+    from generic_agents.worker import claim
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成开始测试'}
+    with Session(engine()) as db:first=start.begin(db,p,s['task_id'],created['plan_id'],body);db.commit()
+    with Session(engine()) as db:original=lease.acquire(db,p,s['task_id'],created['plan_id']);db.commit()
+    engine().dispose()
+    with Session(engine()) as db:
+        assert lease.acquire(db,p,s['task_id'],created['plan_id'])==original
+        job=db.get(Job,first['job_id']);assert job.status=='running' and job.attempts==1
+        assert not list(db.scalars(select(CloudCall)))
+    assert claim(first['job_id'],kinds=[start.KIND],workspace_id=p.workspace_id) is None
+
+
+def test_expired_lease_is_preserved_never_replaced(prepared_preview,monkeypatch):
+    import time
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents import same_goal_advice_unlimited_lease_candidate_v2 as lease
+    from generic_agents.models import Job
+    from generic_agents.worker import claim
+    monkeypatch.setattr(lease,'SECONDS',2)
+    s,created,request,_=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成租约到期'}
+    with Session(engine()) as db:first=start.begin(db,p,s['task_id'],created['plan_id'],body);db.commit()
+    with Session(engine()) as db:original=lease.acquire(db,p,s['task_id'],created['plan_id']);db.commit()
+    time.sleep(2.2)
+    with Session(engine()) as db:
+        with pytest.raises(HTTPException):lease.acquire(db,p,s['task_id'],created['plan_id'])
+        assert len(list(db.scalars(select(Audit).where(Audit.action==lease.ACTION))))==1
+        job=db.get(Job,first['job_id']);assert job.lease_token==original['lease_token'] and job.attempts==1
+        assert not list(db.scalars(select(CloudCall)))
+    assert claim(first['job_id'],kinds=[start.KIND],workspace_id=p.workspace_id) is None
+
+
+def test_concurrent_lease_is_the_same_original(prepared_preview):
+    from queue import Queue
+    from threading import Thread
+    from time import monotonic,sleep
+    from sqlalchemy import func,text
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents import same_goal_advice_unlimited_lease_candidate_v2 as lease
+    s,created,request,_=prepared_preview;p=s['principal'];pidq=Queue();results=[];errors=[]
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成并发租约'}
+    with Session(engine()) as db:start.begin(db,p,s['task_id'],created['plan_id'],body);db.commit()
+    def contender():
+        try:
+            with Session(engine()) as db:
+                pidq.put(db.scalar(select(func.pg_backend_pid())))
+                results.append(lease.acquire(db,p,s['task_id'],created['plan_id']));db.commit()
+        except Exception as e:errors.append(e)
+    with Session(engine()) as first:
+        owner=first.scalar(select(func.pg_backend_pid()));original=lease.acquire(first,p,s['task_id'],created['plan_id'])
+        thread=Thread(target=contender,daemon=True);thread.start();pid=pidq.get(timeout=5)
+        try:
+            until=monotonic()+5;blocked=False
+            while monotonic()<until:
+                with engine().connect() as obs:blocked=owner in obs.scalar(text('SELECT pg_blocking_pids(:pid)'),{'pid':pid})
+                if blocked:break
+                sleep(.05)
+            assert blocked
+        finally:first.commit()
+        thread.join(timeout=10);assert not thread.is_alive() and not errors
+    assert results==[original]
+    with Session(engine()) as db:
+        assert len(list(db.scalars(select(Audit).where(Audit.action==lease.ACTION))))==1
+        assert not list(db.scalars(select(CloudCall)))
+
+
+def test_started_original_must_still_pass_current_preview_check(prepared_preview):
+    from generic_agents import same_goal_advice_unlimited_start_candidate_v2 as start
+    from generic_agents import same_goal_advice_unlimited_lease_candidate_v2 as lease
+    s,created,request,frame=prepared_preview;p=s['principal']
+    with Session(engine()) as db:shown=subject.prepare(db,p,s['task_id'],created['plan_id'],request);db.commit()
+    body={'request_id':str(uuid4()),'expected_plan_version':3,'expected_goal_hash':request['expected_goal_hash'],
+        'expected_mature_head_hash':request['expected_mature_head_hash'],'preview_hash':shown['preview_hash'],
+        'cloud_authorized':True,'reason':'合成发送前重验'}
+    with Session(engine()) as db:start.begin(db,p,s['task_id'],created['plan_id'],body);db.commit()
+    with Session(engine()) as db:lease.acquire(db,p,s['task_id'],created['plan_id']);db.commit()
+    with Session(engine()) as db:
+        task=db.get(Task,s['task_id']);plan=db.get(Plan,created['plan_id'])
+        prep,_=custody.read_started(db,p,task,plan)
+        event=db.scalar(select(Audit).where(Audit.action==subject.ACTION,Audit.object_id==plan.id))
+        assert subject.verify_current_for_start(db,p,task,plan,prep,event,started=True)==frame
+        assert not list(db.scalars(select(CloudCall)))
