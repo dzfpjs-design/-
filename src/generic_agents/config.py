@@ -9,6 +9,12 @@ from pydantic import Field, SecretStr, field_validator
 class Settings(BaseSettings):
     # Candidate only: even if enabled it remains guarded to a disposable DB.
     v2_deepseek_dispatch_enabled: bool = False
+    # Separate, test-only private response spool; never a report directory.
+    v2_response_spool_enabled: bool = False
+    v2_response_spool_root: Path | None = None
+    v2_deepseek_connect_timeout_seconds: float = Field(default=10, ge=1, le=60)
+    v2_deepseek_read_timeout_seconds: float = Field(default=120, ge=1, le=600)
+    v2_deepseek_total_timeout_seconds: float = Field(default=600, ge=1, le=1800)
     # Synthetic evidence may exercise real rule selection only in an explicit
     # verification service. No workspace request can change this boundary.
     threshold_policy_environment: Literal['production','verification'] = 'production'

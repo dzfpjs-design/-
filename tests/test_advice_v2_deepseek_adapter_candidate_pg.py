@@ -1,5 +1,5 @@
 """Disposable PG + loopback fake provider; never invokes real DeepSeek."""
-import base64,copy,json,os,subprocess,sys
+import base64,copy,json,os,subprocess,sys,tempfile,time
 from datetime import timedelta
 from pathlib import Path
 import pytest
@@ -23,6 +23,14 @@ from tests.test_same_goal_advice_unlimited_preview_candidate_v2_pg import prepar
 from tests.test_same_goal_advice_unlimited_store_v2_pg import synthetic_custody
 
 pytestmark=pytest.mark.skipif(not os.environ.get('GA_TEST_SYNTHETIC_PROVIDER_PORT'),reason='isolated fake provider only')
+
+
+@pytest.fixture(autouse=True)
+def private_response_spool(monkeypatch):
+    with tempfile.TemporaryDirectory(prefix='advice-v2-response-spool-') as path:
+        monkeypatch.setattr(settings(),'v2_response_spool_enabled',True)
+        monkeypatch.setattr(settings(),'v2_response_spool_root',Path(path))
+        yield
 
 
 def test_formal_switch_defaults_closed_without_database_or_credentials(monkeypatch):
@@ -95,7 +103,7 @@ def test_loopback_connection_loss_stays_unknown_no_retry(started):
 
 def test_loopback_slow_stream_is_bounded_and_not_retried(started,monkeypatch):
     _,args,opinion=setup(started);port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
-    monkeypatch.setattr(subject,'MAX_STREAM_SECONDS',.3)
+    monkeypatch.setattr(settings(),'v2_deepseek_total_timeout_seconds',1)
     with provider(port,mode='slow',content=json.dumps(opinion)) as server:
         result=subject.execute_synthetic_test_only(*args)
         assert result['state']=='unknown' and result['retry_authorized'] is False and len(server.requests)==1
@@ -103,7 +111,8 @@ def test_loopback_slow_stream_is_bounded_and_not_retried(started,monkeypatch):
         assert len(server.requests)==1
 
 
-def test_process_crash_after_capture_recovers_without_second_post(started,prepared_preview,tmp_path):
+@pytest.mark.parametrize("point,exit_code",[("after_capture",76),("after_spool",77),("mid_stream",78)])
+def test_process_crash_after_capture_recovers_without_second_post(started,prepared_preview,tmp_path,point,exit_code):
     from generic_agents import same_goal_advice_transport_intent_candidate_v2 as intent
     s,args,opinion=setup(started);port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT']);p=args[0]
     resolved=document.sources.resolve_documents(None,None,None,None)
@@ -111,16 +120,27 @@ def test_process_crash_after_capture_recovers_without_second_post(started,prepar
     case={'principal':{'user_id':p.user_id,'workspace_id':p.workspace_id,'role':p.role,'session_id':p.session_id},
         'arguments':list(args[1:]),'frame':copy.deepcopy(prepared_preview[3]),'resolved':resolved}
     file=tmp_path/'synthetic-crash.json';file.write_text(json.dumps(case));file.chmod(0o600)
-    env=os.environ.copy();env['GA_SYNTHETIC_CRASH_CASE']=str(file);env['GA_STORAGE_DIR']=str(settings().storage_dir)
+    env=os.environ.copy();env['GA_SYNTHETIC_CRASH_CASE']=str(file);env['GA_SYNTHETIC_CRASH_POINT']=point;env['GA_STORAGE_DIR']=str(settings().storage_dir);env['GA_V2_RESPONSE_SPOOL_ENABLED']='true';env['GA_V2_RESPONSE_SPOOL_ROOT']=str(settings().v2_response_spool_root)
     with provider(port,content=json.dumps(opinion),usage={'prompt_tokens':3,'completion_tokens':2,'total_tokens':5}) as server:
         child=subprocess.run([sys.executable,'-m','tests.synthetic_deepseek_adapter_crash_child_v2'],env=env,
             stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=90)
-        assert child.returncode==76 and len(server.requests)==1
+        assert child.returncode==exit_code and len(server.requests)==1
         engine().dispose()
         with Session(engine()) as db:
             original=db.scalar(select(Audit).where(Audit.action==intent.ACTION,Audit.object_id==args[2]))
             assert original is not None;intent_id=original.id
-        result=reconcile.reconcile(p.workspace_id,args[-1],intent_id)
+        from generic_agents import same_goal_advice_spool_recovery_candidate_v2 as recovery
+        from generic_agents import same_goal_advice_dispatch_permit_candidate_v2 as permits
+        from generic_agents import same_goal_advice_response_spool_test_v2 as spool
+        with Session(engine()) as db:
+            permit=db.scalar(select(Audit).where(Audit.action==permits.ACTION,Audit.object_id==args[2]));permit_id=permit.id
+        if point=='mid_stream':
+            with pytest.raises(spool.SpoolError):recovery.recover(p.workspace_id,args[-1],intent_id,permit_id)
+            with Session(engine()) as db:assert db.get(CloudCall,args[-1]).status=='reserved'
+            with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+            assert len(server.requests)==1
+            return
+        result=recovery.recover(p.workspace_id,args[-1],intent_id,permit_id)
         assert result['state']=='settled' and result['answer_state']=='succeeded'
         with Session(engine()) as db:assert db.get(CloudCall,args[-1]).charged_tokens==5
         assert len(server.requests)==1
@@ -148,7 +168,7 @@ def test_official_mode_uses_fixed_gateway_policy_with_inprocess_transport(starte
     monkeypatch.setattr(settings(),'deepseek_api_key',SecretStr('synthetic-only'))
     monkeypatch.setattr(settings(),'cloud_allowed_providers','deepseek')
     monkeypatch.setattr(settings(),'v2_deepseek_dispatch_enabled',True)
-    real_client=httpx.Client
+    real_client=httpx.AsyncClient
     def handle(request):
         seen.append((str(request.url),request.headers.get('authorization')))
         body=json.dumps({
@@ -157,7 +177,7 @@ def test_official_mode_uses_fixed_gateway_policy_with_inprocess_transport(starte
         return httpx.Response(200,headers={'Set-Cookie':'synthetic-cookie=must-not-be-recorded'},
             stream=httpx.ByteStream(body))
     def local_client(**kwargs):return real_client(transport=httpx.MockTransport(handle),**kwargs)
-    monkeypatch.setattr(subject.httpx,'Client',local_client)
+    monkeypatch.setattr(subject.httpx,'AsyncClient',local_client)
     result=subject.execute(*args)
     assert result['state']=='settled' and result['answer_state']=='succeeded'
     assert seen==[('https://api.deepseek.com/chat/completions','Bearer synthetic-only')]
@@ -200,13 +220,13 @@ def test_no_table_or_session_lock_held_during_http(started):
 
 def _mock_formal_client(monkeypatch,opinion,seen):
     import httpx
-    real_client=httpx.Client
+    real_client=httpx.AsyncClient
     def handle(request):
         seen.append((str(request.url),request.headers.get('authorization')))
         body=json.dumps({'choices':[{'finish_reason':'stop','message':{'role':'assistant','content':json.dumps(opinion)}}],
             'usage':{'prompt_tokens':3,'completion_tokens':2,'total_tokens':5}}).encode()
         return httpx.Response(200,stream=httpx.ByteStream(body))
-    monkeypatch.setattr(subject.httpx,'Client',lambda **kw:real_client(transport=httpx.MockTransport(handle),**kw))
+    monkeypatch.setattr(subject.httpx,'AsyncClient',lambda **kw:real_client(transport=httpx.MockTransport(handle),**kw))
 
 
 def test_credential_rotation_after_permit_uses_current_secret(started,monkeypatch):
@@ -257,3 +277,28 @@ def test_provider_disable_after_permit_prevents_send_and_keeps_unknown(started,m
         intent_id=db.scalar(select(Audit.id).where(Audit.action==intents.ACTION))
     with pytest.raises(HTTPException):reconcile.reconcile(args[0].workspace_id,args[-1],intent_id)
     assert seen==[]
+
+
+def test_slow_first_byte_over_three_seconds_succeeds(started):
+    _,args,opinion=setup(started);port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
+    with provider(port,mode='slow_first_byte',content=json.dumps(opinion),usage={'prompt_tokens':3,'completion_tokens':2,'total_tokens':5}) as server:
+        before=time.monotonic();result=subject.execute_synthetic_test_only(*args)
+        assert time.monotonic()-before>=3 and result['state']=='settled' and len(server.requests)==1
+
+
+def test_database_failure_after_complete_spool_recovers_without_resend(started,monkeypatch):
+    from generic_agents import same_goal_advice_spool_recovery_candidate_v2 as recovery
+    _,args,opinion=setup(started);port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
+    with provider(port,content=json.dumps(opinion),usage={'prompt_tokens':3,'completion_tokens':2,'total_tokens':5}) as server:
+        with monkeypatch.context() as failure:
+            def unavailable(*_args):raise RuntimeError('synthetic database unavailable')
+            failure.setattr(storage,'capture',unavailable)
+            result=subject.execute_synthetic_test_only(*args)
+        assert result['state']=='capture_pending' and result['retry_authorized'] is False and len(server.requests)==1
+        engine().dispose()
+        recovered=recovery.recover(args[0].workspace_id,args[-1],result['intent_audit_id'],result['permit_audit_id'])
+        assert recovered['state']=='settled'
+        assert recovery.recover(args[0].workspace_id,args[-1],result['intent_audit_id'],result['permit_audit_id'])['state']=='settled'
+        with Session(engine()) as db:assert db.get(CloudCall,args[-1]).charged_tokens==5
+        with pytest.raises(HTTPException):subject.execute_synthetic_test_only(*args)
+        assert len(server.requests)==1
