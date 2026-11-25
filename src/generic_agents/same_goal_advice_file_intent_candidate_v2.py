@@ -6,6 +6,8 @@ content-addressed file discoverable after a transaction rollback. It is not a
 safe garbage collector: legacy upload writers do not share its locks.
 """
 import hashlib
+import copy
+from contextvars import ContextVar
 from uuid import UUID
 from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session
@@ -104,12 +106,49 @@ def register(db, p, task_id, job_id):
         action=ACTION, data={'schema': SCHEMA, 'intent_hash': digest(record.data)})); db.flush()
     return record.id
 
+# A witness exists only inside the coordinator-owned fresh Session and one
+# transaction. It is never accepted from an API, Job payload or db.info.
+# This is a trusted internal call boundary, not a defence against arbitrary
+# Python code running in this process.
+_verified_preflight = ContextVar('advice_v2_file_preflight', default=None)
+
+
+def _snapshot(db, p, job_id, target, *, lock):
+    record = _load(db, p, job_id, target, lock=lock)
+    query = select(Audit).where(Audit.workspace_id == p.workspace_id,
+        Audit.object_id == record.id, Audit.action == ACTION)
+    if lock: query = query.with_for_update(read=True)
+    events = list(db.scalars(query.execution_options(populate_existing=True)))
+    old.need(len(events) == 1)
+    receipt = events[0]
+    return {'record_id': record.id, 'record_version': record.version,
+        'record_created': record.created_at.isoformat(), 'record_hash': digest(record.data),
+        'receipt_id': receipt.id, 'receipt_version': receipt.version,
+        'receipt_created': receipt.created_at.isoformat(), 'receipt_actor': receipt.actor_id,
+        'receipt_hash': digest(receipt.data)}
+
+
 @old.checked
 def require_committed(db, p, task, plan, job, prep, resolved):
-    """Require a prior durable intent, never a row inserted in this transaction."""
+    """Require exact prior durable originals, never same-transaction inserts."""
     target = _target(p, task, plan, job, prep, resolved)
-    # A separate connection sees only committed state. A same-transaction
-    # flush must never turn an uncommitted intent into file-write authority.
+    witness = _verified_preflight.get()
+    if witness is not None:
+        # Only a new Session owned by the coordinator is eligible. Refuse any
+        # reuse, savepoint, transaction switch or pending ORM edits.
+        old.need(type(witness) is dict and witness.get('session') is db
+            and witness.get('transaction') is db.get_transaction()
+            and db.get_nested_transaction() is None and witness.get('used') is False
+            and witness.get('principal') == p and witness.get('job_id') == job.id
+            and witness.get('target') == target and witness.get('poisoned') is False
+            and not db.new and not db.dirty and not db.deleted,
+            '原资料登记预核对不可复用；未写入文件')
+        witness['used'] = True
+        old.need(_snapshot(db, p, job.id, target, lock=True) == witness['snapshot'],
+            '原资料登记或回执在处理前变化；未写入文件')
+        return
+    # Existing entry points remain conservative: a second independent Session
+    # must see committed state. This path may block with a one-connection pool.
     with Session(bind=db.get_bind(), autoflush=False) as committed:
         _load(committed, p, job.id, target, lock=False)
     _load(db, p, job.id, target, lock=True)
