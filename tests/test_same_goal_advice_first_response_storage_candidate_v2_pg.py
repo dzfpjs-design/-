@@ -206,3 +206,20 @@ def test_historical_unsafe_receipt_rejects_without_rewriting(synthetic,monkeypat
         assert audit.data==tampered
         db.rollback()
     with Session(engine()) as db:assert subject.read(db,s['workspace'],s['call'],s['intent'])==saved
+
+
+def test_permit_local_absence_check_neither_authorizes_nor_accepts_existing_or_orphan(synthetic,monkeypatch):
+    monkeypatch.setattr(gate,'check_original',fake_gate);s=synthetic
+    with Session(engine()) as db:
+        assert subject.check_no_local_response_for_permit(db,s['workspace'],s['call'],s['intent']) is None
+        db.rollback()
+    with Session(engine()) as db:
+        subject.capture(db,s['workspace'],s['call'],s['intent'],b'answer',receipt(s));db.commit()
+    with Session(engine()) as db:
+        with pytest.raises(HTTPException):subject.check_no_local_response_for_permit(db,s['workspace'],s['call'],s['intent'])
+        db.rollback()
+    with Session(engine()) as db:
+        db.execute(text('DELETE FROM ga_test_advice_v2_first_response'));db.commit()
+    with Session(engine()) as db:
+        with pytest.raises(HTTPException):subject.check_no_local_response_for_permit(db,s['workspace'],s['call'],s['intent'])
+        db.rollback()
