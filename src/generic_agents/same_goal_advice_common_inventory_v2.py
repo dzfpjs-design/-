@@ -48,9 +48,15 @@ def read_snapshot(db, p, task):
         return _read(reader, p, task.id, lock=False)
 
 
-def _read(db, p, task_id, *, lock=True):
+def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_test_only=False):
     from . import same_goal_advice_execution_v308 as execution
 
+    old.need(type(intent_test_only) is bool and (not intent_test_only or reserved_plan_test_only is not None))
+    if reserved_plan_test_only is not None:
+        from . import same_goal_advice_cloud_claim_test_v2 as claims
+        claims.require_test_database(db)
+        old.need(lock and type(reserved_plan_test_only) is str)
+    verified_reservation = verified_intent = None
     with db.no_autoflush:
         old._reader(db, p)
         query = select(Task).where(Task.workspace_id == p.workspace_id, Task.id == task_id)
@@ -72,10 +78,19 @@ def _read(db, p, task_id, *, lock=True):
                 prepared = plan.status in {'awaiting_consent','awaiting_dispatch'}
                 cancellations = old._rows(db, p, Audit, Audit.action == v2.CANCELLED_EXPIRED, Audit.object_id == plan.id)
                 cancelled = bool(cancellations)
-                prep, job = ((v2.read_expired_cancelled(db, p, task, plan) if cancelled else
-                    v2.read_started(db, p, task, plan) if started else
-                    v2.read_prepared(db, p, task, plan) if prepared else v2.read_queued(db, p, task, plan))
-                    if lock else v2._read_queued(db, p, task.id, plan.id, lock=False, prepared=prepared, cancelled=cancelled, started=started))
+                if plan.id == reserved_plan_test_only:
+                    old.need(started and not cancelled)
+                    # We are already inside the caller's isolated reader; the
+                    # shared claim guard checks its actual bound Connection.
+                    checked = v2._read_queued(db, p, task.id, plan.id, prepared=True,
+                        started=True, reserved_test_only=True, intent_test_only=intent_test_only)
+                    prep, job, verified_reservation = checked[:3]
+                    if intent_test_only: verified_intent = checked[3]
+                else:
+                    prep, job = ((v2.read_expired_cancelled(db, p, task, plan) if cancelled else
+                        v2.read_started(db, p, task, plan) if started else
+                        v2.read_prepared(db, p, task, plan) if prepared else v2.read_queued(db, p, task, plan))
+                        if lock else v2._read_queued(db, p, task.id, plan.id, lock=False, prepared=prepared, cancelled=cancelled, started=started))
                 (closed if cancelled else queued).append((plan, prep, job))
             else:
                 old.need(False, '业务建议记录版本未知，保留原记录等待核对')
@@ -157,6 +172,12 @@ def _read(db, p, task_id, *, lock=True):
         expected_audits |= {plan.data[starts.POINTER]['audit_id'] for plan, _, _ in queued if plan.status=='awaiting_dispatch'}
         expected_audits |= {event.id for plan, _, _ in queued if plan.status=='awaiting_dispatch'
             for event in old._rows(db,p,Audit,Audit.action==leases.ACTION,Audit.object_id==plan.id)}
+        if reserved_plan_test_only is not None:
+            old.need(verified_reservation is not None and any(row[0].id == reserved_plan_test_only for row in queued))
+            expected_audits.add(verified_reservation['reservation_audit_id'])
+            if intent_test_only:
+                old.need(verified_intent is not None)
+                expected_audits.add(verified_intent['intent_audit_id'])
         expected_jobs = {row[2].id for row in v2records} | {
             plan.data[starts.POINTER]['job_id'] for plan, _, _ in queued if plan.status=='awaiting_dispatch'}
         old.need({job.id for job in v2jobs} == expected_jobs
@@ -185,7 +206,9 @@ def _read(db, p, task_id, *, lock=True):
         expected_files = {row[0].data['document_preparation']['evidence_ref']['evidence_id']
             for row in v2records if row[0].status in {'awaiting_consent','awaiting_dispatch'}
             and row[1]['request']['document_source']['kind'] == 'approved_source_set'}
-        old.need(not v2calls and not cloud and {item.id for item in evidence} == expected_files,
+        expected_cloud = ({verified_reservation['cloud_call_id']} if verified_reservation is not None else set())
+        old.need(not v2calls and {item.id for item in cloud} == expected_cloud
+            and {item.id for item in evidence} == expected_files,
             '业务建议存在未识别的调用或资料记录，保留原记录等待核对')
         if http_session:
             valid = db.scalar(select(AuthSession.id).where(AuthSession.id == p.session_id,

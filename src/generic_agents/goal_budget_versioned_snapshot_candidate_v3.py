@@ -1,9 +1,9 @@
 """Read-only v1/v2 Goal totals; never grants a write or an external call.
 
 This separate candidate is not registered with an API or worker. Only pristine
-queued v2 preparation is understood; its presence is reported separately and
-does not constitute a Start, a reservation, or permission to create either.
-Unknown or partial v2 states are rejected by the common inventory reader.
+queued v2 preparation is understood by default. A dedicated test-only path can
+also recheck one authenticated reservation or intent against the same Goal.
+Neither path authorizes another proposal or a send; unknown states fail closed.
 """
 from uuid import UUID
 
@@ -55,12 +55,13 @@ def _counts(reader, principal, task, v1_calls):
 
 
 @old.checked
-def read_locked(db, principal, task):
+def read_locked(db, principal, task, *, reserved_plan_test_only=None, intent_test_only=False):
     """Read candidate counters under the actual Task and custody locks.
 
     This is only for the unrouted v2 policy reader. It neither creates nor
-    reserves work, and deliberately cannot read progressed v2 lifecycle
-    states. The caller retains its transaction and must still separately
+    reserves work. A strictly isolated test-only call may identify one
+    existing original reservation; all other progressed states remain blocked.
+    The caller retains its transaction and must still separately
     recheck permissions and all authorization at any future Start/send.
     """
     old.need(type(task) is Task)
@@ -70,7 +71,8 @@ def read_locked(db, principal, task):
     task_id = state.identity[0]
     with isolation.isolated(db, task_id) as reader:
         guard._extra_state(db, reader, principal.workspace_id)
-        basis = inventory._read(reader, principal, task_id, lock=True)
+        basis = inventory._read(reader, principal, task_id, lock=True,
+            reserved_plan_test_only=reserved_plan_test_only, intent_test_only=intent_test_only)
         saved = reader.get(Task, task_id)
         old.need(saved is not None and saved.workspace_id == principal.workspace_id)
         calls, steps = _counts(reader, principal, saved, basis['v1_calls'])
