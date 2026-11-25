@@ -84,3 +84,42 @@ def test_revocation_after_conflict_never_becomes_retry_or_write(ready):
         assert db.scalar(select(func.count()).select_from(Audit).where(
             Audit.object_id == created['plan_id'], Audit.action == v2.DOCUMENT_PREPARED)) == 0
         assert db.scalar(select(func.count()).select_from(CloudCall)) == 0
+
+
+def test_expired_lease_reclaims_same_control_then_retries(ready, monkeypatch):
+    from time import monotonic, sleep
+    from generic_agents import leases
+    from generic_agents import same_goal_advice_document_lease_candidate_v2 as control
+    setup, created, _ = ready
+    principal = setup['principal']
+    # Only new synthetic lease duration is shortened; no stored timestamps or
+    # authorization records are changed.
+    monkeypatch.setattr(leases, 'LEASE_SECONDS', 2)
+    control_id, old_token = start(setup, created)
+    with Session(engine()) as db:
+        second = Workspace(name='Isolated second workspace'); db.add(second); db.commit(); other = second.id
+    with Session(engine()) as holder:
+        gate.require(holder, other)
+        assert sequential.process_or_defer(principal, control_id, old_token)['state'] == 'retry_later'
+        holder.rollback()
+    deadline = monotonic() + 6
+    while True:
+        with Session(engine()) as db:
+            row = db.get(Job, control_id)
+            expired = row.lease_until < db.scalar(select(func.clock_timestamp()))
+        if expired: break
+        assert monotonic() < deadline
+        sleep(.05)
+    with Session(engine()) as db:
+        new_token = control.claim(db, principal, control_id); db.commit()
+    assert new_token != old_token
+    # New synthetic lease should be long enough to complete normal checks.
+    # The issued lease itself remains unmodified and the same job is used.
+    outcome = sequential.process_or_defer(principal, control_id, new_token)
+    assert outcome['state'] == 'processed' and outcome['result']['job_id'] == created['job_id']
+    with Session(engine()) as db:
+        row = db.get(Job, control_id)
+        assert row.attempts == 2 and row.lease_token == new_token
+        assert db.scalar(select(func.count()).select_from(Audit).where(
+            Audit.object_id == created['plan_id'], Audit.action == v2.DOCUMENT_PREPARED)) == 1
+        assert db.scalar(select(func.count()).select_from(CloudCall)) == 0
