@@ -8,6 +8,7 @@ import unittest
 from uuid import uuid4
 from unittest.mock import patch
 from tests.synthetic_advice_mock_state import record_once, save_state, read_state, read_request_marker
+from scripts.run_synthetic_advice_mock import safe_environment
 
 
 class StateChecks(unittest.TestCase):
@@ -32,6 +33,12 @@ class StateChecks(unittest.TestCase):
             os.chmod(name,0o755)
             with patch.dict(os.environ,{'GA_SYNTHETIC_RUN_ROOT':name,'GA_SYNTHETIC_RUN_ID':str(uuid4())}):
                 with self.assertRaises(RuntimeError): record_once()
+
+    def test_parent_credentials_are_not_copied_to_children(self):
+        with patch.dict(os.environ, {'DEEPSEEK_API_KEY':'synthetic-secret', 'GA_DATABASE_URL':'synthetic-url'}):
+            environment=safe_environment(Path('/synthetic/bin'))
+            self.assertNotIn('DEEPSEEK_API_KEY',environment)
+            self.assertNotIn('GA_DATABASE_URL',environment)
 
 
 if __name__=='__main__': unittest.main()

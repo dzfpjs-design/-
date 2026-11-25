@@ -39,18 +39,21 @@ def main():
         raise RuntimeError('original fake response references unavailable; leave for review')
     pg=Path(args.pg_bin).resolve(strict=True); data=root/'data'
     if data.is_symlink() or not data.is_dir(): raise RuntimeError('invalid synthetic PostgreSQL data')
-    if subprocess.run([str(pg/'pg_ctl'),'-D',str(data),'status'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:
+    env={key:os.environ[key] for key in ('TMPDIR','LANG','LC_ALL') if key in os.environ}
+    env['PATH']=str(pg)+':/usr/bin:/bin:/usr/sbin:/sbin'; env['LC_ALL']='C'
+    if subprocess.run([str(pg/'pg_ctl'),'-D',str(data),'status'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=env).returncode==0:
         raise RuntimeError('synthetic PostgreSQL already running; do not attach')
-    env=os.environ.copy(); env['LC_ALL']='C'
+    repo=Path(__file__).resolve().parents[1]
+    if os.path.lexists(repo/'.env'):
+        raise RuntimeError('run only in a clean isolated worktree without .env')
     control=subprocess.check_output([str(pg/'pg_controldata'),str(data)],text=True,env=env,timeout=30)
     match=re.search(r'^Database system identifier:\s*(\d+)\s*$',control,re.MULTILINE)
     if not match or (state.get('system_identifier') and state['system_identifier']!=match.group(1)):
         raise RuntimeError('synthetic database identity mismatch')
     sid=match.group(1); sock=socket.socket();sock.bind(('127.0.0.1',0));port=sock.getsockname()[1];sock.close()
     subprocess.run([str(pg/'pg_ctl'),'-D',str(data),'-l',str(root/'postgres.log'),'-o',f'-h 127.0.0.1 -p {port} -k {root}','-w','start'],
-        check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+        check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60,env=env)
     try:
-        repo=Path(__file__).resolve().parents[1]
         env.update(GA_TEST_DATABASE_URL=f'postgresql+psycopg://advice_test@127.0.0.1:{port}/postgres',
             GA_DATABASE_URL=f"postgresql+psycopg://advice_test@127.0.0.1:{port}/{state['database']}",
             GA_TEST_PG_DATA_DIR=str(data),GA_TEST_PG_SYSTEM_IDENTIFIER=sid,GA_STORAGE_DIR=str(evidence),
@@ -70,7 +73,7 @@ def main():
         return 0
     finally:
         subprocess.run([str(pg/'pg_ctl'),'-D',str(data),'-m','fast','-w','stop'],
-            stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+            stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60,env=env)
 
 
 if __name__=='__main__':sys.exit(main())
