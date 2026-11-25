@@ -110,7 +110,14 @@ def process(db, p, task_id, job_id):
     selection = prep['request']['document_source']; resolved = sources.resolve_documents(db, p, task, selection)
     receipt_id = uid()
     if selection['kind'] == 'approved_source_set':
+        # The committed intent survives this transaction rolling back.
+        from .same_goal_advice_file_intent_candidate_v2 import require_committed, check_private_directory, _check_current, _bind_commit_guard
+        require_committed(db, p, task, plan, job, prep, resolved)
+        check_private_directory(p, resolved['sha256'])
+        _check_current(db, p, task.id, prep['budget']['policy_ref'])
+        _bind_commit_guard(db, p, task.id, prep['budget']['policy_ref'])
         file = evidence.save_evidence(db, p, resolved['content'], 'text/plain')
+        _check_current(db, p, task.id, prep['budget']['policy_ref'])
         old.need(file.data.get('cloud_model_ids') == [] and file.data.get('uploaded_by') == p.user_id
             and file.version == 1)
         uploader = p.user_id

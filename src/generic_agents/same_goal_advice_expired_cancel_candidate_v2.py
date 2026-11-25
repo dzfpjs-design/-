@@ -42,7 +42,8 @@ def cancel(db, p, task_id, plan_id, body):
         old.need(event.actor_id == p.user_id and digest(event.data['body']) == digest(request),
             '原取消请求与当前内容不一致，保留原记录')
         return {'plan_id': plan.id, 'job_id': job.id, 'request_id': request['request_id'],
-            'state': 'cancelled_expired', 'replayed': True}
+            'state': 'cancelled_expired', 'replayed': True,
+            'notice': '原资料保留；可能存在已登记或遗留文件，未执行清理。'}
     prep, job = v2.read_queued(db, p, task, plan)
     old.need(p.role == 'admin' or p.user_id in {prep['requested_by'], prep['data_actor_id'], prep['business_actor_id']})
     old.need(request['expected_plan_version'] == plan.version and request['request_id'] != prep['request']['request_id'])
@@ -62,4 +63,5 @@ def cancel(db, p, task_id, plan_id, body):
     db.flush()
     v2.read_expired_cancelled(db, p, task, plan)
     return {'plan_id': plan.id, 'job_id': job.id, 'request_id': request['request_id'],
-        'state': 'cancelled_expired', 'replayed': False}
+        'state': 'cancelled_expired', 'replayed': False,
+        'notice': '原资料保留；可能存在已登记或遗留文件，未执行清理。'}

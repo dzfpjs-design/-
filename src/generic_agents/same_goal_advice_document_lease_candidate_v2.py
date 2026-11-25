@@ -88,7 +88,23 @@ def register(db,p,task_id,job_id):
 
 @old.checked
 def claim(db,p,control_id):
-    guard.require_disposable_database(db);_actor(db,p);row=_control(db,p,control_id)
+    guard.require_disposable_database(db);_actor(db,p);_bind_session_guard(db,p);row=_control(db,p,control_id)
+    # Recheck the original under the same Task lock used by cancellation.
+    # A durable cancellation receipt makes read_queued fail closed.
+    target=row.data['target'];task=old.existing._task(db,p,target['task_id'],lock=True)
+    original=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,Job.id==target['job_id'])
+        .with_for_update().execution_options(populate_existing=True))
+    plan=db.scalar(select(Plan).where(Plan.workspace_id==p.workspace_id,Plan.task_id==task.id,
+        Plan.id==target['plan_id']).with_for_update().execution_options(populate_existing=True))
+    old.need(original is not None and plan is not None)
+    prep,checked=(v2.read_prepared(db,p,task,plan) if original.status=='succeeded'
+        else v2.read_queued(db,p,task,plan))
+    old.need(checked.id==original.id and prep['record_hash']==target['preparation_hash']
+        and prep['data_actor_id']==p.user_id)
+    if original.status!='succeeded':
+        from .same_goal_advice_file_intent_candidate_v2 import _check_current, _bind_commit_guard
+        _check_current(db,p,task.id,prep['budget']['policy_ref'])
+        _bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'])
     clock=db.scalar(select(func.clock_timestamp()))
     old.need(row.status=='queued' or (row.status=='running' and row.lease_until is not None and row.lease_until<clock),
         '处理任务尚未到可领取状态')
