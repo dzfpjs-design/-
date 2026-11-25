@@ -25,6 +25,7 @@ PLAN = 'same-goal-advice-unlimited-plan-v2'
 PREPARE_KIND = 'prepare_same_goal_advice_unlimited_v2'
 JOB_SCHEMA = 'same-goal-advice-unlimited-prepare-job-v2'
 ACCEPTED = 'same_goal_advice.unlimited_preparation_accepted_v2'
+CANCELLED_EXPIRED = 'same_goal_advice.unlimited_expired_preparation_cancelled_v2'
 DOCUMENT_PREPARED = 'same_goal_advice.unlimited_documents_prepared_v2'
 DOCUMENT_KEY = 'same_goal_advice_unlimited_document_preparation_v2'
 UNAVAILABLE_TO_GENERAL_WORKERS = datetime(9999, 1, 1, tzinfo=timezone.utc)
@@ -93,7 +94,14 @@ def read_prepared(db, p, task, plan):
         return _read_queued(reader, p, task.id, plan.id, prepared=True)
 
 
-def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False):
+@old_store.checked
+def read_expired_cancelled(db, p, task, plan):
+    """Authenticate an expired cancellation without reviving its original Job."""
+    with read_session.isolated(db, task.id) as reader:
+        return _read_queued(reader, p, task.id, plan.id, cancelled=True)
+
+
+def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelled=False):
     with db.no_autoflush:
         # Writers take the Task lock before actor/Plan/Job locks. Holding a
         # compatible read lock in that same order prevents an in-flight
@@ -109,7 +117,7 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False):
         plan = db.scalar(query.execution_options(populate_existing=True))
         old_store.need(plan is not None)
         data = plan.data
-        old_store.need(type(prepared) is bool)
+        old_store.need(type(prepared) is bool and type(cancelled) is bool and not (prepared and cancelled))
         old_store.need(plan.workspace_id == task.workspace_id == p.workspace_id and plan.task_id == task.id
             and (plan.status, plan.version) == (('awaiting_consent', 2) if prepared else ('queued', 1))
             and type(data) is dict
@@ -173,6 +181,7 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False):
         old_store.need(event.id == op['audit_id'] and event.created_at is not None
             and event.created_at.tzinfo is not None and plan.created_at == job.created_at == event.created_at
             and rows[0].created_at <= event.created_at <= now)
+        accepted_at = event.created_at
         # A correct local pointer is insufficient if the same workspace nonce
         # was also used by another advice or continuation operation. The new
         # writer must take the shared workspace nonce lock before the Task lock;
@@ -220,7 +229,30 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False):
         if prepared:
             from . import same_goal_advice_prepare_document_candidate_v2 as document
             document.verify_original(db, p, task, plan, prep, job, events, files)
-        old_store.need((prepared or not events and not files) and not cloud,
+        elif cancelled:
+            old_store.need(len(events) == 1 and events[0].action == CANCELLED_EXPIRED and not files)
+            event = events[0]; body = old_contracts.Cancel.model_validate(event.data['body']).model_dump(mode='json')
+            expected = {'schema': CANCELLED_EXPIRED, 'task_id': task.id, 'plan_id': plan.id,
+                'job_id': job.id, 'job_key': job.idempotency_key, 'actor_id': event.actor_id,
+                'request_id': body['request_id'], 'body': body, 'body_hash': digest(body),
+                'preparation_snapshot_hash': prep['record_hash'], 'policy_ref': ref}
+            old_store.need(event.object_id == plan.id and digest(event.data) == digest(expected)
+                and body['expected_plan_version'] == plan.version and body['request_id'] != nonce
+                and event.created_at is not None and event.created_at.tzinfo is not None
+                and accepted_at < policy.instant(saved_policy['expires_at']) <= event.created_at <= now,
+                '原到期取消回执无法核对')
+            cancel_nonce = body['request_id']
+            cancel_events = old_store._rows(db, p, Audit,
+                Audit.action.in_(nonces.ACTIONS | {policy.AUTHORIZATION, legacy_quota.AUTHORIZATION}), or_(
+                Audit.data['request_id'].as_string() == cancel_nonce,
+                Audit.data['request']['request_id'].as_string() == cancel_nonce,
+                Audit.data['body']['request_id'].as_string() == cancel_nonce))
+            cancel_plans = old_store._rows(db, p, Plan, or_(
+                Plan.data['operations'].contains([{'request_id': cancel_nonce}]),
+                Plan.data['revisions'].contains([{'request_id': cancel_nonce}])))
+            old_store.need(len(cancel_events) == 1 and cancel_events[0].id == event.id and not cancel_plans,
+                '原取消编号与其他申请冲突，保留全部记录等待核对')
+        old_store.need((prepared or cancelled or not events and not files) and not cloud,
             'v2 准备任务存在未归档的资料或调用记录，保留原记录等待核对')
         if http_session:
             # Row locks prevent revocation changes, but cannot stop a session

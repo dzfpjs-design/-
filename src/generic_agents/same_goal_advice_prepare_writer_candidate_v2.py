@@ -75,12 +75,16 @@ def prepare(db, p, task_id, body, policy_ref):
         plan = db.scalar(select(Plan).where(Plan.id == event.object_id,
             Plan.workspace_id == p.workspace_id, Plan.task_id == task.id).with_for_update())
         old.need(plan is not None)
-        prep, job = (v2.read_prepared(db, p, task, plan) if plan.status == 'awaiting_consent'
+        cancellations = old._rows(db, p, Audit, Audit.action == v2.CANCELLED_EXPIRED, Audit.object_id == plan.id)
+        prep, job = (v2.read_expired_cancelled(db, p, task, plan) if cancellations else
+            v2.read_prepared(db, p, task, plan) if plan.status == 'awaiting_consent'
             else v2.read_queued(db, p, task, plan))
         old.need(prep['request'] == request and prep['requested_by'] == p.user_id
             and prep['budget']['policy_ref'] == reference
             and job.available_at == UNAVAILABLE_TO_GENERAL_WORKERS)
-        return {'plan_id': plan.id, 'job_id': job.id, 'replayed': True}
+        result = {'plan_id': plan.id, 'job_id': job.id, 'replayed': True}
+        if cancellations: result['state'] = 'cancelled_expired'
+        return result
     old.need(basis['queued_v2'] == 0)
     old.need(not any(old._preparation_open(row[0]) for row in old._inventory(db, p, task)),
         '原业务建议未结清，未创建第二个准备任务')

@@ -61,7 +61,7 @@ def _read(db, p, task_id, *, lock=True):
         plans = old._rows(db, p, Plan, or_(
             (Plan.task_id == task.id) & Plan.data['schema'].as_string().startswith('same-goal-advice-', autoescape=True),
             Plan.data['preparation_snapshot']['scope']['task_id'].as_string() == task.id))
-        legacy, queued = [], []
+        legacy, queued, closed = [], [], []
         for plan in plans:
             schema = plan.data.get('schema') if type(plan.data) is dict else None
             if schema == c.PLAN:
@@ -69,9 +69,12 @@ def _read(db, p, task_id, *, lock=True):
                 legacy.append((plan, prep, job, execution.checked(db, p, task, plan, prep, job)))
             elif schema == v2.PLAN:
                 prepared = plan.status == 'awaiting_consent'
-                prep, job = ((v2.read_prepared(db, p, task, plan) if prepared else v2.read_queued(db, p, task, plan))
-                    if lock else v2._read_queued(db, p, task.id, plan.id, lock=False, prepared=prepared))
-                queued.append((plan, prep, job))
+                cancellations = old._rows(db, p, Audit, Audit.action == v2.CANCELLED_EXPIRED, Audit.object_id == plan.id)
+                cancelled = bool(cancellations)
+                prep, job = ((v2.read_expired_cancelled(db, p, task, plan) if cancelled else
+                    v2.read_prepared(db, p, task, plan) if prepared else v2.read_queued(db, p, task, plan))
+                    if lock else v2._read_queued(db, p, task.id, plan.id, lock=False, prepared=prepared, cancelled=cancelled))
+                (closed if cancelled else queued).append((plan, prep, job))
             else:
                 old.need(False, '业务建议记录版本未知，保留原记录等待核对')
         old.need(len(queued) <= 1 and not (queued and any(old._preparation_open(row[0]) for row in legacy)),
@@ -123,7 +126,8 @@ def _read(db, p, task_id, *, lock=True):
 
         # Reverse inventory: a missing Plan must not make a visible v2 job or
         # acceptance disappear. Future v2 variants are intentionally blocked.
-        v2ids = [row[0].id for row in queued]
+        v2records = queued + closed
+        v2ids = [row[0].id for row in v2records]
         v2prefix = 'same-goal-advice-prepare-v2:' + task.id + ':'
         v2send = 'same-goal-advice-send-v2:' + task.id + ':'
         v2jobs = old._rows(db, p, Job, or_(
@@ -138,10 +142,12 @@ def _read(db, p, task_id, *, lock=True):
                 Audit.data['task_id'].as_string() == task.id,
                 Audit.data['plan_id'].as_string().in_(v2ids),
                 Audit.data['job_key'].as_string().startswith(v2prefix, autoescape=True)))
-        expected_audits = {row[0].data['operations'][0]['audit_id'] for row in queued}
+        expected_audits = {row[0].data['operations'][0]['audit_id'] for row in v2records}
         expected_audits |= {row[0].data['document_preparation']['receipt_ref']['id']
-            for row in queued if row[0].status == 'awaiting_consent'}
-        old.need({job.id for job in v2jobs} == {row[2].id for row in queued}
+            for row in v2records if row[0].status == 'awaiting_consent'}
+        expected_audits |= {event.id for plan, _, _ in closed for event in old._rows(db, p, Audit,
+            Audit.action == v2.CANCELLED_EXPIRED, Audit.object_id == plan.id)}
+        old.need({job.id for job in v2jobs} == {row[2].id for row in v2records}
             and {event.id for event in v2audits} == expected_audits,
             '业务建议存在未识别的任务或凭据，保留原记录等待核对')
         # Reverse-search task-bound v2 transport and document markers even if
@@ -165,7 +171,7 @@ def _read(db, p, task_id, *, lock=True):
             Evidence.data[v2.DOCUMENT_KEY]['task_id'].as_string() == task.id,
             Evidence.data[v2.DOCUMENT_KEY]['plan_id'].as_string().in_(v2ids)))
         expected_files = {row[0].data['document_preparation']['evidence_ref']['evidence_id']
-            for row in queued if row[0].status == 'awaiting_consent'
+            for row in v2records if row[0].status == 'awaiting_consent'
             and row[1]['request']['document_source']['kind'] == 'approved_source_set'}
         old.need(not v2calls and not cloud and {item.id for item in evidence} == expected_files,
             '业务建议存在未识别的调用或资料记录，保留原记录等待核对')
