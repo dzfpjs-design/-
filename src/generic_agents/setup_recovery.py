@@ -39,6 +39,15 @@ def recovery_plan(db,p,body):
     historical=history_row(db,p,body.target_revision)
     if not historical.data:raise HTTPException(409,'初始空配置不能作为恢复目标')
     value=copy.deepcopy(historical.data);validate_configuration(value)
+    # History recovery must not silently replace the current candidate bundle
+    # or discard an unreviewed source on a business/step that still matters.
+    from .setup_business_candidates import protect_recovery
+    protect_recovery(config.data, value)
+    # History proves only a past acknowledgement; restoring it never creates
+    # a fresh human confirmation for the current draft.
+    for flow in value.get('flows', {}).values():
+        if isinstance(flow, dict):
+            flow.pop('candidateContentReview', None)
     metadata={};warnings=[];material_changes=[];changed_sources=set()
     old_materials=value.get('materials',[])
     for old in old_materials:
@@ -59,14 +68,27 @@ def recovery_plan(db,p,body):
         if m.status!='parsed':warnings.append(m.name+'原件保留，但解析尚未完成或该模态未支持')
     rows=db.scalars(select(SetupMaterial).where(SetupMaterial.workspace_id==p.workspace_id)
         .order_by(SetupMaterial.created_at,SetupMaterial.id).with_for_update()).all()
+    candidate = config.data.get('businessCandidates')
+    candidate_materials = set()
+    if isinstance(candidate, dict) and isinstance(candidate.get('material'), dict):
+        candidate_materials.add(candidate['material'].get('id'))
+    from .flow_sources import flow_source_ids
+    for flow in config.data.get('flows', {}).values():
+        if isinstance(flow, dict) and (flow.get('candidateKey') or flow.get('candidateBasisHash')):
+            candidate_materials.update(flow_source_ids(flow))
+            for item in [flow, *flow.get('steps', [])]:
+                candidate_materials.update(source.get('material_id') for source in item.get('candidateUnresolvedSources', [])
+                                           if isinstance(source, dict))
     # Newer original files remain accessible; they are not quietly included in older business logic.
     retained=[];material_values=[]
     for m in rows:
         view=material_view(m,db)
         if m.id in metadata:view.update(metadata[m.id])
-        else:
+        elif m.id not in candidate_materials:
             view['archived']=True
             retained.append({'id':m.id,'name':m.name,'was_archived':m.archived})
+        else:
+            warnings.append(m.name+'为当前业务候选依据，恢复时保留资料现状')
         material_values.append(view)
     value['materials']=material_values
     confirmed=[name for name,f in value.get('flows',{}).items() if f.get('confirmedSignature')]
@@ -83,6 +105,9 @@ def recovery_plan(db,p,body):
     value=synchronize_reviews(config.data,value)
     from .report_configuration_handoff import protect_configuration_sources
     value=protect_configuration_sources(db,p,config.data,value,restore=True)
+    # Recheck after existing recovery transformations; never let a recovery
+    # projection drop candidate source markers or pending evidence silently.
+    protect_recovery(config.data, value)
     reconfirm=list(dict.fromkeys([*reconfirm,*[name for name in confirmed if not value['flows'][name].get('confirmedSignature')]]))
     from .setup_understanding import names
     before_names=names(config.data);after_names=names(value)
@@ -124,6 +149,8 @@ def restore_draft(body:RestoreConfirm,p:P,db:DB):
     protect_automation_instruction_transition(config.data,value,restore=True)
     from .report_configuration_handoff import protect_configuration_sources
     value=protect_configuration_sources(db,p,config.data,value,restore=True);validate_configuration(value)
+    from .setup_business_candidates import protect_recovery
+    protect_recovery(config.data, value)
     config.data=value;config.version+=1
     db.add(SetupRevision(workspace_id=p.workspace_id,draft_id=config.id,version=config.version,data=config.data))
     audit(db,p,'setup.restore',config.id,{'from_revision':body.revision,'target_revision':body.target_revision,

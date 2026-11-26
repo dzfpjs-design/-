@@ -12,7 +12,7 @@ from generic_agents.models import SetupMaterial, Membership, User, Workspace
 from generic_agents.security import password_hash
 from generic_agents.worker import process_once
 from generic_agents.setup_business_candidates import (
-    _clear_stale_material_confirmations, _resolve_unchanged_flows, validate_bundle,
+    _candidate_basis, _clear_stale_material_confirmations, _resolve_unchanged_flows, validate_bundle,
 )
 
 
@@ -283,18 +283,34 @@ def test_revalidation_never_modifies_protected_flow_markers():
 
 def test_material_change_only_clears_relevant_stale_approvals():
     old = {'materials': [{'id': 'm', 'version': 1}], 'flows': {
-        'related': {'steps': [{'sourceId': 'm'}], 'confirmedAt': 'yes', 'confirmedSignature': 'yes'},
-        'unrelated': {'steps': [{'sourceId': 'n'}], 'confirmedAt': 'yes', 'confirmedSignature': 'yes'}}}
+        'related': {'steps': [{'sourceId': 'm'}], 'confirmedAt': 'yes', 'confirmedSignature': 'yes', 'candidateContentReview': {'time': 'prior'}},
+        'unrelated': {'steps': [{'sourceId': 'n'}], 'confirmedAt': 'yes', 'confirmedSignature': 'yes', 'candidateContentReview': {'time': 'prior'}}}}
     b = validate_bundle(bundle({'id': 'm', 'version': 1, 'hash': 'a' * 64, 'engine': 'test', 'status': 'parsed'}))
     current = {'id': 'm', 'version': 2, 'engine': 'test'}
     changed = copy.deepcopy(old); _clear_stale_material_confirmations(old, changed, current, b)
     assert changed['flows']['related']['confirmedAt'] is None
+    assert 'candidateContentReview' not in changed['flows']['related']
     assert changed['flows']['unrelated'] == old['flows']['unrelated']
     # A flow already confirmed against the new saved material version is not
     # invalidated merely because the separate candidate binding was older.
     old['materials'][0]['version'] = 2
     unchanged = copy.deepcopy(old); _clear_stale_material_confirmations(old, unchanged, current, b)
     assert unchanged == old
+
+
+def test_repositioning_candidate_basis_invalidates_content_review():
+    old_ref = {'material_id': 'm', 'block_id': 'old', 'quote': '来源'}
+    new_ref = {'material_id': 'm', 'block_id': 'new', 'quote': '来源'}
+    flow = {'candidateKey': 'patrol', 'trigger': '计划', 'output': '记录', 'steps': [],
+            'citations': [old_ref], 'candidateUnresolvedSources': [], 'candidateContentReview': {'time': 'prior'}}
+    flow['candidateBasisHash'] = _candidate_basis(flow, 'business', '检查')
+    value = {'flows': {'检查': flow}}
+    preview = {'candidates': [{'key': 'patrol', 'name': '检查', 'citations': [new_ref],
+                               'unresolved_sources': [], 'sources': [{'source_text': '来源', 'quote': '来源'}], 'steps': []}]}
+    result = _resolve_unchanged_flows(value, preview, {'id': 'm'})
+    assert result == {'skipped': 0}
+    assert flow['citations'] == [new_ref]
+    assert 'candidateContentReview' not in flow
 
 
 def test_revalidation_respects_existing_source_protection(client, monkeypatch):
@@ -320,6 +336,103 @@ def test_revalidation_respects_existing_source_protection(client, monkeypatch):
     result = client.post('/api/setup/candidates/revalidate', json={'revision': configured['revision']})
     assert result.status_code == 409
     assert client.get('/api/setup/draft').json() == configured
+
+
+def test_revalidate_relocates_existing_citations_and_restores_pending_on_missing(client):
+    row = material(client); proposal = bundle(row)
+    draft = client.get('/api/setup/draft').json()
+    saved = client.post('/api/setup/candidates', json={'revision': draft['revision'], 'bundle': proposal}).json()
+    preview = client.post('/api/setup/candidates/preview', json=proposal).json()
+    configured = client.put('/api/setup/draft', json={'revision': saved['revision'],
+        'configuration': add_flow(saved['configuration'], preview)}).json()
+    before = configured['configuration']['flows']['日常检查']
+    assert before['citations'][0]['block_id'] == row['blocks'][0]['id']
+    assert len(before['candidateBasisHash']) == 64
+    with Session(engine()) as db:
+        source = db.get(SetupMaterial, row['id']); blocks = copy.deepcopy(source.data['blocks'])
+        blocks[0]['id'] = 'new-block'; source.data = {**source.data, 'blocks': blocks}; source.version += 1; db.commit()
+    moved = client.post('/api/setup/candidates/revalidate', json={'revision': configured['revision']})
+    assert moved.status_code == 200, moved.text
+    updated = moved.json()['draft']; current = updated['configuration']['flows']['日常检查']
+    assert current['citations'][0]['block_id'] == 'new-block'
+    assert current['candidateUnresolvedSources'] == []
+    with Session(engine()) as db:
+        source = db.get(SetupMaterial, row['id']); source.data = {**source.data, 'blocks': []}; source.version += 1; db.commit()
+    missing = client.post('/api/setup/candidates/revalidate', json={'revision': updated['revision']})
+    assert missing.status_code == 200, missing.text
+    current = missing.json()['draft']['configuration']['flows']['日常检查']
+    assert current['citations'] == []
+    assert current['candidateUnresolvedSources'][0]['reason'] == 'not_found'
+    assert current['confirmedAt'] is None
+    with Session(engine()) as db:
+        source = db.get(SetupMaterial, row['id'])
+        first = copy.deepcopy(row['blocks'][0]); second = copy.deepcopy(first); second['id'] = 'duplicate'
+        source.data = {**source.data, 'blocks': [first, second]}; source.version += 1; db.commit()
+    ambiguous = client.post('/api/setup/candidates/revalidate', json={'revision': missing.json()['draft']['revision']})
+    assert ambiguous.status_code == 200, ambiguous.text
+    assert ambiguous.json()['draft']['configuration']['flows']['日常检查']['candidateUnresolvedSources'][0]['reason'] == 'ambiguous'
+
+
+def test_revalidate_preserves_user_modified_business_and_reports_skipped(client):
+    row = material(client); proposal = bundle(row)
+    draft = client.get('/api/setup/draft').json()
+    saved = client.post('/api/setup/candidates', json={'revision': draft['revision'], 'bundle': proposal}).json()
+    preview = client.post('/api/setup/candidates/preview', json=proposal).json()
+    configured = client.put('/api/setup/draft', json={'revision': saved['revision'],
+        'configuration': add_flow(saved['configuration'], preview)}).json()
+    edited = copy.deepcopy(configured['configuration'])
+    edited['flows']['日常检查']['trigger'] = '用户自行调整的触发条件'
+    update = client.put('/api/setup/draft', json={'revision': configured['revision'], 'configuration': edited})
+    assert update.status_code == 200, update.text
+    updated = update.json()
+    forged = copy.deepcopy(updated['configuration'])
+    forged['flows']['日常检查']['candidateBasisHash'] = 'f' * 64
+    assert client.put('/api/setup/draft', json={'revision': updated['revision'], 'configuration': forged}).status_code == 409
+    with Session(engine()) as db:
+        source = db.get(SetupMaterial, row['id']); blocks = copy.deepcopy(source.data['blocks'])
+        blocks[0]['id'] = 'new-block'; source.data = {**source.data, 'blocks': blocks}; source.version += 1; db.commit()
+    result = client.post('/api/setup/candidates/revalidate', json={'revision': updated['revision']})
+    assert result.status_code == 200, result.text
+    assert result.json()['recheck']['skipped'] >= 1
+    after = result.json()['draft']['configuration']['flows']['日常检查']
+    assert after['trigger'] == '用户自行调整的触发条件'
+    assert after['citations'] == updated['configuration']['flows']['日常检查']['citations']
+
+
+def test_history_restore_cannot_erase_candidates_or_pending_and_stale_preview_rejects(client):
+    row = material(client); proposal = bundle(row, source_text='不存在的原文', quote='不存在的原文')
+    empty = client.get('/api/setup/draft').json()
+    initial = {'version': 1, 'resources': [], 'connections': [], 'materials': [],
+               'instanceProfile': {'name': '最初'}, 'businesses': [], 'flows': {}}
+    initial = client.put('/api/setup/draft', json={'revision': empty['revision'], 'configuration': initial}).json()
+    saved = client.post('/api/setup/candidates', json={'revision': initial['revision'], 'bundle': proposal}).json()
+    preview = client.post('/api/setup/candidates/preview', json=proposal).json()
+    configured = client.put('/api/setup/draft', json={'revision': saved['revision'],
+        'configuration': add_flow(saved['configuration'], preview)}).json()
+    for target in (initial['revision'], saved['revision']):
+        reply = client.post('/api/setup/draft/restore/preview', json={'revision': configured['revision'], 'target_revision': target})
+        assert reply.status_code == 409
+    edited = copy.deepcopy(configured['configuration']); edited['instanceProfile']['name'] = '后续编辑'
+    later = client.put('/api/setup/draft', json={'revision': configured['revision'], 'configuration': edited}).json()
+    request = {'revision': later['revision'], 'target_revision': configured['revision']}
+    plan = client.post('/api/setup/draft/restore/preview', json=request)
+    assert plan.status_code == 200, plan.text
+    # Another user edits after preview; the old restore cannot overwrite it.
+    concurrent = copy.deepcopy(later['configuration']); concurrent['instanceProfile']['name'] = '并发编辑'
+    latest = client.put('/api/setup/draft', json={'revision': later['revision'], 'configuration': concurrent}).json()
+    reply = client.post('/api/setup/draft/restore', json={**request, 'preview_hash': plan.json()['preview_hash']})
+    assert reply.status_code == 409
+    assert client.get('/api/setup/draft').json()['revision'] == latest['revision']
+    fresh_request = {'revision': latest['revision'], 'target_revision': configured['revision']}
+    fresh = client.post('/api/setup/draft/restore/preview', json=fresh_request)
+    assert fresh.status_code == 200, fresh.text
+    restored = client.post('/api/setup/draft/restore', json={**fresh_request, 'preview_hash': fresh.json()['preview_hash']})
+    assert restored.status_code == 200, restored.text
+    result = restored.json()['configuration']
+    assert result['businessCandidates'] == configured['configuration']['businessCandidates']
+    assert result['flows']['日常检查']['candidateUnresolvedSources']
+    assert next(value for value in result['materials'] if value['id'] == row['id'])['archived'] is False
+    assert client.get('/api/setup/materials/' + row['id']).json()['archived'] is False
 
 
 def test_other_workspace_cannot_preview_or_append_material(client):
