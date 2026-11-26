@@ -157,7 +157,11 @@ def authorize(db, p, task_id, body):
         return _receipt(db, p, task, body, originals[0], now)
     store.need(not store._rows(db, p, Audit, Audit.action == old.AUTHORIZATION, Audit.object_id == task.id,
         Audit.data['request_id'].as_string() == body['request_id']), '原请求编号已用于另一版政策')
-    context = old._configuration(db, p, task, body)
+    # This policy is exclusively for the DeepSeek unlimited-usage path.
+    # Preserve the original Goal, source, actor and published-model checks,
+    # but do not charge this request against the Goal's generic tool/step
+    # capacity; that capacity continues to apply to other workflow tools.
+    context = old._configuration_base(db, p, task, body)
     expires = instant(body['expires_at'])
     store.need(now < expires <= now + old.MAX_VALIDITY)
     deadline = context['goal']['spec'].get('deadline')
@@ -166,6 +170,11 @@ def authorize(db, p, task_id, body):
     execution = model.data['execution']
     store.need(execution['provider'] == 'deepseek' and type(execution.get('max_tokens')) is int
         and requested['max_tokens'] <= execution['max_tokens'])
+    # Removing a usage limit must not make unknown or inconsistent historical
+    # operations acceptable. Recheck the versioned inventory under its normal
+    # locks, without comparing unrelated workflow counters to Goal budgets.
+    from . import goal_budget_versioned_snapshot_candidate_v3 as capacity
+    capacity.read_locked(db, p, task)
     store.need(not context['document_required'] or requested['max_evidence_items'] == 2)
     assert_no_active_v2(db, p, task, context['scope'], now)
     for previous in store._rows(db, p, Audit, Audit.action == store.QUOTA_POLICY, Audit.object_id == task.id):

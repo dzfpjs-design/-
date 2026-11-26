@@ -22,7 +22,7 @@ from .models import CloudCall
 from .security import Principal
 
 
-def reconcile(workspace_id,call_id,intent_id):
+def reconcile(workspace_id,call_id,intent_id,*,authorize_settlement=None):
     """Settle one captured answer in its original ledger, without user auth.
 
     This is an internal accounting operation. It returns no answer or secret and
@@ -39,6 +39,8 @@ def reconcile(workspace_id,call_id,intent_id):
                 'retry_authorized':False,'business_result_verified':False}
     with Session(engine()) as db:
         guard.require_disposable_database(db)
+        if authorize_settlement is not None:
+            authorize_settlement(db)
         pin=gate.check_original(db,workspace_id,call_id,intent_id)
         captured=storage.read(db,workspace_id,call_id,intent_id)
         store.need(type(captured) is tuple and len(captured)==3,

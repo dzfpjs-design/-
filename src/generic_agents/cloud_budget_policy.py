@@ -96,10 +96,13 @@ def budget_status(db, p, cap, token_bound, *, day=None, lock=False):
             or deep_tokens > data['tokens'] or deep_calls > data['calls']):
         raise ModelBlocked('云调用用量记录与总账不一致，未发送')
     used_tokens, used_calls = data['tokens'] - deep_tokens, data['calls'] - deep_calls
-    token_limit, call_limit = settings().cloud_daily_token_limit, settings().cloud_daily_call_limit
-    if type(token_limit) is not int or token_limit < 0 or type(call_limit) is not int or call_limit < 0:
-        raise ModelBlocked('云调用用量策略无法核对，未发送')
     unlimited = provider == 'deepseek'
+    token_limit, call_limit = settings().cloud_daily_token_limit, settings().cloud_daily_call_limit
+    # Limits apply only to other providers. A bad limit configuration still
+    # fails closed for them, but cannot become a hidden DeepSeek quota.
+    if not unlimited and (type(token_limit) is not int or token_limit < 0
+            or type(call_limit) is not int or call_limit < 0):
+        raise ModelBlocked('云调用用量策略无法核对，未发送')
     return {'provider': provider, 'unlimited': unlimited,
             'used_tokens': used_tokens, 'used_calls': used_calls,
             'token_limit': None if unlimited else token_limit,
