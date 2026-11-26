@@ -31,7 +31,7 @@ def free_port(excluded):
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             port = sock.getsockname()[1]
-        if port not in excluded and port != 55486:
+        if port not in excluded and port not in {8766, 55486}:
             return port
     raise RuntimeError('no isolated port')
 
