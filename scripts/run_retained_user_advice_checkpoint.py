@@ -59,15 +59,27 @@ def _port():
 
 
 def _stop_test_process_group(process):
-    """Stop the session we created, including children left by an exited test."""
+    """Stop our session and confirm its process group has disappeared."""
     try:os.killpg(process.pid,signal.SIGTERM)
-    except ProcessLookupError:return
+    except ProcessLookupError:return True
+    except OSError:return False
     try:process.wait(timeout=10)
     except subprocess.TimeoutExpired:pass
+    except OSError:return False
     # A child may outlive its pytest parent after any exit, not just timeout.
     try:os.killpg(process.pid,signal.SIGKILL)
-    except ProcessLookupError:pass
-    if process.poll() is None:process.wait(timeout=10)
+    except ProcessLookupError:return True
+    except OSError:return False
+    try:
+        if process.poll() is None:process.wait(timeout=10)
+    except (OSError,subprocess.TimeoutExpired):return False
+    deadline=time.monotonic()+5
+    while True:
+        try:os.killpg(process.pid,0)
+        except ProcessLookupError:return True
+        except OSError:return False
+        if time.monotonic()>=deadline:return False
+        time.sleep(0.05)
 
 
 def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False):
@@ -121,8 +133,8 @@ def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False):
                 outcome='timeout'
             finally:
                 # A worker's sending state may be unknown; stop it and never restart it.
-                _stop_test_process_group(process)
-                test_processes_stopped=True
+                test_processes_stopped=_stop_test_process_group(process)
+                if not test_processes_stopped and outcome=='passed':outcome='process_cleanup_unconfirmed'
     finally:
         stopped=not start_attempted
         if start_attempted:
@@ -136,7 +148,7 @@ def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False):
         _write(root/'status.json',{'state':outcome,'exit_code':exit_code,
             'elapsed_seconds':round(time.monotonic()-began),'cluster_stopped':stopped,
             'test_processes_stopped':test_processes_stopped})
-    return 0 if outcome=='passed' and stopped else 1
+    return 0 if outcome=='passed' and stopped and test_processes_stopped else 1
 
 
 def main():
