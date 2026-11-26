@@ -7,9 +7,9 @@ const SCOPES={provided_source_text:'已提供的资料',provided_excerpt:'资料
 const SOURCE_TYPES={observation:'观测记录',capability:'能力资料',evidence:'业务资料',packet:'资料包',archive_record:'归档记录'};
 const FRESHNESS={current:'在原设定有效期内',stale:'已过期',unknown:'时效待核',not_applicable:'不适用'};
 const OBSERVATION={
- not_cited:'未引用现场观测，设备状态待核。',
- current:'已引用现场观测，设备当前状态仍需确认。',
- stale:'观测已过期，现场状态待核。',
+ not_cited:'未引用现场观测，现场状态待核。',
+ current:'观测在原设定有效期内，现场状态仍需确认。',
+ stale:'现场观测已过期，现场状态待核。',
  unknown:'观测时效待核，现场状态待核。',
 };
 
@@ -62,18 +62,14 @@ function checkedPage(page){
  return {enabled:page.enabled,items:page.items};
 }
 
-function EvidenceItem({item}){
+function EvidenceItem({item,onRetry,busy}){
  const data=item?.state==='ready'?checkedEvidence(item.evidence):null;
  if(!data)return <div>
-  <p role="status">依据待核实，暂无法展示。</p></div>;
+  <p role="status">依据待核实，暂无法展示。 <button type="button" disabled={busy} onClick={onRetry}>重试</button></p></div>;
  return <div>
-  <dl className="advice-evidence-counts">
-   <div><dt>已登记能力</dt><dd>{data.capability_count} 条</dd></div>
-   <div><dt>现场观测</dt><dd>{data.observation_count} 条</dd></div>
-   <div><dt>其他依据</dt><dd>{data.other_count} 条</dd></div>
-  </dl>
+  <p><strong>依据：</strong>已登记能力 {data.capability_count} · 现场观测 {data.observation_count}{data.other_count>0&&<> · 其他依据 {data.other_count}</>}</p>
   <p>{OBSERVATION[data.observation_state]}</p>
-  {data.partial_source_count>0&&<p>包含资料摘录，尚不能代表全文。</p>}
+  {data.partial_source_count>0&&<p>部分资料仅为摘录，尚不能代表全文。</p>}
   {data.items.some(entry=>entry.kind==='observation'&&entry.freshness==='unknown')&&data.observation_state!=='unknown'&&
    <p>部分观测时效待核。</p>}
   {data.items.length>0&&<details><summary>查看来源与时间</summary>
@@ -110,11 +106,8 @@ export default function AdviceEvidenceExplanationV2({account,task,planId,request
  const evidence=data?.items[0]?.state==='ready'?checkedEvidence(data.items[0].evidence):null;
  if((!data&&!error)||data?.enabled===false||(data&&data.items.length===0&&!error)||
   (evidence?.has_recommendation===false&&!error))return null;
- return <section className="media-form advice-evidence-explanation" aria-label="建议依据">
-  <div className="advice-evidence-heading"><div><h5>建议依据</h5>
-   <p>查看建议参考的能力和现场观测。</p></div>
-   <button type="button" disabled={!!busy} onClick={refresh}>{busy==='refresh'?'正在刷新…':'刷新'}</button></div>
-  {error&&<p role="alert">{error}</p>}
-  {data?.items.map((item,index)=><EvidenceItem key={index} item={item}/>)}
- </section>;
+ return <aside className="advice-evidence-explanation" aria-label="建议依据">
+  {error&&<p role="alert">{error} <button type="button" disabled={!!busy} onClick={refresh}>{busy==='refresh'?'正在重试…':'重试'}</button></p>}
+  {data?.items.map((item,index)=><EvidenceItem key={index} item={item} onRetry={refresh} busy={!!busy}/>)}
+ </aside>;
 }
