@@ -7,6 +7,8 @@ from pydantic import Field, SecretStr, field_validator
 
 
 class Settings(BaseSettings):
+    # Human-readable evidence explanation; remains test-database-only.
+    v2_advice_evidence_explanation_enabled: bool = False
     # Recovery console is deliberately restricted to isolated test databases.
     v2_advice_recovery_console_enabled: bool = False
     # Candidate only: even if enabled it remains guarded to a disposable DB.

@@ -32,6 +32,8 @@ from .same_goal_advice_offline_api_candidate_v2 import router as offline_documen
 router.include_router(offline_document_router)
 from .same_goal_advice_recovery_api_candidate_v2 import router as advice_recovery_router
 router.include_router(advice_recovery_router)
+from .same_goal_advice_evidence_explain_candidate_v2 import router as advice_evidence_explain_router
+router.include_router(advice_evidence_explain_router)
 from .same_goal_continuation_api_v312 import router as business_continuation_router
 router.include_router(business_continuation_router)
 from .same_goal_continuation_grant_api_v313 import router as continuation_grant_router
