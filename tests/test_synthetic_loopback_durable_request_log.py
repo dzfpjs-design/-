@@ -22,8 +22,7 @@ def entries(path):
     content=path.read_bytes()
     assert b'private-user-content' not in content and b'private-api-key' not in content
     rows=[json.loads(line) for line in content.splitlines()]
-    assert all(set(row)=={'count','received_at','method','content_length'} for row in rows)
-    assert all(row['method']=='POST' and row['content_length']==len(b'private-user-content') for row in rows)
+    assert all(set(row)=={'count'} and type(row['count']) is int for row in rows)
     return rows
 
 

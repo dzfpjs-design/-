@@ -7,7 +7,6 @@ import hashlib
 import gzip
 import json
 import os
-from datetime import datetime, timezone
 import socket
 import time
 from contextlib import contextmanager
@@ -20,8 +19,8 @@ from .synthetic_connection_receipt import ConnectionReceipt
 def provider(port, *, mode='reply', content='{}', usage=None, on_received=None, request_log=None, connection_stats=None):
     """Optionally retain private receipt files; caller removes them explicitly.
 
-    Records contain only sequence, arrival time, method and body length. The file
-    is created exclusively and synced before the response or callback, including
+    HTTP records contain only a sequential count. The file is created
+    exclusively and synced before the response or callback, including
     for an abruptly stopped provider. Connection statistics count accepted
     sockets, not HTTP requests. They require a successful enclosing test and a
     stopped snapshot to establish clean shutdown; all other outcomes are
@@ -77,8 +76,7 @@ def provider(port, *, mode='reply', content='{}', usage=None, on_received=None, 
             except (ValueError,TypeError):self.send_error(400);return
             with self.server.request_lock:
                 if self.server.request_log_fd is not None:
-                    item={'count':len(self.server.requests)+1,'received_at':datetime.now(timezone.utc).isoformat(),
-                        'method':'POST','content_length':size}
+                    item={'count':len(self.server.requests)+1}
                     data=(json.dumps(item,separators=(',',':'))+'\n').encode('ascii')
                     try:
                         view=memoryview(data)
