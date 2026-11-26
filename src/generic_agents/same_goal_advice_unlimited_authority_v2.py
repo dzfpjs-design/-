@@ -62,12 +62,10 @@ def current_policy(db, p, task_id, policy_ref, *, reserved_plan_test_only=None, 
     # prospective slot, not authority for another Plan or an external send.
     from . import goal_budget_versioned_snapshot_candidate_v3 as capacity
     context = old._configuration_base(db, p, task, request)
-    used = capacity.read_locked(db, p, task, reserved_plan_test_only=reserved_plan_test_only,
+    # Retain custody, inventory and reservation integrity checks. Their
+    # generic workflow counters do not limit DeepSeek unlimited requests.
+    capacity.read_locked(db, p, task, reserved_plan_test_only=reserved_plan_test_only,
         intent_test_only=intent_test_only)
-    store.need(used['calls'] < context['goal']['spec']['max_tool_calls'],
-        '原目标调用额度已用尽，不能增加本次建议额度')
-    store.need(used['steps'] < context['goal']['spec']['max_steps'],
-        '原目标步骤额度已用尽，不能增加本次建议额度')
     store.need(context['scope'] == saved['scope']
         and store._pin(context['source']) == saved['source_business_capability_ref']
         and store._pin(context['advice']) == saved['advice_capability_ref']
