@@ -164,6 +164,8 @@ def signature_value(config,flow):
         'trigger':flow.get('trigger'),'output':flow.get('output'),'steps':flow.get('steps'),'sources':sources}
     if flow.get('citations') or flow.get('inferenceReason'):
         value.update(citations=flow.get('citations',[]),inferenceReason=flow.get('inferenceReason',''))
+    if flow.get('candidateUnresolvedSources'):
+        value['candidateUnresolvedSources']=copy.deepcopy(flow['candidateUnresolvedSources'])
     if 'reportSource' in flow:value['reportSource']=copy.deepcopy(flow['reportSource'])
     from .report_full_semantic_configuration_v1 import signature_context
     semantic=signature_context(config,flow)
@@ -198,6 +200,13 @@ def _citation_issues(db,p,citations,label,*,flow=None,path=None,name=None):
 
 def flow_issues(db,p,config,flow,*,name=None,require_signature=True):
     issues=[];steps=flow.get('steps',[]);ids=[s.get('id') for s in steps]
+    from .setup_business_candidates import validate_unresolved
+    for item in [flow,*steps]:
+        try:
+            if validate_unresolved(item.get('candidateUnresolvedSources', [])):
+                issues.append('业务或步骤存在待核原文，请先重新核验')
+        except HTTPException:
+            issues.append('业务或步骤的待核依据无法核对')
     if not flow.get('trigger','').strip() or not flow.get('output','').strip():issues.append('请补齐启动条件与最终产出')
     if not 1<=len(steps)<=16 or len(set(ids))!=len(ids) or any(not isinstance(x,str) or not x for x in ids):
         issues.append('需要1—16个具有唯一标识的步骤')
