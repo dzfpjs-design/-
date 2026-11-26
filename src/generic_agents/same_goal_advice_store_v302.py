@@ -443,8 +443,16 @@ def prepare(db,p,task_id,body,*,reserved_plan_test_only=None,intent_test_only=Fa
         plan,prep,job=previous[0]
         need(prep['request']['request_id']==body['request_id'] and prep['request_hash']==digest(body) and prep['requested_by']==p.user_id)
         return _view(db,p,task,plan,prep,job)
-    # Only a proved original may replay across versions.  Preserve the strict
-    # v1 inventory for every new mutation until all writers migrate together.
+    # Only a proved original may replay across versions. A policy can exist
+    # before its v2 Plan, so plan inventory alone is not a cross-version fence.
+    # The v2 policy writer acquires this same Task lock before its commit.
+    from . import same_goal_advice_unlimited_policy_v2 as unlimited
+    now=db.scalar(select(func.clock_timestamp()))
+    for policy_event in _rows(db,p,Audit,Audit.action==unlimited.POLICY,Audit.object_id==task.id):
+        policy_value,_=unlimited.policy_shape(policy_event,now)
+        need(instant(policy_value['expires_at'])<=now,
+            '已有待处理的业务建议，请先核对原申请')
+    # Preserve the strict v1 inventory for every new mutation until writers migrate together.
     _inventory(db,p,task)
     need(not any(_preparation_open(plan) for plan,_,_ in inventory),
         '原分析申请尚未结清，请先核对原进度或完成审核')

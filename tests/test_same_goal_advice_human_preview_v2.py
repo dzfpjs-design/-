@@ -233,3 +233,17 @@ def test_nested_json_pointer_escapes_are_resolved_and_sent_path_is_visible():
     _replace_capability_metadata(messages,frame,change)
     result=display(messages,frame,aliases,snapshots,original_parts)
     assert any('结果详情 → 温度（登记路径：/result~1detail/temperature）' in line['value'] for line in result['lines'])
+
+
+def test_same_field_key_in_distinct_object_types_preserves_all_mapped_labels():
+    messages, frame, aliases, snapshots, original_parts = sample()
+    snapshots[1]['fields']=copy.deepcopy(snapshots[1]['fields']);snapshots[1]['type_name']='设备';snapshots[1]['fields'][0]['label']='设备温度'
+    frame['capability_pins']['object_snapshots_hash']=digest(snapshots)
+    payload=json.loads(messages[2]['content'][0]['text']);decision=payload['decision_input']
+    second=copy.deepcopy(decision['requirements'][0]);second.update(requirement_ref='requirement_2',entity_id='alias-b')
+    decision['requirements'].append(second)
+    mapping=copy.deepcopy(decision['candidates'][0]['requirement_mappings'][0]);mapping['requirement_ref']='requirement_2'
+    decision['candidates'][0]['requirement_mappings'].append(mapping)
+    messages[2]['content'][0]['text']=json.dumps(payload,ensure_ascii=False)
+    result=display(messages,frame,aliases,snapshots,original_parts)
+    assert any('对象 1（本地类型：监测点）：温度' in line['value'] and '对象 2（本地类型：设备）：设备温度' in line['value'] for line in result['lines'])

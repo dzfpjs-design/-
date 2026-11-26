@@ -132,6 +132,22 @@ def display(messages, frame, aliases, snapshots, original_parts):
         'input_schema_hash','output_schema_hash','quote_start','quote_end'}
     reference_fields = {'requirement_ref','source_ref','capability_ref','candidate_ref','fact_ref','conflict_ref','port_ref'}
     lines = []
+    requirements_by_ref = {item['requirement_ref']:item for item in decision['requirements']}
+    need(len(requirements_by_ref) == len(decision['requirements']))
+    def field_description(field, capability=None, port=None):
+        identities = set()
+        if capability is not None and port is not None:
+            for choice in decision['candidates']:
+                for mapping in choice['requirement_mappings']:
+                    if mapping['capability_ref'] == capability and mapping['port_ref'] == port:
+                        requirement = requirements_by_ref.get(mapping['requirement_ref'])
+                        need(requirement is not None and requirement['field'] == field)
+                        identities.add(requirement['entity_id'])
+        if not identities:
+            identities = {identity for identity, candidate in field_labels if candidate == field}
+        need(identities and all((identity,field) in field_labels and identity in entities for identity in identities))
+        matches = [(identity,field_labels[(identity,field)]) for identity in entities if identity in identities]
+        return matches[0][1] if len(matches) == 1 else '；'.join(entities[identity] + '：' + label for identity,label in matches)
     def output_location(pointer, field, capability, port_ref, value_type, unit):
         need(isinstance(pointer, str) and not _UUID_TEXT.search(pointer) and isinstance(field, str) and capability in pinned_caps)
         pin = pinned_caps[capability]
@@ -140,9 +156,7 @@ def display(messages, frame, aliases, snapshots, original_parts):
         need(len(candidates) == 1)
         selected = candidates[0]
         need(selected['value_type'] == value_type and selected['unit'] == unit)
-        labels = {label for (ident, candidate), label in field_labels.items() if candidate == field}
-        need(len(labels) == 1)
-        field_label = next(iter(labels))
+        field_label = field_description(field, capability, port_ref)
         if pin['delivery'] == 'requested_observation':
             need(execution.get('adapter') == 'workflow_service' and execution.get('operation') == 'resense_from_context'
                 and pointer == '/requested_observation/' + field)
@@ -178,17 +192,18 @@ def display(messages, frame, aliases, snapshots, original_parts):
         names.append(field_label)
         return '输出字段（本地名称）：' + ' → '.join(names) + '（登记路径：' + pointer + '）'
 
-    def visit(value, path, key=None, entity=None, capability=None, source_kind=None, candidate=None):
+    def visit(value, path, key=None, entity=None, capability=None, source_kind=None, candidate=None, port=None):
         if value is None:
             return
         if isinstance(value, list):
             child_key = key[:-1] if key and key.endswith('_refs') else ('entity_id' if key == 'entity_ids' else key)
             for index, child in enumerate(value, 1):
-                visit(child, path + [str(index)], child_key, entity, capability, source_kind, candidate)
+                visit(child, path + [str(index)], child_key, entity, capability, source_kind, candidate, port)
             return
         if isinstance(value, dict):
             entity = value.get('entity_id', entity)
             candidate = value.get('candidate_ref', candidate)
+            port = value.get('port_ref', port)
             capability = value.get('capability_ref', source_to_capability.get(value.get('source_ref'), capability))
             source_kind = source_kinds.get(value.get('source_ref'), value.get('kind', source_kind))
             for child_key, child in value.items():
@@ -219,9 +234,9 @@ def display(messages, frame, aliases, snapshots, original_parts):
                 elif child_key == 'text' and source_kind == 'capability' and child is not None:
                     parsed = json.loads(child)
                     need(set(parsed) == {'capability_id','kind','allowed_agent_roles','release_version','adapter','operation','side_effect','delivery','ports'})
-                    visit(parsed, path + [captions[child_key]], child_key, entity, capability, None, candidate)
+                    visit(parsed, path + [captions[child_key]], child_key, entity, capability, None, candidate, port)
                 else:
-                    visit(child, path + [captions[child_key]], child_key, entity, capability, source_kind, candidate)
+                    visit(child, path + [captions[child_key]], child_key, entity, capability, source_kind, candidate, port)
             return
         need(type(value) in (str, int, float, bool))
         if key == 'entity_id':
@@ -232,8 +247,7 @@ def display(messages, frame, aliases, snapshots, original_parts):
             elif entity is not None:
                 need((entity, value) in field_labels); value = field_labels[(entity, value)]
             else:
-                labels = {label for (ident, field), label in field_labels.items() if field == value}
-                need(len(labels) == 1); value = next(iter(labels))
+                value = field_description(value, capability, port)
         elif key == 'claim_ref':
             need((candidate, value) in claims); value = claims[(candidate, value)]
         elif key == 'port_ref':
