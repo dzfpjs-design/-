@@ -1,12 +1,15 @@
 """Profile one GET against a fresh disposable synthetic snapshot; no sender."""
 import json
 import os
+from functools import wraps
 from pathlib import Path
 import re
+import resource
 from time import perf_counter_ns
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import Column, Integer, String, func, select
 from sqlalchemy.orm import Session, declarative_base
@@ -14,7 +17,8 @@ from sqlalchemy.orm import Session, declarative_base
 from generic_agents.api import app
 from generic_agents.config import settings
 from generic_agents.db import engine
-from generic_agents.models import Capability, CloudCall, Plan
+from generic_agents.models import Capability, CloudCall, Membership, Plan, Task, User, Workspace
+from generic_agents.security import Principal
 from tests.synthetic_advice_fresh_checkpoint_restore import restore_to_disposable_test_db
 from tests.synthetic_advice_performance_probe import install
 
@@ -56,27 +60,58 @@ def test_read_only_context_profile_on_fresh_synthetic_checkpoint(monkeypatch):
     assert auth.status_code == 200
     client.headers.update({'X-CSRF-Token': auth.json()['csrf_token'], 'X-Workspace-ID': login['workspace_id']})
     probe = install(monkeypatch)
-    started = perf_counter_ns()
-    reply = client.get(f'/api/workspace/tasks/{task_id}/business-advice-v2/context')
-    elapsed = perf_counter_ns() - started
-    metrics = probe.snapshot()
+    from generic_agents import typed_payload_codec_v131 as codec, typed_payload_orm_v131 as orm
+    from tests.synthetic_request_decode_cache import SyntheticBudget, install as install_cache
+    baseline_codec, baseline_orm, baseline_verified = codec.decode_payload, orm.decode_payload, codec._verified_decode_json
+    budget = SyntheticBudget()
+    candidate_decode = install_cache(monkeypatch, budget)
+    contexts = (context for included in app.routes if hasattr(included, 'effective_route_contexts')
+                for context in included.effective_route_contexts())
+    route = next(item for item in contexts if item.path ==
+                 '/api/workspace/tasks/{task_id}/business-advice-v2/context')
+    original_call = route.dependant.call
+    cache_stats = {}
+    @wraps(original_call)
+    def scoped_context(*args, **kwargs):
+        principal = kwargs['p']
+        with budget.bind(principal.user_id, principal.workspace_id) as scope:
+            result = original_call(*args, **kwargs)
+            cache_stats.update(hits=scope.hits, misses=scope.misses, bypassed=scope.bypassed,
+                               peak_accounted_bytes=scope.used, entries=len(scope.entries))
+            return result
+    stable = ('enabled', 'title', 'goal_hash', 'head_hash', 'sources', 'model', 'max_tokens', 'can_prepare', 'can_start')
+    baseline_response = None
+    runs = []
+    for mode in ('baseline', 'candidate', 'baseline', 'candidate'):
+        candidate = mode == 'candidate'
+        monkeypatch.setattr(route.dependant, 'call', scoped_context if candidate else original_call)
+        monkeypatch.setattr(codec, 'decode_payload', candidate_decode if candidate else baseline_codec)
+        monkeypatch.setattr(orm, 'decode_payload', candidate_decode if candidate else baseline_orm)
+        monkeypatch.setattr(codec, '_verified_decode_json', baseline_verified.__wrapped__ if candidate else baseline_verified)
+        cache_stats.clear()
+        # On macOS this is a process-lifetime high-water mark in bytes, not a
+        # per-request allocation measurement; retain both absolute readings.
+        rss_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        started = perf_counter_ns()
+        response = client.get(f'/api/workspace/tasks/{task_id}/business-advice-v2/context')
+        elapsed = perf_counter_ns() - started
+        rss_after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        metrics = probe.snapshot()
+        assert response.status_code == 200 and budget.used == 0
+        current = {key: response.json()[key] for key in stable}
+        if baseline_response is None: baseline_response = current
+        else: assert current == baseline_response
+        if candidate: assert cache_stats['hits'] > 0
+        runs.append({'mode': mode, 'elapsed_ns': elapsed, 'rss_highwater_before_bytes': rss_before,
+                     'rss_highwater_after_bytes': rss_after, 'cache': dict(cache_stats),
+                     'inclusive_synthetic_metrics': metrics})
     path = Path(os.environ['GA_TEST_TIMING_LOG'])
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'w', encoding='utf-8') as out:
-        json.dump({'stage': 'context_get_only', 'status_code': reply.status_code,
-                   'elapsed_ns': elapsed, 'inclusive_synthetic_metrics': metrics}, out)
+        json.dump({'stage': 'context_get_only_ab', 'status_code': 200, 'runs': runs}, out)
     with Session(engine()) as db:
         assert db.scalar(select(func.count()).select_from(CloudCall)) == 0
         assert db.scalar(select(func.count()).select_from(Plan)) == plans_before
-    if reply.status_code != 200:
-        detail = reply.json().get('detail')
-        # Return only fixed categories; validation values and messages may be private.
-        category = ('request_validation' if isinstance(detail, list)
-                    else 'service_validation' if isinstance(detail, str) else 'other')
-        origins = sorted({item['loc'][0] for item in detail
-                          if isinstance(item, dict) and isinstance(item.get('loc'), list)
-                          and item['loc'] and item['loc'][0] in {'query', 'path', 'header', 'body', 'cookie'}}) if isinstance(detail, list) else []
-        raise AssertionError((reply.status_code, category, origins))
 
 
 @pytest.mark.skipif(os.environ.get('GA_TEST_CONTEXT_ONLY_PROFILE') != '1', reason='explicit context-only isolated runner required')
@@ -119,3 +154,38 @@ def test_sequential_scoped_reads_are_not_equivalent_to_batch_during_concurrent_c
     assert first_metrics['connection_execute']['calls'] == 1
     assert second_metrics['connection_execute']['calls'] == 1
     assert batch_metrics['connection_execute']['calls'] == 1
+
+
+@pytest.mark.skipif(os.environ.get('GA_TEST_CONTEXT_ONLY_PROFILE') != '1', reason='explicit context-only isolated runner required')
+def test_decode_cache_does_not_hide_committed_data_change_or_permission_revocation(monkeypatch):
+    from generic_agents import same_goal_advice_store_v302 as store
+    from tests.synthetic_request_decode_cache import SyntheticBudget, install as install_cache
+    with Session(engine()) as db:
+        workspace = Workspace(name='synthetic-workspace'); user = User(username='synthetic-user', password_hash='synthetic')
+        db.add_all([workspace, user]); db.flush()
+        membership = Membership(user_id=user.id, workspace_id=workspace.id, role='admin')
+        capability = Capability(workspace_id=workspace.id, namespace='synthetic', name='synthetic',
+                                release_version='1', kind='domain_package', content_hash='0'*64, data={})
+        db.add_all([membership, capability]); db.flush()
+        task = Task(workspace_id=workspace.id, owner_id=user.id, package_id=capability.id,
+                    title='synthetic-task', data={'synthetic-value': 1})
+        db.add(task); db.commit()
+        user_id, workspace_id, task_id, membership_id = user.id, workspace.id, task.id, membership.id
+    principal = Principal(user_id, workspace_id, 'admin', 'synthetic-session')
+    budget = SyntheticBudget()
+    install_cache(monkeypatch, budget)
+    with budget.bind(user_id, workspace_id) as scope, Session(engine()) as reader:
+        store._reader(reader, principal)
+        query = select(Task.data).where(Task.id == task_id, Task.workspace_id == workspace_id)
+        assert reader.scalar(query)['synthetic-value'] == 1
+        assert reader.scalar(query)['synthetic-value'] == 1 and scope.hits >= 1
+        # A different workspace must still be filtered by the database.
+        assert reader.scalar(select(Task.data).where(Task.id == task_id, Task.workspace_id == 'other-workspace')) is None
+        with Session(engine()) as writer:
+            changed = writer.get(Task, task_id); changed.data = {'synthetic-value': 2}; writer.commit()
+        assert reader.scalar(query)['synthetic-value'] == 2
+        with Session(engine()) as writer:
+            writer.get(Membership, membership_id).role = 'viewer'; writer.commit()
+        with pytest.raises(HTTPException):
+            store._reader(reader, principal)
+    assert budget.used == 0
