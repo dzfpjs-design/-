@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 global.sessionStorage={getItem(){return null;},setItem(){},removeItem(){}};
 const {DraftSync,api}=await import('../src/runtime-api.js');
 const {readDraftRecord,draftOutboxKey}=await import('../src/draft-cache-contract.mjs');
+const {addReportCandidates}=await import('../src/report-candidate-draft.mjs');
 const storage=()=>{const values=new Map();return {setItem(k,v){values.set(k,v);},getItem(k){return values.get(k);}};};
 const tails=new Map();const locks={request(key,_options,operation){const result=(tails.get(key)||Promise.resolve()).then(operation);tails.set(key,result.catch(()=>{}));return result;}};
 const response=(obj,status=200)=>new Response(JSON.stringify(obj),{status,headers:{'content-type':'application/json'}});
@@ -37,4 +38,20 @@ test('changing login stops future old draft writes while keeping recoverable uns
  global.fetch=async(url,options)=>{requests.push(JSON.parse(options.body));await new Promise(r=>release=r);return response({revision:5});};
  const sync=new DraftSync(s,'account-one-draft',4,()=>{},{locks});sync.save({name:'already sent'});await new Promise(r=>setTimeout(r,0));sync.save({name:'latest unsent'});sync.suspend();release();await assert.rejects(sync.wait());sync.retry();
  assert.equal(requests.length,1);const pending=JSON.parse(s.getItem('account-one-draft'));assert.equal(pending.revision,5);assert.equal(pending.pending,true);assert.deepEqual(pending.configuration,{name:'latest unsent'});
+});
+
+for(const failure of ['conflict','offline'])test('bulk candidate draft survives '+failure+' without overwriting an existing flow',async()=>{
+ const material={id:'synthetic-material',hash:'a'.repeat(64),version:1,engine:'native-docx-v1',status:'parsed'};
+ const step={key:'observe',name:'采集',purpose:'核查',agent:'多模感知智能体',role:'',output:'记录',condition:'',next_key:'end',else_key:'end',inference_reason:'建议',sources:[]};
+ const candidate={key:'new',name:'新业务',trigger:'按计划',output:'记录',inference_reason:'建议',sources:[],steps:[step]};
+ const bundle={schema:'setup-business-candidates-v1',origin:'local_summary',material,candidates:[candidate]};
+ const preview={material,candidates:[{...candidate,citations:[],unresolved_sources:[],steps:[{...step,citations:[],unresolved_sources:[]}]}]};
+ const original={businessCandidates:bundle,businesses:['已有业务'],flows:{'已有业务':{trigger:'原触发',output:'原产出',steps:[]}}};
+ const next=addReportCandidates(original,bundle,preview,['new'],[material],'ready',()=> 'step-1').workspace,s=storage(),states=[];
+ global.fetch=async()=>{if(failure==='offline')throw Error('offline');return response({detail:'版本冲突'},409);};
+ const sync=new DraftSync(s,'candidate-'+failure,4,value=>states.push(value),{locks});sync.save(next);await assert.rejects(sync.wait());
+ const pending=readDraftRecord(s,draftOutboxKey('candidate-'+failure,sync.owner));
+ assert.equal(pending.pending,true);assert.deepEqual(pending.configuration.businessCandidates,bundle);
+ assert.equal(pending.configuration.flows['已有业务'].trigger,'原触发');assert.equal(pending.configuration.flows['新业务'].confirmedSignature,null);
+ assert.equal(original.flows['新业务'],undefined);assert.equal(states.at(-1).state,'error');
 });

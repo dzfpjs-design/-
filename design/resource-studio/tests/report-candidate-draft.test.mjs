@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {addReportCandidate, currentCandidateMaterial} from '../src/report-candidate-draft.mjs';
+import {addReportCandidate, addReportCandidates, currentCandidateMaterial} from '../src/report-candidate-draft.mjs';
 import {flowProblems, flowSignature, saveFlow} from '../src/setup-schema.js';
 
 const material={id:'material-a',hash:'a'.repeat(64),version:2,engine:'native-docx-v1',status:'needs_input'};
@@ -54,4 +54,16 @@ test('a preview cannot omit a source or change the proposed business content',()
  assert.throws(()=>addReportCandidate(base(),bundle,missingPreview,'forest',[material],'ready',()=> 'x'),/重新核对/);
  const modifiedPreview={...preview,candidates:[{...row,trigger:'虚构的触发'}]};
  assert.throws(()=>addReportCandidate(base(),bundle,modifiedPreview,'forest',[material],'ready',()=> 'x'),/重新核对/);
+});
+
+test('bulk addition skips equivalent existing names and keeps every pending source',()=>{
+ const second={...original,key:'fire',name:'防火核查'},b={...bundle,candidates:[original,second]};
+ const secondPreview={...row,key:'fire',name:'防火核查'},v={...preview,candidates:[row,secondPreview]};
+ const ws=base();ws.businesses=['森林巡护'];ws.flows['森林巡护']={trigger:'原流程',output:'原产出',steps:[]};
+ const result=addReportCandidates(ws,b,v,['forest','fire'],[material],'ready',()=> 'step-new');
+ assert.deepEqual(result.skipped,['森林巡护']);assert.deepEqual(result.added,['防火核查']);
+ assert.equal(result.workspace.flows['森林巡护'].trigger,'原流程');assert.equal(result.workspace.flows['防火核查'].confirmedSignature,null);
+ assert.deepEqual(result.workspace.flows['防火核查'].steps[0].candidateUnresolvedSources,[missing]);
+ assert.throws(()=>addReportCandidates(ws,b,{...v,candidates:[row,{...secondPreview,trigger:'伪造'}]},['forest','fire'],[material],'ready',()=> 'x'),/重新核对/);
+ assert.deepEqual(ws.businesses,['森林巡护']);
 });
