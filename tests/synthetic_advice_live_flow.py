@@ -78,7 +78,7 @@ def run_synthetic_mature_flow(monkeypatch):
             now=db.scalar(select(func.clock_timestamp()))
             body={'request_id':str(uuid4()),'expected_goal_hash':task.data['goal_hash'],
                 'expected_mature_head_hash':head['head_hash'],
-                'limits':{'max_tokens':512,'max_request_bytes':50000,'max_evidence_items':2},
+                'limits':{'max_tokens':8192,'max_request_bytes':50000,'max_evidence_items':2},
                 'expires_at':(now+timedelta(hours=2)).isoformat(),'reason':'合成测试政策'}
             issued=policy.authorize(db,p,task_id,body);db.commit()
             print('AUTHORIZED_SYNTHETIC_POLICY',flush=True)
