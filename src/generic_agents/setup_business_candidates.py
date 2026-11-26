@@ -189,7 +189,7 @@ def _verified_resolution(db, p, source, citations, snapshots):
     for ref in citations:
         if (not isinstance(ref, dict) or ref.get('material_id') != identity
                 or not isinstance(ref.get('quote'), str) or not ref['quote'].strip()
-                or ref['quote'] not in source['source_text']):
+                or ref['quote'] != source['quote']):
             continue
         result = resolve_material_citation(material=material, expected_file_hash=material['hash'],
             expected_material_version=material['version'], expected_engine=material['engine'],
@@ -208,6 +208,8 @@ def protect_transitions(db, p, previous, proposed):
     snapshots = {}
     old_flows = previous.get('flows', {})
     new_flows = proposed.get('flows', {})
+    new_names = set(new_flows) - set(old_flows)
+    aliases = proposed.get('businessAliases', {})
     candidate_keys = [flow['candidateKey'] for flow in new_flows.values()
                       if isinstance(flow, dict) and flow.get('candidateKey')]
     if len(candidate_keys) != len(set(candidate_keys)):
@@ -219,11 +221,24 @@ def protect_transitions(db, p, previous, proposed):
                         and flow.get('candidateKey') == old_flow['candidateKey']]
             if len(possible) == 1:
                 new_flow = possible[0]
+        if new_flow is None:
+            possible = [new_flows[key] for key in new_names
+                        if aliases.get(key) == name and isinstance(new_flows[key], dict)]
+            if len(possible) == 1:
+                new_flow = possible[0]
+        old_pending = (isinstance(old_flow, dict) and any(
+            item.get('candidateUnresolvedSources') for _, item in _items(old_flow)))
+        if new_flow is None and old_pending and new_names:
+            raise HTTPException(409, '待核业务请先单独删除，再新建其他业务')
         if not isinstance(old_flow, dict) or not isinstance(new_flow, dict):
             continue
         new_items = dict(_items(new_flow))
+        old_items = dict(_items(old_flow))
+        new_steps = {key for key in new_items if key[0] == 'step' and key not in old_items}
         for identity, old_item in _items(old_flow):
             if identity not in new_items:
+                if identity[0] == 'step' and old_item.get('candidateUnresolvedSources') and new_steps:
+                    raise HTTPException(409, '待核步骤请先单独删除，再新增其他步骤')
                 continue
             new_item = new_items[identity]
             old_sources = validate_unresolved(old_item.get('candidateUnresolvedSources', []))
@@ -374,7 +389,8 @@ def _resolve_unchanged_flows(value, preview, material):
     choices = {candidate['key']: candidate for candidate in preview['candidates']}
     for name, flow in value.get('flows', {}).items():
         candidate = choices.get(flow.get('candidateKey')) if isinstance(flow, dict) else None
-        if not candidate or name != candidate['name']:
+        if (not candidate or name != candidate['name']
+                or 'reportSource' in flow or 'fullSemanticSource' in flow):
             continue
         changed = False
         if (flow.get('trigger') == candidate['trigger'] and flow.get('output') == candidate['output']
@@ -404,6 +420,22 @@ def _resolve_unchanged_flows(value, preview, material):
             flow['confirmedSignature'] = None
 
 
+def _clear_stale_material_confirmations(previous, value, material, bundle):
+    """Invalidate only saved approvals that still point at the older parse."""
+    if material['version'] == bundle.material.version and material['engine'] == bundle.material.engine:
+        return
+    from .flow_sources import flow_source_ids
+    prior = next((item for item in previous.get('materials', [])
+                  if isinstance(item, dict) and item.get('id') == material['id']), None)
+    if (prior and prior.get('version') == material['version']
+            and material['engine'] == bundle.material.engine):
+        return
+    for flow in value.get('flows', {}).values():
+        if isinstance(flow, dict) and material['id'] in flow_source_ids(flow):
+            flow['confirmedAt'] = None
+            flow['confirmedSignature'] = None
+
+
 @router.post('/candidates/revalidate')
 def revalidate_candidates(body: RevalidateCandidates, p: P, db: DB):
     """Rebind only to a new parse of the same original, leaving flows alone."""
@@ -422,6 +454,18 @@ def revalidate_candidates(body: RevalidateCandidates, p: P, db: DB):
     updated = validate_bundle(value['businessCandidates'])
     preview = preview_bundle(db, p, updated)
     _resolve_unchanged_flows(value, preview, material)
+    # A changed material version affects approvals only when the flow actually
+    # references it and that flow's saved material snapshot is still stale.
+    # Do not disturb unrelated flows or approvals based on the current version.
+    _clear_stale_material_confirmations(row.data, value, material, bundle)
+    if value.get('flows', {}) != row.data.get('flows', {}):
+        from .report_configuration_handoff import protect_configuration_sources
+        try:
+            guarded = protect_configuration_sources(db, p, row.data, value)
+        except HTTPException:
+            raise HTTPException(409, '已有业务来源需要先核对，原草稿保留') from None
+        if guarded != value:
+            raise HTTPException(409, '已有业务来源需要先核对，原草稿保留')
     if value == row.data:
         db.commit()
         return {'draft': draft_view(row), 'preview': preview}
