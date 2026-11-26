@@ -6,13 +6,14 @@ from functools import wraps
 from pathlib import Path
 import re
 import resource
+import sys
 from time import perf_counter_ns
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import Column, Integer, String, func, select
+from sqlalchemy import Column, Integer, String, func, select, text
 from sqlalchemy.orm import Session, declarative_base
 
 from generic_agents.api import app
@@ -210,3 +211,76 @@ def test_decode_cache_does_not_hide_committed_data_change_or_permission_revocati
         with pytest.raises(HTTPException):
             store._reader(reader, principal)
     assert budget.used == 0
+
+
+@pytest.mark.skipif(os.environ.get('GA_TEST_CONTEXT_TAMPER_PROFILE') != '1', reason='explicit synthetic tamper runner required')
+def test_guard_rechecks_tampered_release_in_same_stack(monkeypatch):
+    """Synthetic concurrent corruption between two authority checks is rejected."""
+    from generic_agents import layered_approval_store_v175 as approval, workspace_api
+    from generic_agents import typed_payload_codec_v131 as codec
+    assert not os.environ.get('DEEPSEEK_API_KEY') and not os.environ.get('DASHSCOPE_API_KEY')
+    monkeypatch.setattr(settings(), 'cloud_allowed_providers', '')
+    monkeypatch.setattr(settings(), 'v2_advice_setup_test_enabled', True)
+    monkeypatch.setattr(settings(), 'v2_user_send_test_enabled', False)
+    monkeypatch.setattr(settings(), 'v2_user_send_worker_enabled', False)
+    task_id = restore_to_disposable_test_db(os.environ['GA_SYNTHETIC_FRESH_CHECKPOINT'])
+    login = json.loads((settings().storage_dir / '__synthetic_checkpoint_login__.json').read_text())
+    with Session(engine()) as db:
+        assert db.scalar(select(func.count()).select_from(CloudCall)) == 0
+        plans_before = db.scalar(select(func.count()).select_from(Plan))
+        capabilities = list(db.scalars(select(Capability).where(
+            Capability.workspace_id == login['workspace_id'],
+            Capability.data['specification']['device_gateway_binding']['origin'].as_string().is_not(None))))
+        origins = {cap.data['specification']['device_gateway_binding']['origin'] for cap in capabilities}
+        assert len(origins) == 1
+        origin = next(iter(origins))
+        assert re.fullmatch(r'http://127\.0\.0\.1:[1-9][0-9]{0,4}', origin)
+        assert int(origin.rsplit(':', 1)[1]) not in {55486, 8766, engine().url.port}
+        monkeypatch.setattr(settings(), 'device_gateway_allowed_origins', origin)
+    state = {'tampered': False, 'second_check_started': False, 'second_check_rejected': False}
+    saved_execution = workspace_api.saved_execution
+    validate_sources = approval.validate_document_sources
+
+    @wraps(saved_execution)
+    def traced_saved_execution(*args, **kwargs):
+        in_guard = sys._getframe(1).f_code.co_name == 'guard'
+        if state['tampered'] and in_guard:
+            state['second_check_started'] = True
+        try:
+            return saved_execution(*args, **kwargs)
+        except HTTPException as error:
+            if state['tampered'] and in_guard and error.status_code == 409:
+                state['second_check_rejected'] = True
+            raise
+
+    @wraps(validate_sources)
+    def validate_then_tamper(db, principal, task, value, **kwargs):
+        result = validate_sources(db, principal, task, value, **kwargs)
+        if not state['tampered']:
+            # This deliberately corrupts only the fresh synthetic release;
+            # no source records, identities or payloads are written to logs.
+            with engine().begin() as writer:
+                writer.execute(text("SET LOCAL lock_timeout = '2s'"))
+                encoded = writer.scalar(text('SELECT _ga_data_canonical FROM domain_instance_releases WHERE id = :id'),
+                                        {'id': task.data['instance_release_id']})
+                envelope = json.loads(encoded)
+                envelope['payload_hash'] = '0' * 64 if envelope['payload_hash'] != '0' * 64 else '1' * 64
+                writer.execute(text('UPDATE domain_instance_releases SET _ga_data_canonical = :value WHERE id = :id'),
+                               {'value': codec.canonical_json(envelope), 'id': task.data['instance_release_id']})
+            state['tampered'] = True
+        return result
+
+    monkeypatch.setattr(workspace_api, 'saved_execution', traced_saved_execution)
+    monkeypatch.setattr(approval, 'validate_document_sources', validate_then_tamper)
+    client = TestClient(app, raise_server_exceptions=False)
+    auth = client.post('/api/login', json={'username': login['username'], 'password': login['password']})
+    assert auth.status_code == 200
+    client.headers.update({'X-CSRF-Token': auth.json()['csrf_token'], 'X-Workspace-ID': login['workspace_id']})
+    reply = client.get(f'/api/workspace/tasks/{task_id}/business-advice-v2/context')
+    with Session(engine()) as db:
+        assert db.scalar(select(func.count()).select_from(CloudCall)) == 0
+        assert db.scalar(select(func.count()).select_from(Plan)) == plans_before
+    assert state['tampered'] is True
+    assert state['second_check_started'] is True
+    assert state['second_check_rejected'] is True
+    assert reply.status_code == 409
