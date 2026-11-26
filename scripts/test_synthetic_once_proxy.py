@@ -51,13 +51,28 @@ class ProxyTests(unittest.TestCase):
                 runner_main()
         self.assertFalse((self.root/'provider-connect-attempt').exists())
 
-    def test_direct_bootstrap_rejects_live_mode_before_importing_backend(self):
+    def test_direct_live_modules_reject_even_fake_mode(self):
         env = {'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(Path(__file__).resolve().parents[1]),
-               'GA_SYNTHETIC_PROVIDER_MODE': 'live'}
-        result = subprocess.run([sys.executable, '-m', 'tests.synthetic_advice_live_bootstrap'],
-                                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(b'synthetic bootstrap permits fake provider only', result.stderr)
+               'GA_SYNTHETIC_PROVIDER_MODE': 'fake'}
+        for module in ('tests.synthetic_advice_live_bootstrap', 'tests.synthetic_advice_live_flow'):
+            result = subprocess.run([sys.executable, '-m', module], env=env,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b'is disabled', result.stderr)
+
+    def test_fake_mode_delegates_only_to_offline_mock_runner(self):
+        argv = ['runner', '--checkpoint', '/synthetic/checkpoint', '--pg-bin', '/usr/bin', '--mode', 'fake']
+        with patch.object(sys, 'argv', argv), patch('scripts.run_synthetic_advice_mock.main', return_value=0) as mock:
+            self.assertEqual(runner_main(), 0)
+            mock.assert_called_once_with()
+            self.assertEqual(sys.argv, argv)
+
+    def test_fake_mode_rejects_supplied_credential_before_runner(self):
+        argv = ['runner', '--checkpoint', '/synthetic/checkpoint', '--pg-bin', '/usr/bin', '--credential-fd', '3']
+        with patch.object(sys, 'argv', argv), patch('scripts.run_synthetic_advice_mock.main') as mock:
+            with self.assertRaisesRegex(RuntimeError, 'fake mode accepts no credential'):
+                runner_main()
+            mock.assert_not_called()
 
     def test_fake_provider_never_accepts_a_live_credential(self):
         for supplied, accepted in [(b'synthetic-only', True), (b'not-a-real-test-key', False)]:
