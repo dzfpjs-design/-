@@ -158,10 +158,12 @@ def _derive(cloud, opinion, freshness):
         entries.append({'kind': kind, 'source_scope': scope, 'source_types': source_types,
             'observed_at': at, 'observed_start': window['start'] if kind == 'observation' else None,
             'observed_end': window['end'] if kind == 'observation' else None,
-            'freshness': freshness.get(ref, 'unknown') if kind == 'observation' else 'not_applicable'})
+            # A 'current' snapshot may expire while waiting for locks or in an
+            # open browser. Without an enforced deadline, never advertise it.
+            'freshness': ('stale' if freshness.get(ref) == 'stale' else 'unknown')
+                         if kind == 'observation' else 'not_applicable'})
     observations = [item['freshness'] for item in entries if item['kind'] == 'observation']
-    state = ('not_cited' if not observations else 'stale' if 'stale' in observations else
-             'current' if all(x == 'current' for x in observations) else 'unknown')
+    state = ('not_cited' if not observations else 'stale' if 'stale' in observations else 'unknown')
     return {**counts, 'has_recommendation': opinion['recommendation']['candidate_ref'] is not None,
         'observation_state': state,
         'partial_source_count': sum(row['readability'] == 'partial' for row in cloud['sources']), 'items': entries}

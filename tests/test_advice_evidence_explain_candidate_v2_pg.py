@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
+import time
 from uuid import uuid4
 
 import pytest
@@ -50,7 +51,9 @@ def test_explanation_categories_and_tampered_references(monkeypatch):
     assert subject._derive(cloud, opinion, {})['observation_state'] == 'unknown'
     explanation = subject._derive(cloud, opinion, {observed[0]: 'stale'})
     assert explanation['observation_count'] == 1 and explanation['observation_state'] == 'stale'
-    assert subject._derive(cloud, opinion, {observed[0]: 'current'})['observation_state'] == 'current'
+    current = subject._derive(cloud, opinion, {observed[0]: 'current'})
+    assert current['observation_state'] == 'unknown'
+    assert next(item for item in current['items'] if item['kind'] == 'observation')['freshness'] == 'unknown'
     opinion['recommendation']['candidate_ref'] = None
     assert subject._derive(cloud, opinion, {})['has_recommendation'] is False
     opinion['recommendation']['supporting_fact_refs'] = ['invented_fact']
@@ -81,6 +84,28 @@ def test_observation_freshness_requires_original_source_and_policy():
     assert subject._one_observation_freshness(fact, sources, [original, original], 60, now) is None
     assert subject._one_observation_freshness(fact, {'source':{'kind':'observation','source_id':'other'}}, [original], 60, now) is None
     assert subject._one_observation_freshness({**fact,'semantics':'interval_mean'}, sources, [original], 60, now) is None
+
+
+def test_delayed_response_cannot_claim_fresh_observation_after_expiry(monkeypatch):
+    # Simulate an initially current, one-second observation while response
+    # construction is blocked until after its actual validity deadline.
+    cloud = derive(projection_scene.__wrapped__(monkeypatch))['cloud_request']['decision_input']
+    opinion = _opinion(cloud)
+    observation = next(fact for fact in cloud['facts'] if fact['kind'] == 'observation')
+    opinion['recommendation']['supporting_fact_refs'] = [observation['fact_ref']]
+    now = datetime.now(timezone.utc)
+    at = now.isoformat()
+    fact = {'kind':'observation','semantics':'instantaneous','time_scope':{'start':at,'end':at},
+            'entity_id':'entity','source_refs':[{'source_ref':'source'}]}
+    sources = {'source':{'kind':'observation','source_id':'observation'}}
+    recorded = [{'observation_id':'observation','entity_id':'entity','observed_at':at}]
+    snapshot = subject._one_observation_freshness(fact, sources, recorded, 1, now)
+    assert snapshot == 'current'
+    time.sleep(1.1)
+    assert subject._one_observation_freshness(fact, sources, recorded, 1, datetime.now(timezone.utc)) == 'stale'
+    response = subject._derive(cloud, opinion, {observation['fact_ref']: snapshot})
+    assert response['observation_state'] == 'unknown'
+    assert response['items'][0]['freshness'] == 'unknown'
 
 
 @pytest.mark.skipif(not os.environ.get('GA_TEST_SYNTHETIC_PROVIDER_PORT'), reason='isolated loopback provider only')
