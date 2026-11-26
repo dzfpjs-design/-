@@ -5,10 +5,12 @@ const KINDS={capability_declaration:'已登记能力',observation:'现场观测'
 const SCOPES={provided_source_text:'已提供的资料',provided_excerpt:'资料摘录',
  not_reviewed:'资料范围待核',unknown:'资料范围待核'};
 const SOURCE_TYPES={observation:'观测记录',capability:'能力资料',evidence:'业务资料',packet:'资料包',archive_record:'归档记录'};
-const FRESHNESS={current:'在原设定有效期内',stale:'已过期',unknown:'时效待核',not_applicable:'不适用'};
+// A cached response can outlive its original freshness window. Without a
+// verifiable expiry instant in the response, never assert it remains current.
+const FRESHNESS={current:'时效待核',stale:'已过期',unknown:'时效待核',not_applicable:'不适用'};
 const OBSERVATION={
  not_cited:'未引用现场观测，现场状态待核。',
- current:'观测在原设定有效期内，现场状态仍需确认。',
+ current:'观测时效待核，现场状态待核。',
  stale:'现场观测已过期，现场状态待核。',
  unknown:'观测时效待核，现场状态待核。',
 };
@@ -70,7 +72,8 @@ function EvidenceItem({item,onRetry,busy}){
   <p><strong>依据：</strong>已登记能力 {data.capability_count} · 现场观测 {data.observation_count}{data.other_count>0&&<> · 其他依据 {data.other_count}</>}</p>
   <p>{OBSERVATION[data.observation_state]}</p>
   {data.partial_source_count>0&&<p>部分资料仅为摘录，尚不能代表全文。</p>}
-  {data.items.some(entry=>entry.kind==='observation'&&entry.freshness==='unknown')&&data.observation_state!=='unknown'&&
+  {data.items.some(entry=>entry.kind==='observation'&&['unknown','current'].includes(entry.freshness))&&
+   !['unknown','current'].includes(data.observation_state)&&
    <p>部分观测时效待核。</p>}
   {data.items.length>0&&<details><summary>查看来源与时间</summary>
    {data.items.map((entry,i)=><div key={i}>

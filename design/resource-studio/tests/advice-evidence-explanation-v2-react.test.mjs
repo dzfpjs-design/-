@@ -8,7 +8,7 @@ const capability={kind:'capability_declaration',source_scope:'provided_excerpt',
 const observation={kind:'observation',source_scope:'provided_source_text',observed_at:'2026-11-25T00:00:00Z',freshness:'current',source_types:['observation']};
 const evidence=(overrides={})=>({has_recommendation:true,capability_count:1,observation_count:0,other_count:0,observation_state:'not_cited',partial_source_count:1,items:[capability],...overrides});
 
-test('evidence stays beside the selected recommendation and clearly handles unavailable facts',async()=>{
+test('evidence stays beside the selected recommendation and clearly handles unavailable facts',async(t)=>{
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
  const keys=['window','document','navigator','IS_REACT_ACT_ENVIRONMENT'];
  const old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
@@ -39,14 +39,25 @@ test('evidence stays beside the selected recommendation and clearly handles unav
   assert.equal([...document.querySelectorAll('button')].filter(x=>x.textContent==='重试').length,1);
   items=[{state:'ready',evidence:evidence({has_recommendation:false,capability_count:0,partial_source_count:0,items:[]})}];await remount(render());assert.equal(document.body.textContent,'');
   items=[{state:'ready',evidence:evidence({has_recommendation:undefined})}];await remount(render());assert.match(document.body.textContent,/依据待核实/);
-  items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'current',partial_source_count:0,items:[observation]})}];await remount(render());
-  assert.match(document.body.textContent,/观测在原设定有效期内，现场状态仍需确认/);
-  assert.match(document.body.textContent,/北京时间/);assert.match(document.body.textContent,/来源：观测记录/);assert.doesNotMatch(document.body.textContent,/设备在线|现场已确认/);
+  t.mock.timers.enable({apis:['Date'],now:new Date('2026-11-25T00:00:01Z')});
+  try{
+   items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'current',partial_source_count:0,items:[observation]})}];await remount(render());
+   const callsBeforeWait=calls.length;
+   const assertUncertain=()=>{assert.match(document.body.textContent,/观测时效待核，现场状态待核/);
+    assert.match(document.body.textContent,/观测时间/);assert.match(document.body.textContent,/北京时间/);assert.match(document.body.textContent,/来源：观测记录/);
+    assert.doesNotMatch(document.body.textContent,/有效期内|设备在线|现场已确认/);};
+   assertUncertain();
+   t.mock.timers.setTime(new Date('2026-11-27T00:00:00Z').getTime());
+   assert.equal(calls.length,callsBeforeWait);assertUncertain();
+   await act(async()=>root.render(render()));assertUncertain();
+  }finally{t.mock.timers.reset();}
   items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'unknown',partial_source_count:0,
    items:[{...observation,observed_at:null,observed_start:'2026-11-24T00:00:00Z',observed_end:'2026-11-25T00:00:00Z',freshness:'unknown'}]})}];await remount(render());
   assert.match(document.body.textContent,/观测时效待核/);assert.match(document.body.textContent,/至/);assert.doesNotMatch(document.body.textContent,/已过期/);
   items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'stale',partial_source_count:0,items:[{...observation,freshness:'stale'}]})}];await remount(render());
   assert.match(document.body.textContent,/已过期/);
+  items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:2,observation_state:'stale',partial_source_count:0,items:[{...observation,freshness:'stale'},observation]})}];await remount(render());
+  assert.match(document.body.textContent,/部分观测时效待核/);assert.doesNotMatch(document.body.textContent,/有效期内/);
   items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'current',partial_source_count:0,items:[{...observation,observed_at:'2026-02-30T00:00:00Z'}]})}];await remount(render());
   assert.match(document.body.textContent,/依据待核实/);assert.doesNotMatch(document.body.textContent,/有效期内/);
   items=[{state:'ready',evidence:evidence({capability_count:99})}];await remount(render());
