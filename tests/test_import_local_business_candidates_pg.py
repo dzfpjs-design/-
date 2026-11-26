@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 import hashlib
 import importlib.util
+import os
 from pathlib import Path
 import socket
 import threading
@@ -20,11 +21,13 @@ spec = importlib.util.spec_from_file_location('local_candidate_import_pg', SCRIP
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+_ports = [int(value) for value in os.environ.get('GA_IMPORT_TEST_HTTP_PORTS', '').split(',') if value]
+
 
 @contextmanager
 def local_server():
     listener = socket.socket()
-    listener.bind(('127.0.0.1', 0))
+    listener.bind(('127.0.0.1', _ports.pop(0) if _ports else 0))
     listener.listen(128)
     port = listener.getsockname()[1]
     assert port not in (8766, 55486)
