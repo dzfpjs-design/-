@@ -1,4 +1,5 @@
 """Seed an isolated disposable browser test with synthetic text only."""
+import copy
 import os
 from pathlib import Path
 from fastapi.testclient import TestClient
@@ -33,8 +34,11 @@ with TestClient(app) as client:
     proposal=bundle(row)
     proposal['candidates'][0]['name']='合成检查'
     proposal['candidates'][0]['steps'][0]['sources']=[{'source_text':'仅用于测试的另一处原文。','quote':'另一处原文'}]
+    existing=copy.deepcopy(proposal['candidates'][0]);existing['key']='existing';existing['name']='已有业务'
+    proposal['candidates'].append(existing)
     draft=client.get('/api/setup/draft').json();config=draft['configuration'] or initial_configuration();config['materials']=[row]
     config['instanceProfile']={'name':'合成配置','domain':'合成领域','goal':'测试'}
+    config['businesses']=['已有业务'];config['flows']={'已有业务':{'trigger':'既有触发','output':'既有记录','steps':[]}}
     saved=client.put('/api/setup/draft',json={'revision':draft['revision'],'configuration':config});assert saved.status_code==200, (saved.status_code,saved.text[:300])
     added=client.post('/api/setup/candidates',json={'revision':saved.json()['revision'],'bundle':proposal});assert added.status_code==200
 engine().dispose()
