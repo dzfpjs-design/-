@@ -56,6 +56,20 @@ def test_new_deepseek_unlimited_but_qwen_uses_its_own_allowance_and_total_is_pre
     with pytest.raises(BudgetDenied): reserve(p,qwen,1,'f'*64)
 
 
+def test_deepseek_uses_ledger_when_other_provider_limits_are_invalid(scene, monkeypatch):
+    p, ds, qwen = scene
+    monkeypatch.setattr(settings(), 'cloud_daily_token_limit', -1)
+    monkeypatch.setattr(settings(), 'cloud_daily_call_limit', -1)
+    call = reserve(p, ds, 900, 'd'*64)
+    finish(call, {'usage': {'total_tokens': 42}}, 'succeeded')
+    with Session(engine()) as db:
+        status = budget_status(db, p, ds, 10000)
+        ledger = db.scalar(select(Job).where(Job.workspace_id == p.workspace_id, Job.kind == 'cloud_budget'))
+        assert status['unlimited'] and status['available']
+        assert (ledger.data['calls'], ledger.data['tokens']) == (1, 42)
+        with pytest.raises(ModelBlocked): budget_status(db, p, qwen, 1)
+
+
 def test_empty_ledger_preview_preserves_typed_payload_rules(scene):
     p,ds,qwen=scene
     with Session(engine()) as db:
