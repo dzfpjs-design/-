@@ -1,8 +1,9 @@
 """Count synthetic test work without recording inputs, identifiers or SQL.
 
 Only install this probe inside an isolated synthetic test process. Durations
-are inclusive; nested functions must not be added together. No ORM state,
-authorization decision, provider request or source text is cached here.
+are inclusive; nested functions must not be added together. SQL execute timings
+end when a result object is returned, not when its rows are consumed. No ORM
+state, authorization decision, provider request or source text is cached here.
 """
 from collections import defaultdict
 from functools import wraps
@@ -24,13 +25,14 @@ class SyntheticAdviceProbe:
                 entry['input_chars'] = entry.get('input_chars', 0) + input_chars
                 entry['max_input_chars'] = max(entry.get('max_input_chars', 0), input_chars)
 
-    def wrap(self, monkeypatch, module, name, label, *, lengths=False):
+    def wrap(self, monkeypatch, module, name, label, *, length_indices=()):
         original = getattr(module, name)
 
         @wraps(original)
         def wrapped(*args, **kwargs):
             # Count only character totals, not contents, row identity or hashes.
-            sizes = sum(len(value) for value in (args[0], args[3]) if isinstance(value, str)) if lengths and len(args) >= 4 else 0
+            sizes = sum(len(args[index]) for index in length_indices
+                        if len(args) > index and isinstance(args[index], str))
             started = perf_counter_ns()
             try:
                 return original(*args, **kwargs)
@@ -54,10 +56,17 @@ def install(monkeypatch):
     from generic_agents import same_goal_advice_unlimited_store_v2 as store
     from generic_agents import same_goal_advice_common_inventory_v2 as inventory
     from generic_agents import same_goal_advice_read_session_v2 as read_session
+    from sqlalchemy.engine import Connection
+    from sqlalchemy.orm import Session
 
     probe = SyntheticAdviceProbe()
-    probe.wrap(monkeypatch, orm, 'decode_payload', 'orm_decode', lengths=True)
-    probe.wrap(monkeypatch, codec, '_decode_payload_uncached', 'full_verification', lengths=True)
+    probe.wrap(monkeypatch, orm._DecodedPayloadText, 'process_result_value',
+               'result_processor', length_indices=(1,))
+    probe.wrap(monkeypatch, orm, 'decode_payload', 'orm_decode', length_indices=(0, 3))
+    probe.wrap(monkeypatch, codec, '_decode_payload_uncached', 'full_verification', length_indices=(0, 3))
+    probe.wrap(monkeypatch, Session, 'execute', 'session_execute')
+    probe.wrap(monkeypatch, Connection, 'execute', 'connection_execute')
+    probe.wrap(monkeypatch, Connection, 'exec_driver_sql', 'driver_execute')
     probe.wrap(monkeypatch, old, '_rows', 'read_rows')
     probe.wrap(monkeypatch, store, '_read_queued', 'read_preparation')
     probe.wrap(monkeypatch, inventory, '_read', 'read_inventory')
