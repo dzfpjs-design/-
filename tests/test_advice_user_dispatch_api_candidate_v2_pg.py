@@ -10,10 +10,12 @@ from generic_agents.config import settings
 from generic_agents.db import engine
 from generic_agents.models import CloudCall, Job
 from generic_agents import same_goal_advice_dispatch_control_candidate_v2 as control
+from generic_agents import same_goal_advice_user_send_worker_candidate_v2 as worker
 from generic_agents import same_goal_advice_user_dispatch_api_candidate_v2 as api
 from tests.test_advice_dispatch_delegation_candidate_v2_pg import pending
 from tests.test_same_goal_advice_unlimited_preview_candidate_v2_pg import prepared_preview
 from tests.test_same_goal_advice_unlimited_store_v2_pg import synthetic_custody
+from tests.test_advice_v2_recovery_console_candidate_pg import spool_root
 
 
 @pytest.fixture
@@ -79,3 +81,21 @@ def test_api_token_cannot_confirm_for_user(enabled,pending,client,account):
     with Session(engine()) as db:
         assert db.scalar(select(func.count()).select_from(CloudCall))==0
         assert db.scalar(select(func.count()).select_from(Job).where(Job.kind==control.KIND))==0
+
+
+@pytest.mark.parametrize('failure', ['ordinary', 'worker_disabled', 'spool_unavailable'])
+def test_failed_worker_is_reported_for_attention_immediately(enabled,pending,client,monkeypatch,spool_root,failure):
+    s,created,body=pending;url=base(s,created)
+    assert client.post(url+'/start',json=body).json()['state']=='waiting'
+    monkeypatch.setattr(settings(),'v2_user_send_worker_enabled',True)
+    def fail(*args,**kwargs):
+        if failure=='worker_disabled':monkeypatch.setattr(settings(),'v2_user_send_worker_enabled',False)
+        if failure=='spool_unavailable':monkeypatch.setattr(settings(),'v2_response_spool_enabled',False)
+        raise RuntimeError('测试失败，不能继续')
+    monkeypatch.setattr(worker.lease,'acquire',fail)
+    assert worker.tick()['failed']==1
+    assert client.get(url).json()['state']=='needs_attention'
+    if failure=='ordinary':assert worker.tick()['claimed']==0
+    with Session(engine()) as db:
+        row=db.scalar(select(Job).where(Job.kind==control.KIND))
+        assert row.status=='failed' and row.attempts==1

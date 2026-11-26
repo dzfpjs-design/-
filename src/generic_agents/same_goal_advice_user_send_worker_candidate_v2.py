@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import engine
-from .models import Job
+from .models import Audit, Job
 from . import same_goal_advice_cloud_reservation_candidate_v2 as reservation
 from . import same_goal_advice_deepseek_adapter_candidate_v2 as transport
 from . import same_goal_advice_dispatch_control_candidate_v2 as control
@@ -31,6 +31,20 @@ def _check(db):
     transport._test_endpoint()  # Loopback endpoint only; never a provider key.
 
 
+def _record_failure(proof, stage):
+    """Persist an owned failed attempt without making it eligible for retry."""
+    if proof is None:return
+    with Session(engine()) as db:
+        guard.require_disposable_database(db)
+        row=db.scalar(select(Job).where(Job.id==proof['control_id'],Job.kind==control.KIND).with_for_update())
+        if row is None or row.status!='running' or row.attempts!=1 or row.lease_token!=proof['lease_token']:
+            return
+        row.status='failed';row.version+=1
+        db.add(Audit(workspace_id=row.workspace_id,object_id=row.id,actor_id=row.data['actor_id'],
+            action='advice_v2_worker_attention',data={'stage':stage,'retry_authorized':False}))
+        db.commit()
+
+
 def tick():
     """One bounded sweep. A claimed control is never automatically retried."""
     with Session(engine()) as db:
@@ -39,26 +53,34 @@ def tick():
             .order_by(Job.id).limit(20)))
     claimed=failed=0
     for control_id in ids:
+        proof=None;stage='claim'
         try:
             with Session(engine()) as db:
                 _check(db);proof=control.claim(db,control_id);db.commit()
             claimed+=1
+            stage='authorization'
             with Session(engine()) as db:
                 scope=control.verify_worker(db,proof)
                 actor=runtime_worker.actor(db,scope['workspace_id'],scope['actor_id'])
                 db.commit()
+            stage='preparation'
             with Session(engine()) as db:
                 leased=lease.acquire(db,actor,scope['task_id'],scope['plan_id'],worker_proof=proof);db.commit()
+            stage='reservation'
             with Session(engine()) as db:
                 allocated=reservation.reserve(db,actor,scope['task_id'],scope['plan_id'],leased['job_id'],
                     leased['lease_token'],worker_proof=proof);db.commit()
+            stage='analysis'
             outcome=transport.execute_synthetic_test_only(actor,scope['task_id'],scope['plan_id'],leased['job_id'],
                 leased['lease_token'],allocated['cloud_call_id'],worker_proof=proof)
-            if outcome.get('state')!='settled':failed+=1
+            if outcome.get('state')!='settled':
+                failed+=1;_record_failure(proof,stage)
         except Exception:
             # Leave the original control/permit and all records untouched. No
             # automatic resubmission follows an uncertain or failed attempt.
             failed+=1
+            try:_record_failure(proof,stage)
+            except Exception:pass  # If storage is unavailable, preserve the original claim.
     return {'claimed':claimed,'failed':failed}
 
 

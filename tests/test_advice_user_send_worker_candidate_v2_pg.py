@@ -1,5 +1,6 @@
 """Synthetic dedicated PG tests: one failed worker attempt is never reclaimed."""
 import pytest
+from uuid import uuid4
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -39,5 +40,18 @@ def test_failed_attempt_survives_restart_without_automatic_repeat(pending,monkey
     engine().dispose()
     assert worker.tick()['claimed']==0 and calls==['attempted']
     with Session(engine()) as db:
-        row=db.get(Job,item['control_id']);assert row.status=='running' and row.attempts==1
+        row=db.get(Job,item['control_id']);assert row.status=='failed' and row.attempts==1
         assert db.scalar(select(func.count()).select_from(CloudCall))==0
+
+
+def test_stale_worker_cannot_mark_another_lease_failed(pending):
+    s,created,_=pending;issued=create(pending)
+    with Session(engine()) as db:
+        item=control.enqueue(db,s['principal'],s['task_id'],created['plan_id'],issued['delegation_id']);db.commit()
+    with Session(engine()) as db:
+        proof=control.claim(db,item['control_id']);db.commit()
+    with Session(engine()) as db:
+        row=db.get(Job,item['control_id']);row.lease_token=str(uuid4());db.commit()
+    worker._record_failure(proof,'preparation')
+    with Session(engine()) as db:
+        row=db.get(Job,item['control_id']);assert row.status=='running' and row.attempts==1
