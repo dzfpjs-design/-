@@ -1,6 +1,7 @@
 """Profile one GET against a fresh disposable synthetic snapshot; no sender."""
 import json
 import os
+import cProfile
 from functools import wraps
 from pathlib import Path
 import re
@@ -59,17 +60,37 @@ def test_read_only_context_profile_on_fresh_synthetic_checkpoint(monkeypatch):
     auth = client.post('/api/login', json={'username': login['username'], 'password': login['password']})
     assert auth.status_code == 200
     client.headers.update({'X-CSRF-Token': auth.json()['csrf_token'], 'X-Workspace-ID': login['workspace_id']})
+    contexts = (context for included in app.routes if hasattr(included, 'effective_route_contexts')
+                for context in included.effective_route_contexts())
+    route = next(item for item in contexts if item.path ==
+                 '/api/workspace/tasks/{task_id}/business-advice-v2/context')
+    original_call = route.dependant.call
+    if os.environ.get('GA_TEST_CONTEXT_FUNCTION_PROFILE') == '1':
+        from tests.synthetic_context_function_profile import summarize
+        profiler = cProfile.Profile()
+        @wraps(original_call)
+        def profiled_context(*args, **kwargs):
+            return profiler.runcall(original_call, *args, **kwargs)
+        monkeypatch.setattr(route.dependant, 'call', profiled_context)
+        started = perf_counter_ns()
+        response = client.get(f'/api/workspace/tasks/{task_id}/business-advice-v2/context')
+        elapsed = perf_counter_ns() - started
+        assert response.status_code == 200
+        path = Path(os.environ['GA_TEST_TIMING_LOG'])
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as out:
+            json.dump({'stage': 'context_handler_functions_only', 'status_code': 200,
+                       'elapsed_ns': elapsed, 'profile': summarize(profiler)}, out)
+        with Session(engine()) as db:
+            assert db.scalar(select(func.count()).select_from(CloudCall)) == 0
+            assert db.scalar(select(func.count()).select_from(Plan)) == plans_before
+        return
     probe = install(monkeypatch)
     from generic_agents import typed_payload_codec_v131 as codec, typed_payload_orm_v131 as orm
     from tests.synthetic_request_decode_cache import SyntheticBudget, install as install_cache
     baseline_codec, baseline_orm, baseline_verified = codec.decode_payload, orm.decode_payload, codec._verified_decode_json
     budget = SyntheticBudget()
     candidate_decode = install_cache(monkeypatch, budget)
-    contexts = (context for included in app.routes if hasattr(included, 'effective_route_contexts')
-                for context in included.effective_route_contexts())
-    route = next(item for item in contexts if item.path ==
-                 '/api/workspace/tasks/{task_id}/business-advice-v2/context')
-    original_call = route.dependant.call
     cache_stats = {}
     @wraps(original_call)
     def scoped_context(*args, **kwargs):

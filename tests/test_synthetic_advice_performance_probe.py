@@ -1,5 +1,6 @@
 """The isolated profiler counts work without retaining source text or authority."""
 import json
+import cProfile
 import os
 from pathlib import Path
 import subprocess
@@ -16,6 +17,24 @@ from sqlalchemy.orm import Session
 from generic_agents import typed_payload_codec_v131 as codec
 from generic_agents import typed_payload_orm_v131 as orm
 from tests.synthetic_advice_performance_probe import install
+from tests.synthetic_context_function_profile import summarize
+
+
+def test_function_profile_exports_only_whitelisted_names_and_numbers():
+    scope = {}
+    exec(compile('def scoped():\n    return sum(range(3))',
+                 'synthetic-prefix/src/generic_agents/services.py', 'exec'), scope)
+    unknown = {}
+    exec(compile('def private_synthetic_code():\n    return 1',
+                 'private_synthetic_filename.py', 'exec'), unknown)
+    profile = cProfile.Profile()
+    profile.runcall(lambda: (scope['scoped'](), unknown['private_synthetic_code']()))
+    result = summarize(profile)
+    assert result['functions']['services.scoped']['calls'] == 1
+    assert all(type(value) is int and value >= 0
+               for entry in result['functions'].values() for value in entry.values())
+    encoded = json.dumps(result)
+    assert 'private_synthetic_code' not in encoded and 'private_synthetic_filename' not in encoded
 
 
 def test_counts_only_numeric_metadata_preserves_fresh_results_and_rejection(monkeypatch):
