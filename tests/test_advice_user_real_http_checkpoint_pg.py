@@ -228,7 +228,9 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
         assert client.get(dispatch).json()['state'] == 'waiting'
         port = int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
         request_stats=os.environ.get('GA_TEST_SYNTHETIC_REQUEST_STATS')
+        connection_stats=os.environ.get('GA_TEST_SYNTHETIC_CONNECTION_STATS')
         with provider(port, content=json.dumps(opinion), request_log=Path(request_stats) if request_stats else None,
+                connection_stats=Path(connection_stats) if connection_stats else None,
                 usage={'prompt_tokens': 3, 'completion_tokens': 2, 'total_tokens': 5}) as server:
             run = run_worker_process()
             mark('worker_returned')
