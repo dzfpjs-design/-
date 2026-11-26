@@ -58,15 +58,15 @@ function checkedEvidence(value){
 
 function checkedPage(page){
  if(!page||typeof page!=='object'||typeof page.enabled!=='boolean'||!Array.isArray(page.items)||
-  !(page.next_cursor===undefined||page.next_cursor===null||typeof page.next_cursor==='string'))throw Error('invalid page');
- return {enabled:page.enabled,items:page.items,next_cursor:page.next_cursor||null};
+  page.items.length>1||!(page.next_cursor===undefined||page.next_cursor===null||page.next_cursor===''))throw Error('invalid page');
+ return {enabled:page.enabled,items:page.items};
 }
 
-function EvidenceItem({item,index}){
+function EvidenceItem({item}){
  const data=item?.state==='ready'?checkedEvidence(item.evidence):null;
- if(!data)return <article className="media-form"><h5>第 {index+1} 条</h5>
-  <p role="status">依据待核实，暂无法展示。</p></article>;
- return <article className="media-form"><h5>{data.has_recommendation?'建议 '+(index+1):'暂无推荐方案'}</h5>
+ if(!data)return <div>
+  <p role="status">依据待核实，暂无法展示。</p></div>;
+ return <div>
   <dl className="advice-evidence-counts">
    <div><dt>已登记能力</dt><dd>{data.capability_count} 条</dd></div>
    <div><dt>现场观测</dt><dd>{data.observation_count} 条</dd></div>
@@ -85,12 +85,12 @@ function EvidenceItem({item,index}){
       {' 至 '}{entry.observed_end?<time dateTime={entry.observed_end}>{observedTime(entry.observed_end).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}</time>:'结束待核'}（北京时间）</>:'未提供'}；{FRESHNESS[entry.freshness]}。</p>}
    </div>)}
   </details>}
- </article>;
+ </div>;
 }
 
-export default function AdviceEvidenceExplanationV2({account,task,requestJSON}){
- const scope=JSON.stringify([account?.workspace_id,account?.user_id,account?.role,task?.id]);
- const base='/workspace/tasks/'+encodeURIComponent(task?.id||'')+'/business-advice/evidence-explanation';
+export default function AdviceEvidenceExplanationV2({account,task,planId,requestJSON}){
+ const scope=JSON.stringify([account?.workspace_id,account?.user_id,account?.role,task?.id,planId]);
+ const base='/workspace/tasks/'+encodeURIComponent(task?.id||'')+'/business-advice/evidence-explanation?plan_id='+encodeURIComponent(planId||'');
  const [snapshot,setSnapshot]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState('');
  const generation=useRef(0),inFlight=useRef(false);
  const refresh=useCallback(async()=>{
@@ -103,30 +103,18 @@ export default function AdviceEvidenceExplanationV2({account,task,requestJSON}){
  },[base,requestJSON,scope]);
  useEffect(()=>{
   generation.current++;inFlight.current=false;setSnapshot(null);setError('');setBusy('');
-  if(account?.workspace_id&&account?.user_id&&task?.id)refresh();
+  if(account?.workspace_id&&account?.user_id&&task?.id&&planId)refresh();
   return()=>{generation.current++;inFlight.current=false;};
  },[scope,refresh]);
- const loadMore=async()=>{
-  const page=snapshot?.scope===scope?snapshot:null;
-  if(inFlight.current||!page?.enabled||!page.next_cursor)return;
-  const current=generation.current,cursor=page.next_cursor;inFlight.current=true;setBusy('page');setError('');
-  try{const next=checkedPage(await requestJSON(base+'?cursor='+encodeURIComponent(cursor)));
-   if(generation.current===current){
-    if(!next.enabled){setSnapshot({scope,...next});return;}
-    setSnapshot(old=>old?.scope===scope&&old.next_cursor===cursor?{...next,scope,items:[...old.items,...next.items]}:old);
-   }
-  }catch{if(generation.current===current)setError('加载更多依据失败，请重试或刷新。');}
-  finally{if(generation.current===current){inFlight.current=false;setBusy('');}}
- };
  const data=snapshot?.scope===scope?snapshot:null;
- if((!data&&!error)||data?.enabled===false)return null;
+ const evidence=data?.items[0]?.state==='ready'?checkedEvidence(data.items[0].evidence):null;
+ if((!data&&!error)||data?.enabled===false||(data&&data.items.length===0&&!error)||
+  (evidence?.has_recommendation===false&&!error))return null;
  return <section className="media-form advice-evidence-explanation" aria-label="建议依据">
-  <div className="advice-evidence-heading"><div><h4>建议依据</h4>
+  <div className="advice-evidence-heading"><div><h5>建议依据</h5>
    <p>查看建议参考的能力和现场观测。</p></div>
    <button type="button" disabled={!!busy} onClick={refresh}>{busy==='refresh'?'正在刷新…':'刷新'}</button></div>
   {error&&<p role="alert">{error}</p>}
-  {data?.items.length===0&&<p>当前业务暂无建议依据。</p>}
-  {data?.items.map((item,index)=><EvidenceItem key={index} item={item} index={index}/>)}
-  {data?.next_cursor&&<button type="button" disabled={!!busy} onClick={loadMore}>{busy==='page'?'正在加载…':'加载更多建议'}</button>}
+  {data?.items.map((item,index)=><EvidenceItem key={index} item={item}/>)}
  </section>;
 }

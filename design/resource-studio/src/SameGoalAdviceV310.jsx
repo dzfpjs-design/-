@@ -6,6 +6,7 @@ import {adviceCanonical} from './same-goal-advice-v310-controller.mjs';
 import './same-goal-advice-v310.css';
 import SameGoalContinuationV312 from './SameGoalContinuationV312.jsx';
 import FormalContinuationContextV344 from './FormalContinuationContextV344.jsx';
+import AdviceEvidenceExplanationV2 from './AdviceEvidenceExplanationV2.jsx';
 
 const PHASES={queued:'等待整理资料',preparing:'正在整理资料',awaiting_consent:'资料已保存，待核对授权',send_queued:'分析申请已保存',generating:'正在分析',closing:'回答已保存，正在收尾核对',ready_for_review:'可以审核建议',reviewed:'审核结论已保存',cancelled:'已取消，原记录保留',needs_review:'需要核对原申请'};
 const DECISIONS={accepted:'采用建议',rejected:'不采用建议',needs_revision:'需补充'};
@@ -80,13 +81,16 @@ function FactReferences({refs,input}){
  </article>)}</details>;
 }
 
-function Opinion({result,preview}){
+export function Opinion({result,preview,account,task,planId,requestJSON}){
  const value=result?.model_value,input=cloudInput(preview)?.decision_input;
  if(!value)return null;
  const recommendationIndex=value.candidate_reviews?.findIndex(row=>row.candidate_ref===value.recommendation?.candidate_ref)??-1;
  return <section aria-label="已保存的建议">
   <h5>建议</h5><p className="same-advice-proposal"><strong>{value.recommendation?.candidate_ref?proposal(input,value.recommendation.candidate_ref,Math.max(0,recommendationIndex)):'模型暂未选择方案'}</strong></p>
   <p className="same-advice-text">{value.recommendation?.reason}</p><FactReferences refs={value.recommendation?.supporting_fact_refs} input={input}/>
+  {typeof value.recommendation?.candidate_ref==='string'&&value.recommendation.candidate_ref.trim()&&
+   typeof planId==='string'&&planId&&task?.id&&typeof requestJSON==='function'&&
+   <AdviceEvidenceExplanationV2 key={planId} account={account} task={task} planId={planId} requestJSON={requestJSON}/>}
   <details className="same-advice-candidates"><summary>查看候选方案（{value.candidate_reviews?.length||0}项）</summary>{(value.candidate_reviews||[]).map((candidate,index)=><article className="media-form" key={candidate.candidate_ref}>
    <h6>{proposal(input,candidate.candidate_ref,index)}</h6><p><strong>{SUITABILITY[candidate.suitability]||'模型意见待核对'}</strong></p><p className="same-advice-text">{candidate.reasoning}</p>
    {candidate.blocking_conditions?.length>0&&<><strong>模型列出的前提</strong><ul>{candidate.blocking_conditions.map((line,i)=><li key={i}>{line}</li>)}</ul></>}
@@ -145,7 +149,7 @@ function AdminFees({context,draft,blocked,editingBlocked,onDraft,onAction,Btn}){
  </details>;
 }
 
-export function SameGoalAdviceContentV310({view,account,Btn,onAction,onDraft}){
+export function SameGoalAdviceContentV310({view,account,task,requestJSON,Btn,onAction,onDraft}){
  if(view.denied)return <p role="alert">账号、工作区或权限已变化，资料已隐藏，请重新打开对应工作区。</p>;
  const reads=view.reads||{};
  if(view.loading&&!view.context&&!view.list&&!view.plan&&!Object.values(reads).includes('failed'))return <p role="status">正在读取建议…</p>;
@@ -218,7 +222,7 @@ export function SameGoalAdviceContentV310({view,account,Btn,onAction,onDraft}){
   {['send_queued','generating','closing'].includes(phase)&&<aside className="info" aria-label="原分析进度"><strong>{PHASES[phase]}</strong><p>{phase==='closing'?'结果保存中，完成后可审核。':'正在等待分析结果。'}</p><Button Btn={Btn} disabled={view.busy} onClick={()=>onAction('refresh')}>刷新进度</Button></aside>}
   {plan?.result&&<Stage number={5} title="核对原建议并保存决定">
    <ActualQuestion preview={preview}/>
-   <div className="same-advice-decision"><Opinion result={plan.result} preview={preview}/><div><ReviewScope scope={plan.source_review_scope} dataAsOf={plan.data_as_of} input={cloudInput(preview)?.decision_input}/>
+   <div className="same-advice-decision"><Opinion result={plan.result} preview={preview} account={account} task={task} planId={plan.plan_id} requestJSON={requestJSON}/><div><ReviewScope scope={plan.source_review_scope} dataAsOf={plan.data_as_of} input={cloudInput(preview)?.decision_input}/>
     {ready?<form onSubmit={event=>{event.preventDefault();onAction('review');}} aria-label="保存本次人工决定">
      <fieldset className="same-advice-review-choices" disabled={blocked||permissions.can_review!==true}><legend>这次如何处理</legend>{Object.entries(DECISIONS).map(([value,label])=><label key={value}><input type="radio" name="same-goal-advice-review" value={value} checked={draft.review_decision===value} onChange={()=>onDraft({review_decision:value})}/>{label}</label>)}</fieldset>
      <Reason label="作出此决定的理由" value={draft.review_reason} disabled={editingBlocked||permissions.can_review!==true} onChange={value=>onDraft({review_reason:value})}/>
@@ -294,7 +298,7 @@ export default function SameGoalAdviceV310({account,task,Btn,requestJSON=json,on
   <div className="same-advice-heading"><h4>业务建议</h4><div className="actions"><Button Btn={Btn} disabled={!c||view?.busy||!matches||view?.denied} onClick={()=>run('refresh')}>刷新</Button></div></div>
   {!c?<p role="alert">{holder.error}</p>:!matches||view.denied?<p role="alert">账号、工作区或权限已变化，资料已隐藏，请重新打开对应工作区。</p>:<>
    {localError&&!view.error&&<p role="alert">{localError}</p>}
-   <SameGoalAdviceContentV310 view={view} account={account} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)}/>
+   <SameGoalAdviceContentV310 view={view} account={account} task={task} requestJSON={requestJSON} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)}/>
    {continuation&&<section className="media-form" aria-label="原建议的后续办理草案">
     <div className="same-advice-heading"><div><h5>后续办理</h5><p>先拟定并保存方案，保存草案不会执行任务或操作设备。</p></div>
      <Button Btn={Btn} disabled={!sectionOpen&&(view.busy||view.loading)} aria-expanded={sectionOpen}
