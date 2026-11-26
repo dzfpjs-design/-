@@ -5,6 +5,7 @@ both committed tables and public DTOs. They never assert physical connectivity.
 """
 import copy
 import json
+import os
 import socket
 import threading
 import time
@@ -44,7 +45,10 @@ def scene(client, tmp_path, monkeypatch, request):
     key_dir = tmp_path / 'gateway-keys'; key_dir.mkdir(mode=0o700)
     key = key_dir / 'master.key'; crypto.create_key(key)
     monkeypatch.setattr(settings(), 'device_gateway_key_file', key)
-    sock = socket.socket(); sock.bind(('127.0.0.1', 0)); sock.listen(20)
+    test_port = int(os.environ.get('GA_TEST_SYNTHETIC_GATEWAY_PORT', '0'))
+    if test_port and (not 1024 <= test_port <= 65535 or test_port == 55486):
+        raise ValueError('invalid isolated synthetic gateway port')
+    sock = socket.socket(); sock.bind(('127.0.0.1', test_port)); sock.listen(20)
     origin = 'http://127.0.0.1:' + str(sock.getsockname()[1])
     monkeypatch.setattr(settings(), 'device_gateway_allowed_origins', origin)
     token = getattr(request, 'param', TOKEN)
