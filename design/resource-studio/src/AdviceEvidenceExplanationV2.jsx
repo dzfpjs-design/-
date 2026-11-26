@@ -5,7 +5,7 @@ const KINDS={capability_declaration:'已登记能力',observation:'现场观测'
 const SCOPES={provided_source_text:'已提供的资料',provided_excerpt:'资料摘录',
  not_reviewed:'资料范围待核',unknown:'资料范围待核'};
 const SOURCE_TYPES={observation:'观测记录',capability:'能力资料',evidence:'业务资料',packet:'资料包',archive_record:'归档记录'};
-const FRESHNESS={current:'有效期内',stale:'已过期',unknown:'时效待核',not_applicable:'不适用'};
+const FRESHNESS={current:'在原设定有效期内',stale:'已过期',unknown:'时效待核',not_applicable:'不适用'};
 const OBSERVATION={
  not_cited:'未引用现场观测，设备状态待核。',
  current:'已引用现场观测，设备当前状态仍需确认。',
@@ -30,7 +30,7 @@ function sourceNames(types){
 // Do not turn malformed or internally inconsistent response data into an
 // evidence conclusion. The server remains responsible for source validation.
 function checkedEvidence(value){
- if(!value||typeof value!=='object'||!Array.isArray(value.items)||
+ if(!value||typeof value!=='object'||typeof value.has_recommendation!=='boolean'||!Array.isArray(value.items)||
   !['capability_count','observation_count','other_count','partial_source_count'].every(k=>Number.isSafeInteger(value[k])&&value[k]>=0)||
   !Object.hasOwn(OBSERVATION,value.observation_state))return null;
  const counts={capability_declaration:0,observation:0,other:0};
@@ -64,9 +64,9 @@ function checkedPage(page){
 
 function EvidenceItem({item,index}){
  const data=item?.state==='ready'?checkedEvidence(item.evidence):null;
- if(!data)return <article className="media-form"><h5>建议 {index+1}</h5>
+ if(!data)return <article className="media-form"><h5>第 {index+1} 条</h5>
   <p role="status">依据待核实，暂无法展示。</p></article>;
- return <article className="media-form"><h5>建议 {index+1}</h5>
+ return <article className="media-form"><h5>{data.has_recommendation?'建议 '+(index+1):'暂无推荐方案'}</h5>
   <dl className="advice-evidence-counts">
    <div><dt>已登记能力</dt><dd>{data.capability_count} 条</dd></div>
    <div><dt>现场观测</dt><dd>{data.observation_count} 条</dd></div>

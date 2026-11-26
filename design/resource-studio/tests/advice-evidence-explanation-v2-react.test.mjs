@@ -6,7 +6,7 @@ import {createServer} from 'vite';
 
 const capability={kind:'capability_declaration',source_scope:'provided_excerpt',observed_at:null,freshness:'not_applicable',source_types:['capability','packet','PRIVATE-TYPE'],source_id:'PRIVATE-ID',source_text:'PRIVATE-TEXT'};
 const observation={kind:'observation',source_scope:'provided_source_text',observed_at:'2026-11-25T00:00:00Z',freshness:'current',source_types:['observation']};
-const evidence=(overrides={})=>({capability_count:1,observation_count:0,other_count:0,observation_state:'not_cited',partial_source_count:1,items:[capability],...overrides});
+const evidence=(overrides={})=>({has_recommendation:true,capability_count:1,observation_count:0,other_count:0,observation_state:'not_cited',partial_source_count:1,items:[capability],...overrides});
 
 test('evidence display stays truthful across disabled, uncertainty, paging and account changes',async()=>{
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
@@ -41,11 +41,18 @@ test('evidence display stays truthful across disabled, uncertainty, paging and a
   assert.match(document.body.textContent,/依据待核实/);
   assert.doesNotMatch(document.body.textContent,/PRIVATE-ID|PRIVATE-TEXT|PRIVATE-TYPE|999/);
   assert.doesNotMatch(document.body.textContent,/校验|内部|实验|候选|Schema|账本/);
+  items=[{state:'ready',evidence:evidence({has_recommendation:false,capability_count:0,partial_source_count:0,items:[]})}];
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
+  assert.match(document.body.textContent,/暂无推荐方案/);assert.doesNotMatch(document.body.textContent,/建议 1/);
+  items=[{state:'ready',evidence:evidence({has_recommendation:undefined})}];
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
+  assert.match(document.body.textContent,/依据待核实/);assert.doesNotMatch(document.body.textContent,/建议 1/);
   items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'current',partial_source_count:0,items:[observation]})}];
   await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
   assert.match(document.body.textContent,/已引用现场观测，设备当前状态仍需确认/);
   assert.doesNotMatch(document.body.textContent,/设备在线|现场已确认/);
   assert.match(document.body.textContent,/北京时间/);
+  assert.match(document.body.textContent,/在原设定有效期内/);
   assert.match(document.body.textContent,/来源：观测记录/);
   items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'unknown',partial_source_count:0,
    items:[{...observation,observed_at:null,observed_start:'2026-11-24T00:00:00Z',observed_end:'2026-11-25T00:00:00Z',freshness:'unknown'}]})}];
