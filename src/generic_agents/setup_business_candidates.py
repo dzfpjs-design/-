@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field, ValidationError, model_validator
 
-from .contracts import Contract
+from .contracts import Contract, digest
 from .db import session
 from .evidence import evidence_bytes
 from .models import SetupMaterial, uid
@@ -172,6 +172,17 @@ def _items(flow):
         yield ('step', step.get('id')), step
 
 
+def _candidate_basis(item, scope, name=''):
+    fields = (('trigger', 'output', 'inferenceReason') if scope == 'business' else
+              ('id', 'name', 'purpose', 'agent', 'role', 'output', 'sourceId',
+               'citation', 'condition', 'nextId', 'elseId', 'inferenceReason'))
+    return digest({'scope': scope, 'name': name if scope == 'business' else '',
+                   'candidateKey': item.get('candidateKey'),
+                   'values': {key: item.get(key, '') for key in fields},
+                   'citations': item.get('citations', []),
+                   'pending': item.get('candidateUnresolvedSources', [])})
+
+
 def _verified_resolution(db, p, source, citations, snapshots):
     identity = source['material_id']
     if identity not in snapshots:
@@ -226,10 +237,11 @@ def protect_transitions(db, p, previous, proposed):
                         if aliases.get(key) == name and isinstance(new_flows[key], dict)]
             if len(possible) == 1:
                 new_flow = possible[0]
-        old_pending = (isinstance(old_flow, dict) and any(
-            item.get('candidateUnresolvedSources') for _, item in _items(old_flow)))
-        if new_flow is None and old_pending and new_names:
-            raise HTTPException(409, '待核业务请先单独删除，再新建其他业务')
+        old_protected = (isinstance(old_flow, dict) and any(
+            item.get('candidateBasisHash') or item.get('candidateUnresolvedSources')
+            for _, item in _items(old_flow)))
+        if new_flow is None and old_protected and new_names:
+            raise HTTPException(409, '候选业务请先单独删除，再新建其他业务')
         if not isinstance(old_flow, dict) or not isinstance(new_flow, dict):
             continue
         new_items = dict(_items(new_flow))
@@ -237,10 +249,14 @@ def protect_transitions(db, p, previous, proposed):
         new_steps = {key for key in new_items if key[0] == 'step' and key not in old_items}
         for identity, old_item in _items(old_flow):
             if identity not in new_items:
-                if identity[0] == 'step' and old_item.get('candidateUnresolvedSources') and new_steps:
-                    raise HTTPException(409, '待核步骤请先单独删除，再新增其他步骤')
+                if (identity[0] == 'step' and (old_item.get('candidateBasisHash')
+                        or old_item.get('candidateUnresolvedSources')) and new_steps):
+                    raise HTTPException(409, '候选步骤请先单独删除，再新增其他步骤')
                 continue
             new_item = new_items[identity]
+            if ('candidateBasisHash' in old_item
+                    and new_item.get('candidateBasisHash') != old_item['candidateBasisHash']):
+                raise HTTPException(409, '业务候选来源标记不能直接修改，原草稿保留')
             old_sources = validate_unresolved(old_item.get('candidateUnresolvedSources', []))
             new_sources = validate_unresolved(new_item.get('candidateUnresolvedSources', []))
             for source in old_sources:
@@ -304,6 +320,36 @@ def protect_transitions(db, p, previous, proposed):
                     or saved.get('citations', []) != step['citations']
                     or saved.get('candidateUnresolvedSources', []) != step['unresolved_sources']):
                 raise HTTPException(409, '候选步骤或依据已变化，请重新核验')
+        # The client never supplies the trusted baseline. Keep it when users
+        # later edit: a differing basis prevents automatic source replacement.
+        flow['candidateBasisHash'] = _candidate_basis(flow, 'business', name)
+        for saved in steps:
+            saved['candidateBasisHash'] = _candidate_basis(saved, 'step')
+
+
+def protect_recovery(previous, proposed):
+    """Do not silently discard a candidate or its pending basis in history restore."""
+    if previous.get('businessCandidates') != proposed.get('businessCandidates'):
+        raise HTTPException(409, '历史版本的业务候选不同，请先处理当前候选，原草稿保留')
+    new_flows = proposed.get('flows', {})
+    for name, old_flow in previous.get('flows', {}).items():
+        if not isinstance(old_flow, dict):
+            continue
+        current = dict(_items(old_flow))
+        protected = {identity: item for identity, item in current.items()
+                     if item.get('candidateBasisHash') or item.get('candidateUnresolvedSources')}
+        if not protected:
+            continue
+        new_flow = new_flows.get(name)
+        if not isinstance(new_flow, dict):
+            raise HTTPException(409, '历史版本会移除候选来源，请先处理该业务，原草稿保留')
+        new_items = dict(_items(new_flow))
+        for identity, old_item in protected.items():
+            item = new_items.get(identity)
+            if (not isinstance(item, dict)
+                    or item.get('candidateBasisHash') != old_item.get('candidateBasisHash')
+                    or item.get('candidateUnresolvedSources', []) != old_item.get('candidateUnresolvedSources', [])):
+                raise HTTPException(409, '历史版本会改变候选待核依据，请先处理该业务，原草稿保留')
 
 
 router = APIRouter()
@@ -360,64 +406,53 @@ class RevalidateCandidates(Contract):
     revision: int = Field(strict=True, ge=1)
 
 
-def _resolve_pending(item, candidate, material):
-    expected = {(source['source_text'], source['quote']) for source in candidate['sources']}
-    pending = item.get('candidateUnresolvedSources', [])
-    keep = []
-    changed = False
-    for source in pending:
-        if (source['material_id'] != material['id']
-                or (source['source_text'], source['quote']) not in expected):
-            keep.append(source)
-            continue
-        result = resolve_material_citation(material=material, expected_file_hash=material['hash'],
-            expected_material_version=material['version'], expected_engine=material['engine'],
-            source_text=source['source_text'], quote=source['quote'])
-        if result['status'] != 'matched':
-            keep.append(source)
-            continue
-        ref = result['citation']
-        if ref not in item.setdefault('citations', []):
-            item['citations'].append(ref)
-        changed = True
+def _refresh_candidate_basis(item, candidate, scope, name=''):
+    if not item.get('candidateBasisHash') or item['candidateBasisHash'] != _candidate_basis(item, scope, name):
+        return False, bool(candidate.get('sources'))
+    citations, pending = candidate['citations'], candidate['unresolved_sources']
+    changed = item.get('citations', []) != citations or item.get('candidateUnresolvedSources', []) != pending
     if changed:
-        item['candidateUnresolvedSources'] = keep
-    return changed
+        item['citations'] = copy.deepcopy(citations)
+        item['candidateUnresolvedSources'] = copy.deepcopy(pending)
+        item['candidateBasisHash'] = _candidate_basis(item, scope, name)
+    return changed, False
 
 
 def _resolve_unchanged_flows(value, preview, material):
     choices = {candidate['key']: candidate for candidate in preview['candidates']}
+    skipped = 0
     for name, flow in value.get('flows', {}).items():
         candidate = choices.get(flow.get('candidateKey')) if isinstance(flow, dict) else None
-        if (not candidate or name != candidate['name']
-                or 'reportSource' in flow or 'fullSemanticSource' in flow):
+        if not candidate:
             continue
-        changed = False
-        if (flow.get('trigger') == candidate['trigger'] and flow.get('output') == candidate['output']
-                and flow.get('inferenceReason', '') == candidate['inference_reason']):
-            changed = _resolve_pending(flow, candidate, material)
+        if name != candidate['name'] or 'reportSource' in flow or 'fullSemanticSource' in flow:
+            skipped += 1
+            continue
+        changed, missed = _refresh_candidate_basis(flow, candidate, 'business', name)
+        skipped += int(missed)
         steps = flow.get('steps', [])
         by_key = {step.get('candidateKey'): step for step in steps}
-        ids = {key: step.get('id') for key, step in by_key.items()}
         if len(by_key) != len(steps):
+            skipped += 1
             if changed:
                 flow['confirmedAt'] = None
                 flow['confirmedSignature'] = None
+                flow.pop('candidateContentApproval', None)
+                flow.pop('candidateContentReview', None)
             continue
         for source in candidate['steps']:
             saved = by_key.get(source['key'])
             if not saved:
                 continue
-            fields = ('name', 'purpose', 'agent', 'role', 'output', 'condition')
-            if (any(saved.get(field, '') != source[field] for field in fields)
-                    or saved.get('inferenceReason', '') != source['inference_reason']
-                    or saved.get('nextId', 'auto') != ids.get(source['next_key'], source['next_key'])
-                    or saved.get('elseId', 'end') != ids.get(source['else_key'], source['else_key'])):
-                continue
-            changed = _resolve_pending(saved, source, material) or changed
+            item_changed, missed = _refresh_candidate_basis(saved, source, 'step')
+            changed = item_changed or changed
+            skipped += int(missed)
         if changed:
             flow['confirmedAt'] = None
             flow['confirmedSignature'] = None
+            flow.pop('candidateContentApproval', None)
+            flow.pop('candidateContentReview', None)
+    return {'skipped': skipped}
 
 
 def _clear_stale_material_confirmations(previous, value, material, bundle):
@@ -434,6 +469,8 @@ def _clear_stale_material_confirmations(previous, value, material, bundle):
         if isinstance(flow, dict) and material['id'] in flow_source_ids(flow):
             flow['confirmedAt'] = None
             flow['confirmedSignature'] = None
+            flow.pop('candidateContentApproval', None)
+            flow.pop('candidateContentReview', None)
 
 
 @router.post('/candidates/revalidate')
@@ -453,7 +490,7 @@ def revalidate_candidates(body: RevalidateCandidates, p: P, db: DB):
                                                 ('id', 'version', 'hash', 'engine', 'status')}
     updated = validate_bundle(value['businessCandidates'])
     preview = preview_bundle(db, p, updated)
-    _resolve_unchanged_flows(value, preview, material)
+    recheck = _resolve_unchanged_flows(value, preview, material)
     # A changed material version affects approvals only when the flow actually
     # references it and that flow's saved material snapshot is still stale.
     # Do not disturb unrelated flows or approvals based on the current version.
@@ -468,6 +505,6 @@ def revalidate_candidates(body: RevalidateCandidates, p: P, db: DB):
             raise HTTPException(409, '已有业务来源需要先核对，原草稿保留')
     if value == row.data:
         db.commit()
-        return {'draft': draft_view(row), 'preview': preview}
+        return {'draft': draft_view(row), 'preview': preview, 'recheck': recheck}
     result = _save_candidates(db, p, row, value, 'setup.candidates.revalidate')
-    return {'draft': result, 'preview': preview}
+    return {'draft': result, 'preview': preview, 'recheck': recheck}
