@@ -70,12 +70,14 @@ def _size(key, result=''):
             + sum(sys.getsizeof(item) for item in (text, marker, projection, *owner)))
 
 
-def install(monkeypatch, budget):
+def install(monkeypatch, budget, *, disable_process_cache=True):
     """Install only in a disposable test process; preserve original failures."""
     from generic_agents import typed_payload_orm_v131 as orm
     original = codec.decode_payload
-    # Avoid the existing process-global LRU so tests can prove scope isolation.
-    monkeypatch.setattr(codec, '_verified_decode_json', codec._verified_decode_json.__wrapped__)
+    # Earlier isolated scope tests disable the existing process LRU; coexistence
+    # tests keep it unchanged and distinguish its hits from the new scope cache.
+    if disable_process_cache:
+        monkeypatch.setattr(codec, '_verified_decode_json', codec._verified_decode_json.__wrapped__)
 
     def decode(text, marker, owner, projection_text):
         scope = _CURRENT.get()
