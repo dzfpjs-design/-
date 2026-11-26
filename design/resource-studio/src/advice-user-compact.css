@@ -1,0 +1,7 @@
+.advice-user-panel .advice-user-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.advice-user-panel .advice-user-heading h4,.advice-user-panel h5{margin:0}
+.advice-user-panel .advice-user-item{margin:10px 0 0;padding:10px 0 0;border-top:1px solid #dce7f8}
+.advice-user-panel .advice-user-item p{margin:5px 0}
+.advice-user-panel .advice-user-item button{margin-top:6px}
+.advice-user-panel .advice-user-choice{display:flex;align-items:flex-start;gap:8px;margin-top:10px}
+.advice-user-panel .advice-user-choice input{flex:none;margin-top:3px}
