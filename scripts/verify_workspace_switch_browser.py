@@ -161,6 +161,12 @@ try:
     ws.click('登录');ws.until("!!document.querySelector('select[aria-label=\"切换工作区\"]')")
     ws.eval("(()=>{let s=document.querySelector('select[aria-label=\"切换工作区\"]'),o=[...s.options].find(x=>x.text==='合成林场乙');if(s.value!==o.value){s.value=o.value;s.dispatchEvent(new Event('change',{bubbles:true}))}})()")
     ws.until("document.querySelector('input[placeholder^=\"为这个业务三智能体\"]')?.value==='乙配置'")
+    ws.eval("window.__originalFetch=window.fetch;window.fetch=(url,options)=>String(url).startsWith('/api/me')?new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true})):window.__originalFetch(url,options)")
+    ws.eval("(()=>{let s=document.querySelector('select[aria-label=\"切换工作区\"]');s.value=[...s.options].find(x=>x.text==='合成林场甲').value;s.dispatchEvent(new Event('change',{bubbles:true}))})()")
+    ws.until("document.getElementById('root').inert===true")
+    ws.until("document.body.innerText.includes('暂时无法切换工作区')")
+    assert ws.eval("!document.getElementById('root').inert&&document.querySelector('input[placeholder^=\"为这个业务三智能体\"]')?.value==='乙配置'") is True
+    ws.eval("window.fetch=window.__originalFetch")
     import psycopg
     revoked=ws.eval("[...document.querySelector('select[aria-label=\"切换工作区\"]').options].find(x=>x.text==='合成林场甲').value")
     with psycopg.connect(host='127.0.0.1',port=pg_port,user='advice_test',dbname=db) as connection:
@@ -168,7 +174,7 @@ try:
     ws.eval("(()=>{let s=document.querySelector('select[aria-label=\"切换工作区\"]');s.value=[...s.options].find(x=>x.text==='合成林场甲').value;s.dispatchEvent(new Event('change',{bubbles:true}))})()")
     ws.until("document.body.innerText.includes('工作区权限已变化')")
     assert ws.eval("document.querySelector('input[placeholder^=\"为这个业务三智能体\"]')?.value==='乙配置'") is True
-    print('PASS workspace switch, save, modal guard, reload, restart, relogin and revoked target')
+    print('PASS workspace switch, save, modal guard, reload, restart, relogin, timeout recovery and revoked target')
 finally:
     if ws:
         try:ws.ws.close()
