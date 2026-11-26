@@ -1,7 +1,8 @@
 """The synthetic runner must not leave its own test children running."""
 import importlib.util
+import io
 import json
-import signal
+import os
 import subprocess
 import sys
 import tempfile
@@ -60,20 +61,82 @@ def test_failed_parent_does_not_leave_a_running_child(tmp_path):
               "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2],sys.argv[3]]);"
               "p=pathlib.Path(sys.argv[2]);"
               "exec('while not p.exists(): time.sleep(0.01)');sys.exit(1)")
-    process = subprocess.Popen([sys.executable, '-c', parent, child, str(ready), str(marker)],
-                               start_new_session=True)
+    module = runner_module()
+    read_fd,write_fd=os.pipe()
+    process = subprocess.Popen([sys.executable,str(Path(module.__file__).parent/'synthetic_process_anchor.py'),
+        str(write_fd),sys.executable,'-c',parent,child,str(ready),str(marker)],
+        start_new_session=True,stdin=subprocess.PIPE,pass_fds=(write_fd,))
+    os.close(write_fd)
     try:
-        assert process.wait(timeout=5) == 1
-        assert runner_module()._stop_test_process_group(process) is True
+        assert module._await_test_result(read_fd,5) == 1
+        stopped = module._stop_test_process_group(process)
+        assert stopped is True
         time.sleep(1.2)
         assert not marker.exists()
     finally:
-        # Only the process group created by this test is targeted.
-        import os, signal
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
+        os.close(read_fd)
+        if process.stdin and not process.stdin.closed:process.stdin.close()
+        if process.returncode is None:process.wait(timeout=4)
+
+
+def test_reaped_process_group_is_never_signalled(monkeypatch):
+    module = runner_module()
+    process = subprocess.Popen([sys.executable, '-c', 'pass'],start_new_session=True)
+    assert process.wait(timeout=5) == 0
+    sent = []
+    monkeypatch.setattr(module.os, 'killpg', lambda pid, sig: sent.append(sig))
+    assert module._stop_test_process_group(process) is False
+    assert not sent
+
+
+def test_anchor_stops_own_group_when_parent_control_pipe_closes(tmp_path):
+    module=runner_module()
+    ready=tmp_path/'ready'
+    marker=tmp_path/'child-continued'
+    child="import pathlib,sys,time;pathlib.Path(sys.argv[1]).touch();time.sleep(1);pathlib.Path(sys.argv[2]).touch()"
+    read_fd,write_fd=os.pipe()
+    process=subprocess.Popen([sys.executable,str(Path(module.__file__).parent/'synthetic_process_anchor.py'),
+        str(write_fd),sys.executable,'-c',child,str(ready),str(marker)],stdin=subprocess.PIPE,
+        start_new_session=True,pass_fds=(write_fd,))
+    os.close(write_fd)
+    try:
+        deadline=time.monotonic()+3
+        while not ready.exists() and time.monotonic()<deadline:time.sleep(.01)
+        assert ready.exists()
+        process.stdin.close()
+        process.wait(timeout=4)
+        time.sleep(1.1)
+        assert not marker.exists()
+    finally:
+        os.close(read_fd)
+        if process.stdin and not process.stdin.closed:process.stdin.close()
+        if process.returncode is None:process.wait(timeout=4)
+
+
+def test_timeout_returns_no_result_and_stops_own_anchor(tmp_path):
+    module=runner_module()
+    read_fd,write_fd=os.pipe()
+    process=subprocess.Popen([sys.executable,str(Path(module.__file__).parent/'synthetic_process_anchor.py'),
+        str(write_fd),sys.executable,'-c','import time;time.sleep(3)'],stdin=subprocess.PIPE,
+        start_new_session=True,pass_fds=(write_fd,))
+    os.close(write_fd)
+    try:
+        assert module._await_test_result(read_fd,.2) is None
+        assert module._stop_test_process_group(process) is True
+    finally:
+        os.close(read_fd)
+        if process.stdin and not process.stdin.closed:process.stdin.close()
+        if process.returncode is None:process.wait(timeout=4)
+
+
+def test_unverifiable_process_identity_is_never_signalled(monkeypatch):
+    module = runner_module()
+    sent = []
+    monkeypatch.setattr(module.os, 'killpg', lambda pid, sig: sent.append(sig))
+    control=io.BytesIO();control.close()
+    process = SimpleNamespace(pid=123, returncode=None,stdin=control)
+    assert module._stop_test_process_group(process) is False
+    assert not sent
 
 
 def test_uncertain_database_start_is_not_reported_as_stopped(tmp_path, monkeypatch):
@@ -120,22 +183,27 @@ def test_cleanup_refuses_when_test_children_may_still_run():
 
 def test_group_still_present_after_kill_is_not_confirmed(monkeypatch):
     module = runner_module()
-    sent = []
-    monkeypatch.setattr(module.os, 'killpg', lambda pid, sig: sent.append(sig))
+    monkeypatch.setattr(module.subprocess, 'check_output', lambda *args,**kwargs:'123')
     times = iter((0, 0, 10))
     monkeypatch.setattr(module.time, 'monotonic', lambda: next(times))
     monkeypatch.setattr(module.time, 'sleep', lambda _: None)
-    process = SimpleNamespace(pid=123, wait=lambda timeout: 0, poll=lambda: 0)
+    process = SimpleNamespace(pid=123, returncode=None, stdin=io.BytesIO(),wait=lambda timeout: 0)
     assert module._stop_test_process_group(process) is False
-    assert signal.SIGTERM in sent and signal.SIGKILL in sent and 0 in sent
 
 
 def test_group_cannot_be_inspected_is_not_confirmed(monkeypatch):
     module = runner_module()
-    def reject(pid, sig):
+    def reject(*args,**kwargs):
         raise PermissionError('not permitted')
-    monkeypatch.setattr(module.os, 'killpg', reject)
-    process = SimpleNamespace(pid=123, wait=lambda timeout: 0, poll=lambda: 0)
+    monkeypatch.setattr(module.subprocess, 'check_output', reject)
+    process = SimpleNamespace(pid=123, returncode=None,stdin=io.BytesIO(),wait=lambda timeout:0)
+    assert module._stop_test_process_group(process) is False
+
+
+def test_empty_process_listing_is_not_proof_group_has_exited(monkeypatch):
+    module = runner_module()
+    monkeypatch.setattr(module.subprocess, 'check_output', lambda *args,**kwargs:'')
+    process = SimpleNamespace(pid=123, returncode=None,stdin=io.BytesIO(),wait=lambda timeout:0)
     assert module._stop_test_process_group(process) is False
 
 
@@ -154,8 +222,9 @@ def test_successful_test_with_unconfirmed_process_group_reports_failure(tmp_path
     monkeypatch.setattr(module, '_port', lambda: next(ports))
     monkeypatch.setattr(module.subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(returncode=0))
     monkeypatch.setattr(module.subprocess, 'check_output', lambda *args, **kwargs: '123')
-    process = SimpleNamespace(pid=123, wait=lambda timeout: 0, poll=lambda: 0)
+    process = SimpleNamespace(pid=123, returncode=None)
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kwargs: process)
+    monkeypatch.setattr(module, '_await_test_result', lambda *args: 0)
     monkeypatch.setattr(module, '_stop_test_process_group', lambda _: False)
     assert module.run(pg, Path(sys.executable), checkpoint, 10, retention_probe=True) == 1
     status = json.loads((root / 'status.json').read_text())
