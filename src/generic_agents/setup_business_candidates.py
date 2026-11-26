@@ -244,6 +244,14 @@ def protect_transitions(db, p, previous, proposed):
             raise HTTPException(409, '候选业务请先单独删除，再新建其他业务')
         if not isinstance(old_flow, dict) or not isinstance(new_flow, dict):
             continue
+        # IDs are needed to associate each protected source with exactly one
+        # current step.  A duplicate must never let a dict silently choose one.
+        if old_protected:
+            steps = new_flow.get('steps', [])
+            ids = [step.get('id') if isinstance(step, dict) else None for step in steps]
+            if (any(not isinstance(identity, str) or not identity for identity in ids)
+                    or len(ids) != len(set(ids))):
+                raise HTTPException(409, '候选步骤无法唯一核对，原草稿保留')
         new_items = dict(_items(new_flow))
         old_items = dict(_items(old_flow))
         new_steps = {key for key in new_items if key[0] == 'step' and key not in old_items}
@@ -254,9 +262,17 @@ def protect_transitions(db, p, previous, proposed):
                     raise HTTPException(409, '候选步骤请先单独删除，再新增其他步骤')
                 continue
             new_item = new_items[identity]
-            if ('candidateBasisHash' in old_item
-                    and new_item.get('candidateBasisHash') != old_item['candidateBasisHash']):
-                raise HTTPException(409, '业务候选来源标记不能直接修改，原草稿保留')
+            if 'candidateBasisHash' in old_item:
+                if new_item.get('candidateKey') != old_item.get('candidateKey'):
+                    raise HTTPException(409, '业务候选来源标记不能直接修改，原草稿保留')
+                if 'candidateBasisHash' not in new_item:
+                    # A just-saved browser draft can predate the server's
+                    # protected marker, including an edit made in flight.
+                    # Restore only the locked, authoritative marker; never
+                    # overwrite the user's actual content or pending sources.
+                    new_item['candidateBasisHash'] = old_item['candidateBasisHash']
+                elif new_item['candidateBasisHash'] != old_item['candidateBasisHash']:
+                    raise HTTPException(409, '业务候选来源标记不能直接修改，原草稿保留')
             old_sources = validate_unresolved(old_item.get('candidateUnresolvedSources', []))
             new_sources = validate_unresolved(new_item.get('candidateUnresolvedSources', []))
             for source in old_sources:
