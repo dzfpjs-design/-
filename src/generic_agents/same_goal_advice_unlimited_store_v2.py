@@ -130,7 +130,8 @@ def read_expired_cancelled(db, p, task, plan):
         return _read_queued(reader, p, task.id, plan.id, cancelled=True)
 
 
-def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelled=False, started=False, reserved_test_only=False, intent_test_only=False):
+def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelled=False, started=False, reserved_test_only=False, intent_test_only=False, settled_test_only=False):
+    old_store.need(type(settled_test_only) is bool and (not settled_test_only or intent_test_only))
     old_store.need(type(intent_test_only) is bool and (not intent_test_only or reserved_test_only))
     old_store.need(not reserved_test_only or (lock and prepared and started and not cancelled))
     if reserved_test_only:
@@ -270,16 +271,22 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
             from . import same_goal_advice_unlimited_lease_candidate_v2 as leases
             from . import same_goal_advice_cloud_claim_test_v2 as claims
             from . import same_goal_advice_transport_intent_candidate_v2 as intents
+            from . import same_goal_advice_dispatch_permit_candidate_v2 as permits
+            from . import same_goal_advice_terminal_candidate_v2 as terminal
             document_events = [event for event in events if event.action == DOCUMENT_PREPARED]
             preview_events = [event for event in events if event.action == previews.ACTION]
             start_events = [event for event in events if event.action == starts.ACTION]
             lease_events = [event for event in events if event.action == leases.ACTION]
             reservation_events = [event for event in events if event.action == claims.ACTION]
             intent_events = [event for event in events if event.action == intents.ACTION]
+            permit_events = [event for event in events if event.action == permits.ACTION]
+            terminal_events = [event for event in events if event.action == terminal.ACTION]
             old_store.need(len(start_events)==(1 if started else 0)
                 and len(reservation_events)==(1 if reserved_test_only else 0)
                 and len(intent_events)==(1 if intent_test_only else 0)
-                and len(document_events)+len(preview_events)+len(start_events)+len(lease_events)+len(reservation_events)+len(intent_events)==len(events))
+                and len(permit_events)==(1 if settled_test_only else 0)
+                and len(terminal_events)==(1 if settled_test_only else 0)
+                and len(document_events)+len(preview_events)+len(start_events)+len(lease_events)+len(reservation_events)+len(intent_events)+len(permit_events)+len(terminal_events)==len(events))
             receipt = document.verify_original(db, p, task, plan, prep, job, document_events, files)
             previews.validate_chain(db, p, task, plan, prep, receipt, preview_events)
             if started:
@@ -295,9 +302,15 @@ def _read_queued(db, p, task_id, plan_id, *, lock=True, prepared=False, cancelle
             if reserved_test_only:
                 from . import same_goal_advice_cloud_reservation_candidate_v2 as reservations
                 old_store.need(len(lease_events)==1 and len(cloud)==1)
-                reservation=reservations.verify_saved_links(db,p,task,plan,prep,send_job,start_events[0],
-                    lease_events[0],preview_events,reservation_events[0],cloud[0])
-                if intent_test_only:
+                if settled_test_only:
+                    proof=terminal.verify(db,p.workspace_id,cloud[0].id,intent_events[0].id)
+                    old_store.need(proof['plan_id']==plan.id and proof['terminal_audit_id']==terminal_events[0].id)
+                    reservation={'cloud_call_id':cloud[0].id,'reservation_audit_id':reservation_events[0].id}
+                    intent={'intent_audit_id':intent_events[0].id}
+                else:
+                    reservation=reservations.verify_saved_links(db,p,task,plan,prep,send_job,start_events[0],
+                        lease_events[0],preview_events,reservation_events[0],cloud[0])
+                if intent_test_only and not settled_test_only:
                     preview_event=next(item for item in preview_events if item.id==reservation_events[0].data['preview_ref']['id'])
                     intent=intents.verify_saved_links(db,p,task,plan,send_job,prep,preview_event,
                         reservation_events[0],cloud[0],intent_events[0])

@@ -6,7 +6,7 @@ Unknown versions, incomplete originals, and unexplained records fail closed.
 """
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 
 from . import same_goal_advice_contracts_v302 as c
 from . import same_goal_advice_store_v302 as old
@@ -53,8 +53,25 @@ def read_snapshot(db, p, task):
 
 def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_test_only=False):
     from . import same_goal_advice_execution_v308 as execution
+    from .config import settings
 
     old.need(type(intent_test_only) is bool and (not intent_test_only or reserved_plan_test_only is not None))
+    terminal_enabled=settings().v2_terminal_history_test_enabled
+    if terminal_enabled:
+        from . import same_goal_advice_cloud_claim_test_v2 as terminal_guard
+        from . import same_goal_advice_terminal_candidate_v2 as terminal
+        terminal_guard.require_test_database(db)
+        if not lock:
+            # A repeatable-read, read-only display cannot use the live
+            # terminal verifier's row/table locks. If a terminal exists, do
+            # not silently omit it or turn a snapshot into send authority.
+            # With no terminal, retain the pre-existing snapshot behavior.
+            table=db.scalar(text("SELECT to_regclass('public.ga_test_advice_v2_terminals')"))
+            has_terminal=(db.scalar(text('''SELECT EXISTS(SELECT 1 FROM public.ga_test_advice_v2_terminals t
+                JOIN public.plan_versions p ON p.workspace_id=t.workspace_id AND p.id=t.plan_id
+                WHERE t.workspace_id=:w AND p.task_id=:t)'''),{'w':p.workspace_id,'t':task_id}) if table else False)
+            old.need(not has_terminal, '存在已结算业务建议，快照核验尚不可用；请查看原请求状态')
+            terminal_enabled=False
     if reserved_plan_test_only is not None:
         from . import same_goal_advice_cloud_claim_test_v2 as claims
         claims.require_test_database(db)
@@ -70,7 +87,9 @@ def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_tes
         plans = old._rows(db, p, Plan, or_(
             (Plan.task_id == task.id) & Plan.data['schema'].as_string().startswith('same-goal-advice-', autoescape=True),
             Plan.data['preparation_snapshot']['scope']['task_id'].as_string() == task.id))
-        legacy, queued, closed = [], [], []
+        if terminal_enabled and any(type(plan.data) is dict and plan.data.get('schema')==v2.PLAN for plan in plans):
+            terminal._schema(db)
+        legacy, queued, closed, settled = [], [], [], []
         for plan in plans:
             schema = plan.data.get('schema') if type(plan.data) is dict else None
             if schema == c.PLAN:
@@ -81,7 +100,19 @@ def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_tes
                 prepared = plan.status in {'awaiting_consent','awaiting_dispatch'}
                 cancellations = old._rows(db, p, Audit, Audit.action == v2.CANCELLED_EXPIRED, Audit.object_id == plan.id)
                 cancelled = bool(cancellations)
-                if plan.id == reserved_plan_test_only:
+                terminal_row = (db.execute(text('SELECT call_id,intent_id,audit_id FROM public.ga_test_advice_v2_terminals '
+                    'WHERE workspace_id=:w AND plan_id=:p'),{'w':p.workspace_id,'p':plan.id}).one_or_none()
+                    if terminal_enabled else None)
+                if terminal_row is not None:
+                    old.need(started and not cancelled and plan.id != reserved_plan_test_only)
+                    checked=v2._read_queued(db,p,task.id,plan.id,prepared=True,started=True,
+                        reserved_test_only=True,intent_test_only=True,settled_test_only=True)
+                    prep,job,reservation,dispatch_intent=checked
+                    old.need(reservation['cloud_call_id']==terminal_row.call_id
+                        and dispatch_intent['intent_audit_id']==terminal_row.intent_id)
+                    settled.append((plan,prep,job,terminal_row))
+                    continue
+                elif plan.id == reserved_plan_test_only:
                     old.need(started and not cancelled)
                     # We are already inside the caller's isolated reader; the
                     # shared claim guard checks its actual bound Connection.
@@ -146,7 +177,7 @@ def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_tes
 
         # Reverse inventory: a missing Plan must not make a visible v2 job or
         # acceptance disappear. Future v2 variants are intentionally blocked.
-        v2records = queued + closed
+        v2records = queued + closed + [(plan,prep,job) for plan,prep,job,_ in settled]
         v2ids = [row[0].id for row in v2records]
         v2prefix = 'same-goal-advice-prepare-v2:' + task.id + ':'
         v2send = 'same-goal-advice-send-v2:' + task.id + ':'
@@ -175,6 +206,16 @@ def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_tes
         expected_audits |= {plan.data[starts.POINTER]['audit_id'] for plan, _, _ in queued if plan.status=='awaiting_dispatch'}
         expected_audits |= {event.id for plan, _, _ in queued if plan.status=='awaiting_dispatch'
             for event in old._rows(db,p,Audit,Audit.action==leases.ACTION,Audit.object_id==plan.id)}
+        if settled:
+            from . import same_goal_advice_cloud_claim_test_v2 as claims
+            from . import same_goal_advice_transport_intent_candidate_v2 as intents
+            from . import same_goal_advice_dispatch_permit_candidate_v2 as permits
+            for plan,_prep,_job,entry in settled:
+                for action in (previews.ACTION,starts.ACTION,leases.ACTION,claims.ACTION,intents.ACTION,permits.ACTION,terminal.ACTION):
+                    rows=old._rows(db,p,Audit,Audit.action==action,Audit.object_id==plan.id)
+                    old.need(bool(rows) and (len(rows)==1 or action==previews.ACTION))
+                    expected_audits.update(row.id for row in rows)
+                expected_audits.add(entry.audit_id)
         if reserved_plan_test_only is not None:
             old.need(verified_reservation is not None and any(row[0].id == reserved_plan_test_only for row in queued))
             expected_audits.add(verified_reservation['reservation_audit_id'])
@@ -183,6 +224,7 @@ def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_tes
                 expected_audits.add(verified_intent['intent_audit_id'])
         expected_jobs = {row[2].id for row in v2records} | {
             plan.data[starts.POINTER]['job_id'] for plan, _, _ in queued if plan.status=='awaiting_dispatch'}
+        expected_jobs |= {plan.data[starts.POINTER]['job_id'] for plan,_,_,_ in settled}
         old.need({job.id for job in v2jobs} == expected_jobs
             and {event.id for event in v2audits} == expected_audits,
             '业务建议存在未识别的任务或凭据，保留原记录等待核对')
@@ -210,6 +252,7 @@ def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_tes
             for row in v2records if row[0].status in {'awaiting_consent','awaiting_dispatch'}
             and row[1]['request']['document_source']['kind'] == 'approved_source_set'}
         expected_cloud = ({verified_reservation['cloud_call_id']} if verified_reservation is not None else set())
+        expected_cloud |= {entry.call_id for _,_,_,entry in settled}
         old.need(not v2calls and {item.id for item in cloud} == expected_cloud
             and {item.id for item in evidence} == expected_files,
             '业务建议存在未识别的调用或资料记录，保留原记录等待核对')

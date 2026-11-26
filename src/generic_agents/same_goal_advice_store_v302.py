@@ -186,8 +186,27 @@ def _discover_reserved_history_test_only(db,p,task):
     ids=[plan.id for plan in plans]
     if not ids:return None,False
     events=_rows(db,p,Audit,Audit.action.in_([reservation_action,intent_action]),Audit.object_id.in_(ids))
-    reserved=[event for event in events if event.action==reservation_action]
-    intents=[event for event in events if event.action==intent_action]
+    # A closed original is not an active reservation. It may be excluded only
+    # after revalidating its complete preparation, original dispatch permit,
+    # captured answer, atomic settlement receipt and current daily accounting.
+    # Full common inventory validation still follows this discovery step.
+    from .config import settings
+    settled_ids=set()
+    if settings().v2_terminal_history_test_enabled:
+        from sqlalchemy import text
+        from . import same_goal_advice_terminal_candidate_v2 as terminal
+        from . import same_goal_advice_unlimited_store_v2 as custody
+        terminal._schema(db)
+        for plan in plans:
+            row=db.execute(text('SELECT call_id,intent_id FROM public.ga_test_advice_v2_terminals '
+                'WHERE workspace_id=:w AND plan_id=:p'),{'w':p.workspace_id,'p':plan.id}).one_or_none()
+            if row is None:continue
+            checked=custody._read_queued(db,p,task.id,plan.id,prepared=True,started=True,
+                reserved_test_only=True,intent_test_only=True,settled_test_only=True)
+            need(checked[2]['cloud_call_id']==row.call_id and checked[3]['intent_audit_id']==row.intent_id)
+            settled_ids.add(plan.id)
+    reserved=[event for event in events if event.action==reservation_action and event.object_id not in settled_ids]
+    intents=[event for event in events if event.action==intent_action and event.object_id not in settled_ids]
     need(len(reserved)<=1 and len(intents)<=1)
     if not reserved:
         need(not intents)
