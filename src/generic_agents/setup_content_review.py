@@ -43,9 +43,12 @@ def _lock_actor(db, p):
         raise HTTPException(403, '当前账号或权限已变化，请重新登录')
 
 
-def _signature(configuration, flow):
+def _signature(configuration, flow, business):
     from .instance_compiler import signature_value
-    return json.dumps(signature_value(configuration, flow), ensure_ascii=False,
+    content = {'business': business, 'flow': signature_value(configuration, flow),
+               'candidateKey': flow.get('candidateKey'),
+               'candidateBasisHash': flow.get('candidateBasisHash')}
+    return json.dumps(content, ensure_ascii=False,
                       sort_keys=True, separators=(',', ':'), allow_nan=False)
 
 
@@ -105,7 +108,7 @@ def invalidate_content_reviews(previous, proposed, *, changed_sources=()):
             valid = (not changed.intersection(_review_source_ids(flow))
                      and type(review) is dict and review.get('business') == name
                      and isinstance(review.get('signature'), str)
-                     and json.loads(review['signature']) == json.loads(_signature(value, flow)))
+                     and json.loads(review['signature']) == json.loads(_signature(value, flow, name)))
         except (ValueError, TypeError, KeyError, RecursionError, HTTPException):
             valid = False
         if not valid:
@@ -154,7 +157,7 @@ def content_review(body: ContentReview, p: P, db: DB):
                     or pinned.get('version') != current.version or pinned.get('hash') != current.sha256):
                 raise HTTPException(409, '关联资料已更新，请重新核对草案')
         try:
-            signature = _signature(value, flow)
+            signature = _signature(value, flow, body.business)
         except (ValueError, TypeError, KeyError, RecursionError, HTTPException):
             raise HTTPException(409, '草案内容无法核对，请刷新后重试') from None
         flow[FIELD] = {'business': body.business, 'signature': signature,
