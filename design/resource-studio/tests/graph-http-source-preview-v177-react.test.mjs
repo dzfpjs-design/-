@@ -141,10 +141,17 @@ test('actual ReactDOM preview explains mapped SIM units, future receipts and sep
  await mounted(preview,container=>{
   const section=container.querySelector('[aria-label="HTTP模拟来源与字段映射"]');assert.ok(section);
   const text=section.textContent;
-  for(const message of ['已确认映射的 HTTP 模拟设备来源','模拟数据（SIM）','仅供测试','现场状态未核实',
-   '供应商温度 → 温度','原单位：°C','不表示已经采集或收到回执','不会发送采集请求',
-   '另经授权的未来 HTTP 采集','新回执','原有回执不能','异常来源授权不等于设备执行或补采授权'])assert.ok(text.includes(message),message);
-  assert.ok(container.textContent.includes('流程内能力仍只允许本机只读执行'));
+  for(const message of ['模拟设备','模拟数据（SIM）','仅供测试','非真实设备观测或现场事实',
+   '模拟温度 → 温度','原单位：°C','预览不会发起采集','采样时间由模拟器提供',
+   '仅另经授权的后续采集','旧数据不会重复派单','审批、设备操作和补采须另行授权'])assert.ok(text.includes(message),message);
+  const mapping=section.querySelector('details');assert.ok(mapping);assert.equal(mapping.open,false);
+  assert.equal(mapping.querySelector('summary').textContent,'查看字段映射');
+  const workflow=[...container.querySelectorAll('details')].find(node=>node.querySelector('summary')?.textContent==='查看流程步骤和负责人');
+  assert.ok(workflow);assert.equal(workflow.open,false,'detailed steps stay available without filling the initial view');
+  const limits=[...container.querySelectorAll('details')].find(node=>node.querySelector('summary')?.textContent==='查看执行限制');
+  assert.ok(limits);assert.equal(limits.open,false);assert.match(limits.textContent,/最多 .* 步、.* 次能力调用/);
+  assert.equal((container.textContent.match(/非真实设备观测或现场事实/g)||[]).length,1);
+  assert.ok(container.textContent.includes('仅使用本机只读功能，不操作设备'));
   assert.equal(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/.test(container.textContent),false);
   assert.equal(container.textContent.includes('{"'),false);
   assert.equal(section.querySelector('button'),null,'preview has no acquisition or device action');
@@ -155,7 +162,7 @@ test('actual legacy ReactDOM preview retains its prior explanation without inven
  const s=await scene(),preview=await checkGraphRoutePreview(wire(s.preview),s.command,scope);
  await mounted(preview,container=>{
   assert.equal(container.querySelector('[aria-label="HTTP模拟来源与字段映射"]'),null);
-  assert.ok(container.textContent.includes('这里只允许本机只读能力。'));
-  assert.ok(container.textContent.includes('只处理启用后新送达且符合范围的异常'));
+  assert.ok(container.textContent.includes('仅使用本机只读功能，不操作设备。'));
+  assert.ok(container.textContent.includes('只处理启用后的新异常'));
  });
 });

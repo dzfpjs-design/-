@@ -141,13 +141,13 @@ async function rendered(preview){
 test('ReactDOM target text describes the actual expanded SIM observation goal and preserves old archive meaning',async()=>{
  const s=await scene(),checked=await checkGraphRoutePreview(wire(await preview(s)),s.command,scope);
  const text=await rendered(checked);
- assert.ok(text.includes('本次目标核对近1小时的 SIM 模拟观测（北京时间）'));
- assert.ok(text.includes('至少需 1 条符合范围的观测'));
- assert.ok(text.includes('未核实的提取资料，不等同现场事实，不直接改写对象档案'));
+ assert.ok(text.includes('近 1 小时的模拟观测（SIM，北京时间）'));
+ assert.ok(text.includes('至少 1 条'));
+ assert.ok(text.includes('非真实设备观测或现场事实'));assert.ok(text.includes('不会自动补采或更新对象档案'));
  const old=await scene({http:false}),oldChecked=await checkGraphRoutePreview(wire(await preview(old)),old.command,scope);
  const oldText=await rendered(oldChecked);
- assert.ok(oldText.includes('本次原目标仍核对已登记的对象档案'));
- assert.equal(oldText.includes('本次目标核对近1小时的 SIM 模拟观测（北京时间）'),false);
+ assert.ok(oldText.includes('核对已登记的对象档案'));
+ assert.equal(oldText.includes('近 1 小时的模拟观测（SIM，北京时间）'),false);
  assert.deepEqual(oldChecked.command.goal_spec.evidence,expectedArchive);
  assert.equal(graphWireCanonical(checked.expanded[0].goal_spec.evidence),graphWireCanonical(expectedHTTP));
 });
