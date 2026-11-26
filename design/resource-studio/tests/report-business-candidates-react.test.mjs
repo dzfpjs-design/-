@@ -12,9 +12,9 @@ const unresolved={...source,material_id:material.id,reason:'not_found'};
 const response={material,candidates:[{...business,citations:[],unresolved_sources:[],steps:[{...business.steps[0],citations:[],unresolved_sources:[unresolved]}]}]};
 
 async function environment(run){
- const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'}),keys=['window','document','navigator','IS_REACT_ACT_ENVIRONMENT'];
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'}),keys=['window','document','navigator','sessionStorage','IS_REACT_ACT_ENVIRONMENT'];
  const old=new Map(keys.map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
- globalThis.window=dom.window;globalThis.document=dom.window.document;Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.sessionStorage=dom.window.sessionStorage;Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});globalThis.IS_REACT_ACT_ENVIRONMENT=true;
  const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});let root;
  try{const {createRoot}=await import('react-dom/client'),{default:Component}=await server.ssrLoadModule('/src/ReportBusinessCandidates.jsx');root=createRoot(document.getElementById('root'));await run({Component,root,dom});}
  finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [key,value] of old){if(value)Object.defineProperty(globalThis,key,value);else delete globalThis[key];}}
@@ -67,4 +67,42 @@ test('material version changes require explicit recheck and saved-but-unadopted 
   request:async(path)=>{requests++;assert.equal(path,'/setup/candidates/revalidate');return {draft:saved,preview:response};}};
  await act(async()=>root.render(React.createElement(Component,props)));assert.equal(button('查看候选').disabled,true);assert.equal(button('重新核对依据').disabled,false);
  await act(async()=>button('重新核对依据').click());assert.equal(requests,1);assert.match(document.body.textContent,/结果已保存，请刷新后查看/);
+}));
+
+test('switching workspace hides a prior preview even when candidate contents are identical',()=>environment(async({Component,root})=>{
+ const initial={businesses:[],flows:{},businessCandidates:bundle};let saves=0;
+ const props={bundle,workspace:initial,materials:[material],materialReadStatus:'ready',canManage:true,Btn,onCommit:()=>{saves++;return true;},request:async()=>response};
+ await act(async()=>root.render(React.createElement(Component,{...props,account:{user_id:'u',workspace_id:'one',role:'admin'}})));
+ await act(async()=>button('查看候选').click());assert.match(document.body.textContent,/森林巡护/);
+ await act(async()=>root.render(React.createElement(Component,{...props,account:{user_id:'u',workspace_id:'two',role:'admin'}})));
+ assert.doesNotMatch(document.body.textContent,/森林巡护|内部原句/);assert.equal(button('加入业务清单'),undefined);assert.equal(saves,0);
+}));
+
+test('late preview and recheck responses cannot appear or be adopted after account switch',()=>environment(async({Component,root})=>{
+ const initial={businesses:[],flows:{},businessCandidates:bundle},old={user_id:'a',workspace_id:'one',role:'admin'},other={user_id:'b',workspace_id:'one',role:'admin'};
+ let releasePreview,releaseRecheck,adopted=0;const slowPreview=new Promise(resolve=>{releasePreview=resolve;}),slowRecheck=new Promise(resolve=>{releaseRecheck=resolve;});
+ const props={bundle,workspace:initial,materials:[material],materialReadStatus:'ready',canManage:true,Btn,prepareDraft:async()=>4,onAdopt:async()=>{adopted++;},onCommit:()=>true,
+  request:(path)=>path.endsWith('/preview')?slowPreview:slowRecheck};
+ await act(async()=>root.render(React.createElement(Component,{...props,account:old})));
+ await act(async()=>button('查看候选').click());await act(async()=>root.render(React.createElement(Component,{...props,account:other})));
+ await act(async()=>{releasePreview(response);await Promise.resolve();});assert.doesNotMatch(document.body.textContent,/森林巡护|内部原句/);
+ await act(async()=>button('重新核对依据').click());await act(async()=>root.render(React.createElement(Component,{...props,account:old})));
+ await act(async()=>{releaseRecheck({draft:{revision:5,configuration:initial},preview:response});await Promise.resolve();});assert.equal(adopted,0);
+}));
+
+test('a new session for the same account invalidates the old preview and late response',()=>environment(async({Component,root})=>{
+ const initial={businesses:[],flows:{},businessCandidates:bundle},account={user_id:'u',username:'name',workspace_id:'w',role:'admin'};let release,started=false;
+ const pending=new Promise(resolve=>{release=resolve;}),props={bundle,workspace:initial,materials:[material],materialReadStatus:'ready',canManage:true,Btn,onCommit:()=>true,account,request:async()=>{started=true;return pending;}};
+ sessionStorage.setItem('ga-setup-csrf','first-session');await act(async()=>root.render(React.createElement(Component,props)));
+ await act(async()=>button('查看候选').click());assert.equal(started,true);sessionStorage.setItem('ga-setup-csrf','second-session');
+ await act(async()=>root.render(React.createElement(Component,{...props})));await act(async()=>{release(response);await Promise.resolve();});
+ assert.doesNotMatch(document.body.textContent,/森林巡护|内部原句/);assert.equal(button('加入业务清单'),undefined);
+}));
+
+test('a changed session cannot apply an old preview even before rerender',()=>environment(async({Component,root,dom})=>{
+ const initial={businesses:[],flows:{},businessCandidates:bundle},account={user_id:'u',username:'name',workspace_id:'w',role:'admin'};let saves=0;
+ const props={bundle,workspace:initial,materials:[material],materialReadStatus:'ready',canManage:true,Btn,onCommit:()=>{saves++;return true;},account,request:async()=>response};
+ sessionStorage.setItem('ga-setup-csrf','first-session');await act(async()=>root.render(React.createElement(Component,props)));await act(async()=>button('查看候选').click());
+ sessionStorage.setItem('ga-setup-csrf','second-session');await act(async()=>button('加入业务清单').click());assert.equal(saves,0);
+ await act(async()=>dom.window.dispatchEvent(new dom.window.Event('focus')));assert.doesNotMatch(document.body.textContent,/森林巡护|内部原句/);
 }));
