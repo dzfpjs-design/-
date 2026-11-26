@@ -42,6 +42,21 @@ from tests.test_authored_service_workflow_pg_v270 import publish
 from generic_agents.api import app
 
 
+_mark_at = time.monotonic()
+
+
+def mark(stage):
+    """Record timing only; never record source text, identifiers, or request data."""
+    global _mark_at
+    now=time.monotonic()
+    path=os.environ.get('GA_TEST_TIMING_LOG')
+    if path:
+        with open(path,'a',encoding='utf-8') as out:
+            out.write(json.dumps({'stage':stage,'seconds_since_last':round(now-_mark_at,2)})+'\n')
+        os.chmod(path,0o600)
+    _mark_at=now
+
+
 @contextmanager
 def live_http():
     """Serve this isolated app over an actual loopback TCP socket."""
@@ -86,6 +101,7 @@ def run_worker_process():
 
 @pytest.mark.skipif(not all(os.environ.get(key) for key in ('GA_SYNTHETIC_FRESH_CHECKPOINT','GA_TEST_SYNTHETIC_PROVIDER_PORT','GA_TEST_SYNTHETIC_HTTP_PORT')), reason='isolated checkpoint and loopback services required')
 def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
+    mark('begin')
     monkeypatch.setattr(settings(), 'cloud_allowed_providers', '')
     monkeypatch.setattr(settings(), 'v2_advice_setup_test_enabled', True)
     monkeypatch.setattr(settings(), 'v2_user_send_test_enabled', True)
@@ -98,10 +114,12 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
     with Session(engine()) as db:
         claims.install(db); storage.install(db); terminal.install(db); db.commit()
     monkeypatch.setattr(settings(), 'v2_terminal_history_test_enabled', True)
+    mark('database_ready')
     login = json.loads((settings().storage_dir / '__synthetic_checkpoint_login__.json').read_text())
     with live_http() as client:
         auth = client.post('/api/login', json={'username': login['username'], 'password': login['password']})
         assert auth.status_code == 200
+        mark('login')
         client.headers.update({'X-CSRF-Token': auth.json()['csrf_token'], 'X-Workspace-ID': login['workspace_id']})
         with Session(engine()) as db:
             user = db.scalar(select(User).where(User.username == login['username']))
@@ -127,6 +145,7 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
                 'source_set_id': source.id, 'source_set_hash': source.source_set_hash}}
             clock = db.scalar(select(func.clock_timestamp()))
         assert publish(client, manifest)['status'] == 'published'
+        mark('capability_ready')
         base = f'/api/workspace/tasks/{task_id}/business-advice-v2'
         monkeypatch.setattr(settings(), 'v2_advice_setup_test_enabled', False)
         assert client.get(base + '/availability').json() == {'enabled':False,'has_unfinished':False}
@@ -135,6 +154,7 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
         assert context_response.status_code == 200, context_response.status_code
         assert context_response.json()['sources'][0]['selection'] == source_ref
         assert context_response.json()['can_start'] is False
+        mark('context_ready')
         policy_body = {'request_id': str(uuid4()), 'expected_goal_hash': goal_hash,
             'expected_mature_head_hash': head_hash, 'limits': {'max_tokens': 512,
                 'max_request_bytes': 50000, 'max_evidence_items': 2},
@@ -148,6 +168,7 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
             'expected_mature_head_hash': head_hash, 'document_source': source_ref, 'reason': '合成准备'}
         prepared = client.post(base + '/preparations', json={'request': request, 'policy_ref': issued.json()['policy_ref']})
         assert prepared.status_code == 201, prepared.status_code
+        mark('application_prepared')
         plan = prepared.json()['plan_id']; url = base + '/preparations/' + plan
         monkeypatch.setattr(settings(), 'v2_advice_setup_test_enabled', False)
         assert client.get(base + '/availability').json() == {'enabled':False,'has_unfinished':True}
@@ -156,10 +177,12 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
         processed = client.post(url + '/documents')
         assert processed.status_code == 200, processed.status_code
         assert client.post(url + '/documents').json()['replayed'] is True
+        mark('documents_prepared')
         state = client.get(url).json()
         assert state['phase'] == 'review' and state['can_start'] is False
         docs = client.get(url + '/documents')
         assert docs.status_code == 200 and len(docs.json()['documents']) == 2
+        mark('documents_loaded')
         for item in docs.json()['documents']:
             assert item['text']
             unauthorized = client.post(url + '/consent', json={'evidence_id': item['id'],
@@ -168,11 +191,13 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
             authorized = client.post(url + '/consent', json={'evidence_id': item['id'],
                 'expected_version': item['version'], 'reason': '合成核对', 'confirmed': True})
             assert authorized.status_code == 200, authorized.status_code
+        mark('documents_authorized')
         request_preview = {'request_id': str(uuid4()), 'expected_plan_version': state['version'],
             'expected_goal_hash': goal_hash, 'expected_mature_head_hash': head_hash, 'reason': '合成预览'}
         first = client.post(url + '/preview', json=request_preview)
         assert first.status_code == 201, first.text[:300]
         assert first.json()['can_start'] is False and first.json()['cloud_send_authorized'] is False
+        mark('preview_ready')
         with Session(engine()) as db:
             event = db.scalar(select(Audit).where(Audit.action == preview.ACTION, Audit.object_id == plan))
             assert event is not None
@@ -188,20 +213,24 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
         accepted = client.post(dispatch + '/start', json=start)
         assert accepted.status_code == 201, accepted.text[:300]
         assert accepted.json()['state'] == 'waiting'
+        mark('confirmed')
         assert client.get(dispatch).json()['state'] == 'waiting'
         port = int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
         with provider(port, content=json.dumps(opinion),
                 usage={'prompt_tokens': 3, 'completion_tokens': 2, 'total_tokens': 5}) as server:
             run = run_worker_process()
+            mark('worker_returned')
             assert run.returncode == 0, run.stderr[-1200:]
             assert len(server.requests) == 1
             engine().dispose()
             ready = client.get(dispatch)
             assert ready.status_code == 200 and ready.json()['state'] == 'ready', ready.text[:500]
             assert ready.json()['usage_tokens'] == 5
+            mark('result_ready')
             run_again = run_worker_process()
             assert run_again.returncode == 0, run_again.stderr[-1200:]
             assert len(server.requests) == 1
+            mark('repeat_check_complete')
             # Explicit logout/new login and database connection reset prove
             # that the user-visible result is not in process memory.
             assert client.post('/api/logout').status_code == 200
@@ -212,5 +241,6 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
             restored = client.get(dispatch)
             assert restored.status_code == 200 and restored.json() == ready.json(), restored.text[:500]
             assert len(server.requests) == 1
+            mark('relogin_recovery_complete')
         with Session(engine()) as db:
             assert db.scalar(select(func.count()).select_from(CloudCall)) == 1
