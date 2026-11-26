@@ -6,6 +6,7 @@ import {adviceCanonical} from './same-goal-advice-v310-controller.mjs';
 import './same-goal-advice-v310.css';
 import SameGoalContinuationV312 from './SameGoalContinuationV312.jsx';
 import FormalContinuationContextV344 from './FormalContinuationContextV344.jsx';
+import AdvicePreparationV2 from './AdvicePreparationV2.jsx';
 
 const PHASES={queued:'等待整理资料',preparing:'正在整理资料',awaiting_consent:'资料已保存，待核对授权',send_queued:'分析申请已保存',generating:'正在分析',closing:'回答已保存，正在收尾核对',ready_for_review:'可以审核建议',reviewed:'审核结论已保存',cancelled:'已取消，原记录保留',needs_review:'需要核对原申请'};
 const DECISIONS={accepted:'采用建议',rejected:'不采用建议',needs_revision:'需补充'};
@@ -145,11 +146,16 @@ function AdminFees({context,draft,blocked,editingBlocked,onDraft,onAction,Btn}){
  </details>;
 }
 
-export function SameGoalAdviceContentV310({view,account,Btn,onAction,onDraft}){
+export function SameGoalAdviceContentV310({view,account,Btn,onAction,onDraft,historyOnly=false}){
  if(view.denied)return <p role="alert">账号、工作区或权限已变化，资料已隐藏，请重新打开对应工作区。</p>;
  const reads=view.reads||{};
  if(view.loading&&!view.context&&!view.list&&!view.plan&&!Object.values(reads).includes('failed'))return <p role="status">正在读取建议…</p>;
  const context=view.context,plan=view.plan,preview=view.preview,draft=view.draft||{};
+ if(historyOnly&&!plan&&!view.pending&&!view.needsCheck&&view.localSaved!==false){
+  return <><ReadStatus state={reads.history} label="历史建议" loading="正在读取历史建议…" failed="历史建议暂未读回，请刷新。"/>
+   {view.list&&(view.list.records?.length?view.list.records.map((row,index)=><article key={row.plan_id}><p>建议 {index+1} · {PHASES[row.phase]||'待核对'} · {clock(row.data_as_of)}</p><Button Btn={Btn} disabled={view.busy||view.loading} onClick={()=>onAction('selectPlan',row.plan_id)}>查看</Button></article>):<p>暂无历史建议。</p>)}
+  </>;
+ }
  const contextReady=reads.context==='ready',permissions=contextReady?context?.permissions||{}:{},pending=!!view.pending,editingBlocked=view.busy||view.loading||pending||view.needsCheck===true;
  const blocked=editingBlocked||!view.localSaved,phase=plan?.phase;
  const documents=view.documents?.documents||[],model=view.documents?.model||preview?.model||context?.model;
@@ -237,12 +243,14 @@ export function SameGoalAdviceContentV310({view,account,Btn,onAction,onDraft}){
 export default function SameGoalAdviceV310({account,task,Btn,requestJSON=json,onRegisterGuard,onSaved,
  storage=globalThis.localStorage,tabStorage=globalThis.sessionStorage,locks=globalThis.navigator?.locks,visible=true}){
  const [,draw]=useState(0),[localError,setLocalError]=useState(''),latest=useRef(null),lifetime=useRef(null);
+ const [v2Available,setV2Available]=useState(false),v2Refresh=useRef(null);
  const continuationGuards=useRef(new Map()),formalGuards=useRef(new Map()),continuationSource=useRef(null);
  const [continuationSection,setContinuationSection]=useState({scope:'',open:false});
  const [continuationMessage,setContinuationMessage]=useState({scope:'',text:''});
  if(!lifetime.current)lifetime.current=createRetainedControllerLifecycle();
  let csrf='';try{csrf=tabStorage?.getItem('ga-setup-csrf')||'';}catch{}
  const key=JSON.stringify([account?.user_id,account?.workspace_id,account?.role,task?.id,task?.instance_id,task?.instance_release_id,csrf]);
+ useEffect(()=>{setV2Available(false);},[key]);
  latest.current={key,visible,onRegisterGuard,onSaved};
  const holder=useMemo(()=>{try{return {controller:new SameGoalAdviceControllerV310({account,task,request:requestJSON,storage,session:tabStorage,locks,
   beforePlanChange:from=>{try{const guard=continuationGuards.current.get(JSON.stringify([key,from||'']));return !guard||guard()===true;}catch{return false;}}}),error:''};}catch{return {controller:null,error:'当前任务无法打开，请重新进入。'};}},[key,requestJSON,storage,tabStorage,locks]);
@@ -291,10 +299,12 @@ export default function SameGoalAdviceV310({account,task,Btn,requestJSON=json,on
   setContinuationMessage({scope:sectionScope,text:'草案状态待核对，请先刷新。'});return;
  }setContinuationMessage({scope:'',text:''});setContinuationSection({scope:sectionScope,open:!sectionOpen});};
  return <section className="media-form same-goal-advice-v310" aria-label="本任务业务建议" hidden={!visible}>
-  <div className="same-advice-heading"><h4>业务建议</h4><div className="actions"><Button Btn={Btn} disabled={!c||view?.busy||!matches||view?.denied} onClick={()=>run('refresh')}>刷新</Button></div></div>
+  <div className="same-advice-heading"><h4>业务建议</h4><div className="actions"><Button Btn={Btn} disabled={!c||view?.busy||!matches||view?.denied} onClick={()=>{run('refresh');v2Refresh.current?.();}}>刷新</Button></div></div>
+  {matches&&!view?.denied&&<AdvicePreparationV2 account={account} task={task} requestJSON={requestJSON} storage={storage} locks={locks} onAvailability={setV2Available} onRefreshReady={value=>{v2Refresh.current=value;}}/>}
   {!c?<p role="alert">{holder.error}</p>:!matches||view.denied?<p role="alert">账号、工作区或权限已变化，资料已隐藏，请重新打开对应工作区。</p>:<>
    {localError&&!view.error&&<p role="alert">{localError}</p>}
-   <SameGoalAdviceContentV310 view={view} account={account} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)}/>
+   {v2Available?<details><summary>历史建议</summary><SameGoalAdviceContentV310 view={view} account={account} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)} historyOnly/></details>:
+    <SameGoalAdviceContentV310 view={view} account={account} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)}/>}
    {continuation&&<section className="media-form" aria-label="原建议的后续办理草案">
     <div className="same-advice-heading"><div><h5>后续办理</h5><p>先拟定并保存方案，保存草案不会执行任务或操作设备。</p></div>
      <Button Btn={Btn} disabled={!sectionOpen&&(view.busy||view.loading)} aria-expanded={sectionOpen}

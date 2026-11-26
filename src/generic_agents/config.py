@@ -7,6 +7,8 @@ from pydantic import Field, SecretStr, field_validator
 
 
 class Settings(BaseSettings):
+    # Isolated integration only: the production workflow is not wired yet.
+    v2_advice_setup_test_enabled: bool = False
     # Recovery console is deliberately restricted to isolated test databases.
     v2_advice_recovery_console_enabled: bool = False
     # Candidate only: even if enabled it remains guarded to a disposable DB.

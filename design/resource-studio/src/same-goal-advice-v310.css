@@ -1,4 +1,5 @@
 .same-goal-advice-v310 .same-advice-heading,.same-goal-advice-v310 .same-advice-section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.same-goal-advice-v310 .same-advice-heading>.actions{width:auto;margin:0;padding:0;border:0}
 .same-goal-advice-v310 h4,.same-goal-advice-v310 h5,.same-goal-advice-v310 h6{margin-top:0}
 .same-goal-advice-v310 .same-advice-progress{display:flex;list-style:none;padding:0;gap:.55rem;flex-wrap:wrap;margin:1rem 0}
 .same-goal-advice-v310 .same-advice-progress li{padding:.35rem .65rem;border:1px solid #d9e3ef;border-radius:.35rem;font-size:.88rem}
@@ -25,4 +26,4 @@
 .same-goal-advice-v310 .same-advice-muted{color:#596b82;font-size:.92rem}
 .same-goal-advice-v310 .same-advice-review-choices{display:flex;flex-wrap:wrap;gap:1rem;border:0;padding:0;margin:1rem 0}
 .same-goal-advice-v310 .same-advice-history{margin-top:1rem}
-@media(max-width:760px){.same-goal-advice-v310 .same-advice-columns,.same-goal-advice-v310 .same-advice-decision{grid-template-columns:minmax(0,1fr)}.same-goal-advice-v310 .same-advice-heading>.actions{width:100%}}
+@media(max-width:760px){.same-goal-advice-v310 .same-advice-columns,.same-goal-advice-v310 .same-advice-decision{grid-template-columns:minmax(0,1fr)}}
