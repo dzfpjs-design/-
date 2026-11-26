@@ -42,8 +42,12 @@ def cleanup(root):
         raise ValueError('invalid retention directory')
     marker=root/'retain-synthetic-run.json';status=root/'status.json'
     if (not marker.is_file() or marker.is_symlink() or not status.is_file() or status.is_symlink()
-        or root.stat().st_uid!=os.getuid() or json.loads(marker.read_text())!={'schema':SCHEMA}
-        or json.loads(status.read_text()).get('cluster_stopped') is not True
+        or root.stat().st_uid!=os.getuid() or json.loads(marker.read_text())!={'schema':SCHEMA}):
+        raise ValueError('cannot prove the synthetic cluster is stopped')
+    saved_status=json.loads(status.read_text())
+    processes_stopped=saved_status.get('test_processes_stopped')
+    if (saved_status.get('cluster_stopped') is not True
+        or (processes_stopped is not None and processes_stopped is not True)
         or (root/'data'/'postmaster.pid').exists()):
         raise ValueError('cannot prove the synthetic cluster is stopped')
     shutil.rmtree(root)
@@ -52,6 +56,18 @@ def cleanup(root):
 def _port():
     with socket.socket() as s:
         s.bind(('127.0.0.1',0));return s.getsockname()[1]
+
+
+def _stop_test_process_group(process):
+    """Stop the session we created, including children left by an exited test."""
+    try:os.killpg(process.pid,signal.SIGTERM)
+    except ProcessLookupError:return
+    try:process.wait(timeout=10)
+    except subprocess.TimeoutExpired:pass
+    # A child may outlive its pytest parent after any exit, not just timeout.
+    try:os.killpg(process.pid,signal.SIGKILL)
+    except ProcessLookupError:pass
+    if process.poll() is None:process.wait(timeout=10)
 
 
 def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False):
@@ -65,16 +81,16 @@ def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False):
     if len({port,provider_port,http_port})!=3:raise RuntimeError('could not reserve distinct ports')
     base={key:os.environ[key] for key in ('PATH','HOME','TMPDIR','LANG','LC_ALL') if key in os.environ}
     base.update(DEEPSEEK_API_KEY='',DASHSCOPE_API_KEY='')
-    started=False;outcome='error';exit_code=None;began=time.monotonic()
+    start_attempted=False;test_processes_stopped=True;outcome='error';exit_code=None;began=time.monotonic()
     _write(root/'status.json',{'state':'initializing','cluster_stopped':False})
     print('Synthetic run directory:',root,flush=True)
     try:
         subprocess.run([str(pg/'initdb'),'-D',str(data),'-U','advice_test','-A','trust','--no-locale','-E','UTF8'],
             env=base,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True,timeout=60)
+        start_attempted=True
         subprocess.run([str(pg/'pg_ctl'),'-D',str(data),'-l',str(root/'postgres.log'),'-o',
             f'-h 127.0.0.1 -p {port} -k {root}','-w','start'],env=base,
             stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True,timeout=60)
-        started=True
         sid=subprocess.check_output([str(pg/'psql'),'-h','127.0.0.1','-p',str(port),'-U','advice_test',
             '-d','postgres','-Atc','select system_identifier from pg_control_system()'],env=base,text=True,timeout=15).strip()
         env=dict(base)
@@ -98,28 +114,28 @@ def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False):
                     'tests/test_synthetic_retention_probe_pg.py' if retention_probe else
                     'tests/test_advice_user_real_http_checkpoint_pg.py'],cwd=repo,env=env,
                     stdout=out,stderr=subprocess.STDOUT,start_new_session=True)
+            test_processes_stopped=False
             try:
                 exit_code=process.wait(timeout=timeout);outcome='passed' if exit_code==0 else 'failed'
             except subprocess.TimeoutExpired:
-                # Stop the entire isolated process group, including a worker
-                # whose sending state may be unknown; never restart it.
                 outcome='timeout'
-                try:os.killpg(process.pid,signal.SIGTERM)
-                except ProcessLookupError:pass
-                try:process.wait(timeout=10)
-                except subprocess.TimeoutExpired:pass
-                # A child may outlive the pytest parent even if it exited.
-                try:os.killpg(process.pid,signal.SIGKILL)
-                except ProcessLookupError:pass
-                if process.poll() is None:process.wait(timeout=10)
+            finally:
+                # A worker's sending state may be unknown; stop it and never restart it.
+                _stop_test_process_group(process)
+                test_processes_stopped=True
     finally:
-        stopped=not started
-        if started:
-            result=subprocess.run([str(pg/'pg_ctl'),'-D',str(data),'-m','fast','-w','stop'],env=base,
-                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
-            stopped=result.returncode==0
+        stopped=not start_attempted
+        if start_attempted:
+            try:
+                result=subprocess.run([str(pg/'pg_ctl'),'-D',str(data),'-m','fast','-w','stop'],env=base,
+                    stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=60)
+                stopped=result.returncode==0
+            except (OSError,subprocess.TimeoutExpired):
+                # Startup may have partially succeeded; never report it as stopped.
+                stopped=False
         _write(root/'status.json',{'state':outcome,'exit_code':exit_code,
-            'elapsed_seconds':round(time.monotonic()-began),'cluster_stopped':stopped})
+            'elapsed_seconds':round(time.monotonic()-began),'cluster_stopped':stopped,
+            'test_processes_stopped':test_processes_stopped})
     return 0 if outcome=='passed' and stopped else 1
 
 
