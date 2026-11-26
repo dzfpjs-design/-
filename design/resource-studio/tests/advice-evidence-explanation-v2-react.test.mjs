@@ -67,7 +67,7 @@ test('evidence stays beside the selected recommendation and clearly handles unav
   const result={model_value:{recommendation:{candidate_ref:'candidate',reason:'请进一步观察',supporting_fact_refs:[]},candidate_reviews:[{candidate_ref:'candidate'}],source_reviews:[],conflicts:[]}};
   const opinion=(value,planId)=>React.createElement(Opinion,{result:value,account,task,planId,requestJSON:api});
   await act(async()=>root.render(opinion(result,'plan-A')));
-  const opinionNode=document.querySelector('[aria-label="已保存的模型原建议"]');
+  const opinionNode=document.querySelector('[aria-label="已保存的建议"]');
   assert.ok(opinionNode?.querySelector('[aria-label="建议依据"]'));assert.match(seen.at(-1),/plan_id=plan-A$/);
   const before=seen.length;await act(async()=>root.render(opinion({model_value:{...result.model_value,recommendation:{candidate_ref:null}}},'plan-A')));
   assert.equal(seen.length,before);assert.equal(document.querySelector('[aria-label="建议依据"]'),null);
