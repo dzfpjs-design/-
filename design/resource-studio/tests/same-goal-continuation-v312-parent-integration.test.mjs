@@ -62,6 +62,7 @@ async function fixture(){
  const initial=await register(initialTask);
  const request=async(path,options={})=>{
   calls.push({path,method:options.method||'GET'});assert.ok(!options.method||options.method==='GET','mount and navigation must not POST');if(path==='/me')return copy(account);
+  if(path.endsWith('/business-advice-v2/availability')){if(mode.v2Offline)throw Error('service unavailable');return {enabled:false,has_unfinished:false};}
   const entry=[...tasks.values()].find(row=>path.startsWith(row.base));assert.ok(entry,'fixed task API path');
   if(path===entry.base+'/context'){if(mode.parentGate)await mode.parentGate.promise;return copy(entry.context);}
   if(path===entry.base+'/preparations')return {schema:'same-goal-advice-operation-v302/list',task_id:entry.task.id,records:[copy(entry.plan),...[...extraPlans.values()].filter(plan=>plan.task_id===entry.task.id).map(copy)]};
@@ -203,7 +204,14 @@ test('collapse and reopen retain the actual child DOM/controller, local text and
 }));
 test('parent refresh keeps the already mounted child and unsent text while the parent Plan temporarily clears',{concurrency:false},async()=>harness(async h=>{
  await h.click(h.button('拟定后续办理方案'));await h.until(()=>h.field()&&!h.field().disabled);await h.edit('父页面刷新时不要覆盖的办理草稿');const node=h.field(),before=h.calls.filter(row=>row.path.includes('/continuations')).length;
- h.mode.parentGate=gate();await h.click(h.button('刷新原记录'));assert.equal(h.field(),node);assert.equal(h.field().value,'父页面刷新时不要覆盖的办理草稿');await act(async()=>h.mode.parentGate.resolve());await h.until(()=>!h.button('刷新原记录').disabled);assert.equal(h.field(),node);assert.equal(h.calls.filter(row=>row.path.includes('/continuations')).length,before);
+ h.mode.parentGate=gate();await h.click(h.button('刷新'));assert.equal(h.field(),node);assert.equal(h.field().value,'父页面刷新时不要覆盖的办理草稿');await act(async()=>h.mode.parentGate.resolve());await h.until(()=>!h.button('刷新').disabled);assert.equal(h.field(),node);assert.equal(h.calls.filter(row=>row.path.includes('/continuations')).length,before);
+}));
+test('temporary advice-service failure hides continuation without discarding its unsent draft',{concurrency:false},async()=>harness(async h=>{
+ await h.click(h.button('拟定后续办理方案'));await h.until(()=>h.field()&&!h.field().disabled);await h.edit('暂存的办理草稿');const node=h.field();
+ h.mode.v2Offline=true;await h.click(h.button('刷新'));await h.until(()=>h.text().includes('建议暂不可用'));
+ assert.equal(h.field(),node);assert.ok(node.closest('[hidden]'));assert.equal(h.field().value,'暂存的办理草稿');
+ h.mode.v2Offline=false;await h.until(()=>!h.button('刷新').disabled);await h.click(h.button('刷新'));await h.until(()=>!h.field().closest('[hidden]'));
+ assert.equal(h.field(),node);assert.equal(h.field().value,'暂存的办理草稿');
 }));
 test('broken child persistence reaches the synchronous parent leave/collapse guard and never discards the work',{concurrency:false},async()=>harness(async h=>{
  await h.click(h.button('拟定后续办理方案'));await h.until(()=>h.field()&&!h.field().disabled);h.storage.failPrefix=CONTINUATION_PREFIX;await h.edit('存储暂不可用但仍需保留的人工输入');assert.equal(h.guard(),false);await h.click(h.button('收起办理草案'));assert.ok(h.button('收起办理草案'));assert.equal(h.field().value,'存储暂不可用但仍需保留的人工输入');const event=new h.dom.window.Event('beforeunload',{cancelable:true});globalThis.dispatchEvent(event);assert.equal(event.defaultPrevented,true);
@@ -215,11 +223,11 @@ test('new Task scope immediately hides old child and late old reads cannot resto
 }));
 test('delayed different-Plan Prepare receipt cannot unmount a child whose new human draft stopped persisting',{concurrency:false},async()=>harness(async h=>{
  await h.click(h.button('拟定后续办理方案'));await h.until(()=>h.field()&&!h.field().disabled);await h.edit('点击恢复时已经保存的本机办理稿');const node=h.field(),original=await h.stageParentPrepare();
- await act(async()=>globalThis.dispatchEvent(new h.dom.window.StorageEvent('storage',{key:original.key+':pending',newValue:original.raw})));await h.until(()=>h.button('核对原申请结果'));
- h.mode.receiptGate=gate();await h.click(h.button('核对原申请结果'));await h.until(()=>h.calls.some(row=>row.path===h.initial.base+'/operations/'+original.row.request_id));
- h.storage.failPrefix=CONTINUATION_PREFIX;await h.edit('回执等待期间新写且尚未持久的人工说明');assert.equal(h.guard(),false);await act(async()=>h.mode.receiptGate.resolve());await h.until(()=>!h.button('刷新原记录').disabled);
+ await act(async()=>globalThis.dispatchEvent(new h.dom.window.StorageEvent('storage',{key:original.key+':pending',newValue:original.raw})));await h.until(()=>h.button('查看处理结果'));
+ h.mode.receiptGate=gate();await h.click(h.button('查看处理结果'));await h.until(()=>h.calls.some(row=>row.path===h.initial.base+'/operations/'+original.row.request_id));
+ h.storage.failPrefix=CONTINUATION_PREFIX;await h.edit('回执等待期间新写且尚未持久的人工说明');assert.equal(h.guard(),false);await act(async()=>h.mode.receiptGate.resolve());await h.until(()=>!h.button('刷新').disabled);
  assert.equal(h.field(),node);assert.equal(h.field().value,'回执等待期间新写且尚未持久的人工说明');assert.equal(h.storage.getItem(original.key+':pending'),original.raw);assert.equal(h.storage.getItem(original.key+':received:'+original.row.request_id),null);assert.ok(h.button('收起办理草案'));
- h.storage.failPrefix='';await h.click(h.button('重新保存本机原稿'));assert.equal(h.guard(),true);await h.click(h.button('核对原申请结果'));await h.until(()=>h.field()===null);assert.equal(h.storage.getItem(original.key+':pending'),null);assert.ok([...h.storage.data.values()].some(value=>value.includes('回执等待期间新写且尚未持久的人工说明')));assert.ok(h.calls.every(row=>row.method==='GET'));
+ h.storage.failPrefix='';await h.click(h.button('重新保存本机原稿'));assert.equal(h.guard(),true);await h.click(h.button('查看处理结果'));await h.until(()=>h.field()===null);assert.equal(h.storage.getItem(original.key+':pending'),null);assert.ok([...h.storage.data.values()].some(value=>value.includes('回执等待期间新写且尚未持久的人工说明')));assert.ok(h.calls.every(row=>row.method==='GET'));
 }));
 test('saved continuation mounts execution lazily, keeps the editor across parent reads, and blocks switching while its draft is unsaved',{concurrency:false},async()=>harness(async h=>{
  const draft={route:'business_conclusion',candidate_ref:null,selected_tools:[],purpose:'核对气温',work_description:'用本地工具汇总',expected_result:'原结果可复核',assignee_id:null,due_at:null};
@@ -302,8 +310,8 @@ test('authenticated adopted execution replay uses the actual saved draft, approv
  await h.click(h.button('刷新原草案与办理条件'));
  await h.until(()=>!h.button('刷新原草案与办理条件').disabled);
  assert.equal(result(),mounted);
- await h.click(h.button('刷新原记录'));
- await h.until(()=>!h.button('刷新原记录').disabled);
+ await h.click(h.button('刷新'));
+ await h.until(()=>!h.button('刷新').disabled);
  assert.equal(result(),mounted);
  assert.equal(executionReads(),before);
  assert.equal(h.guard(),true);

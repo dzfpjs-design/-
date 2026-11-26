@@ -17,7 +17,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
   const [documents, setDocuments] = useState([]), [checked, setChecked] = useState({});
   const [preview, setPreview] = useState(null), [busy, setBusy] = useState(''), [error, setError] = useState('');
   const [pending, setPending] = useState(null), [reachable,setReachable]=useState(false);
-  const alive = useRef(0);
+  const alive = useRef(0), reachableRef=useRef(false);
   const reads = useRef({context:0, selected:0});
   const selectedRef=useRef(selected);selectedRef.current=selected;
   const availability = useRef(onAvailability); availability.current = onAvailability;
@@ -29,14 +29,15 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     if(me?.user_id!==account?.user_id||me?.workspace_id!==account?.workspace_id||me?.role!==account?.role)
       throw Object.assign(Error('identity changed'),{status:403});
   },[requestJSON,account?.user_id,account?.workspace_id,account?.role]);
-  const call = useCallback(async(url, body, generation) => {await verifyIdentity();if(alive.current!==generation)throw Error('state changed');const result=await requestJSON(url, {method:'POST', body:JSON.stringify(body)});if(alive.current!==generation)throw Error('state changed');await verifyIdentity();return result;}, [requestJSON,verifyIdentity]);
+  const call = useCallback(async(url, body, generation) => {await verifyIdentity();if(alive.current!==generation||!reachableRef.current)throw Error('state changed');const result=await requestJSON(url, {method:'POST', body:JSON.stringify(body)});if(alive.current!==generation)throw Error('state changed');await verifyIdentity();return result;}, [requestJSON,verifyIdentity]);
   const denied = useCallback((error,generation)=>{
     if(alive.current!==generation||![401,403].includes(error?.status))return false;
-    alive.current++;reads.current.context++;reads.current.selected++;setReachable(false);setContext(null);setItems([]);setSelected('');setState(null);setDocuments([]);setChecked({});setPreview(null);setPending(null);setBusy('');setError('登录状态已变化，请重新登录。');
+    alive.current++;reads.current.context++;reads.current.selected++;availability.current?.('denied');setReachable(false);setContext(null);setItems([]);setSelected('');setState(null);setDocuments([]);setChecked({});setPreview(null);setPending(null);setBusy('');setError('登录状态已变化，请重新登录。');
     return true;
   },[]);
   const refresh = useCallback(async () => {
     const generation = alive.current, serial = ++reads.current.context;
+    reachableRef.current=false;setReachable(false);availability.current?.('checking');
     try {
       await verifyIdentity();
       if(alive.current!==generation||reads.current.context!==serial)return;
@@ -57,19 +58,19 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
       if (available?.enabled!==true) throw Error('unavailable');
       const ctx = await requestJSON(base + '/context');
       if (alive.current !== generation || reads.current.context !== serial) return;
-      if (ctx?.enabled===false) {alive.current++;reads.current.selected++;setBusy('');setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);setError('建议暂不可用，请刷新。');return;}
+      if (ctx?.enabled===false) {alive.current++;reads.current.selected++;availability.current?.('unavailable');setBusy('');setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);setError('建议暂不可用，请刷新。');return;}
       if (ctx?.enabled!==true) throw Error('unavailable');
       const list = await requestJSON(base + '/preparations');
       if(alive.current!==generation||reads.current.context!==serial)return;
       await verifyIdentity();
       if (alive.current !== generation || reads.current.context !== serial) return;
       if(list.items.length)storage.setItem(key+':active',list.items.at(-1).plan_id);else storage.removeItem(key+':active');
-      setContext(ctx); availability.current?.(true); setItems(list.items); setReachable(true);setError('');
+      setContext(ctx); reachableRef.current=true;availability.current?.(true); setItems(list.items); setReachable(true);setError('');
       setSelected(current => current && list.items.some(item => item.plan_id === current)
         ? current : (list.items.at(-1)?.plan_id || ''));
       return list.items;
     } catch (error) { if(denied(error,generation))return; if (alive.current === generation && reads.current.context === serial) {
-      reads.current.selected++;setReachable(false);setError('建议暂不可用，请刷新。');
+      reads.current.selected++;availability.current?.('unavailable');setReachable(false);setError('建议暂不可用，请刷新。');
     } }
   }, [base, requestJSON,denied,storage,key,verifyIdentity]);
   const load = useCallback(async id => {
@@ -93,7 +94,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
   useEffect(() => {refreshReady.current?.(async()=>{const serial=++reads.current.selected,id=selected;setPreview(null);const items=await refresh();if(items&&id&&items.some(item=>item.plan_id===id)&&reads.current.selected===serial&&selectedRef.current===id)await load(id);});return () => refreshReady.current?.(null);}, [refresh,load,selected]);
   useEffect(() => {setPreview(null);setState(null);setDocuments([]);load(selected);}, [selected, load]);
   const prepare = async source => {
-    if (busy || !context?.can_prepare) return;
+    if (busy || !reachableRef.current || !context?.can_prepare) return;
     const generation=alive.current;setBusy('prepare');setError('');
     try {
       if(!locks?.request)throw Error('无法安全保存申请');
@@ -135,13 +136,13 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     finally {if(alive.current===generation)setBusy('');}
   };
   const process = async () => {
-    if(busy||!reachable||!selected)return;const generation=alive.current;setBusy('process');setError('');
+    if(busy||!reachableRef.current||!selected)return;const generation=alive.current;setBusy('process');setError('');
     try {await call(base+'/preparations/'+encodeURIComponent(selected)+'/documents',{},generation);if(alive.current===generation)await load(selected);}
     catch (error) {if(!denied(error,generation)&&alive.current===generation)setError('资料暂未整理完成，请刷新后重试。');}
     finally {if(alive.current===generation)setBusy('');}
   };
   const authorize = async item => {
-    if(busy||!reachable||!checked[item.id])return;const generation=alive.current;setBusy(item.id);setError('');
+    if(busy||!reachableRef.current||!checked[item.id])return;const generation=alive.current;setBusy(item.id);setError('');
     try {await call(base+'/preparations/'+encodeURIComponent(selected)+'/consent',{
       evidence_id:item.id,expected_version:item.version,confirmed:true,reason:'用户确认发送资料分析'},generation);
       if(alive.current===generation)await load(selected);}
@@ -149,7 +150,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     finally {if(alive.current===generation)setBusy('');}
   };
   const showPreview = async () => {
-    if(busy||!reachable||!state)return;const generation=alive.current, previewKey=key+':preview:'+selected;setBusy('preview');setError('');setPreview(null);
+    if(busy||!reachableRef.current||!state)return;const generation=alive.current, previewKey=key+':preview:'+selected;setBusy('preview');setError('');setPreview(null);
     try {
       let request=JSON.parse(storage.getItem(previewKey)||'null');
       if(!request) request=save(storage,previewKey,{request_id:crypto.randomUUID(),expected_plan_version:state.version,

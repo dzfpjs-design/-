@@ -58,3 +58,20 @@ test('authorization, lost reply, refresh, revocation and role loss remain unders
   assert.match(document.body.textContent,/授权有效/,'newly available work is discovered without an empty panel');
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
 });
+
+test('disabled, unavailable, inconsistent and permission failures remain distinguishable and recoverable',async()=>{
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
+ const keys=['window','document','navigator','IS_REACT_ACT_ENVIRONMENT'];const old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
+ globalThis.window=dom.window;globalThis.document=dom.window.document;Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});let root;
+ try{
+  const {createRoot}=await import('react-dom/client'),{default:Panel}=await server.ssrLoadModule('/src/OfflineDocumentDelegationV2.jsx');root=createRoot(document.getElementById('root'));
+  let mode='disabled',reads=0;
+  const request=async()=>{reads++;if(mode==='missing')throw Object.assign(Error('not found'),{status:404});if(mode==='offline')throw Error('network');if(mode==='denied')throw Object.assign(Error('denied'),{status:403});if(mode==='inconsistent')return {enabled:false,items:[{job_id:'j'}]};if(mode==='malformed')return {enabled:true};if(mode==='enabled')return {enabled:true,permit_committed:false,items:[{job_id:'j',task_title:'资料',source_label:'已批准资料',state:'not_authorized',can_authorize:true,can_revoke:false}]};return {enabled:false,items:[]};};
+  const render=()=>React.createElement(Panel,{account:{workspace_id:'w',user_id:'u'},task:{id:'t'},requestJSON:request,storage:dom.window.sessionStorage});
+  const mount=async()=>act(async()=>{root.render(render());});const refresh=async()=>act(async()=>{[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click();});
+  await mount();assert.equal(document.body.textContent,'');
+  for(const state of ['missing','offline','denied','inconsistent','malformed']){mode=state;await act(async()=>{root.unmount();root=createRoot(document.getElementById('root'));root.render(render());});assert.match(document.body.textContent,/无法读取授权状态/);assert.doesNotMatch(document.body.textContent,/同意离线整理/);}
+  mode='enabled';await refresh();assert.match(document.body.textContent,/同意离线整理/);assert.ok(reads>=7);
+ }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
+});
