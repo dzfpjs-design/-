@@ -160,6 +160,8 @@ def save_draft(body: SaveDraft, p: P, db: DB):
         raise HTTPException(409, '业务改名范围无法核对，原配置保留。')
     validate_configuration(submitted)
     row = draft(db, p, True); check_version(row, body.revision)
+    from .setup_content_review import reject_client_review_changes, invalidate_content_reviews
+    reject_client_review_changes(row.data, submitted)
     from .setup_business_candidates import protect_transitions
     if submitted.get('businessCandidates') != row.data.get('businessCandidates'):
         raise HTTPException(409, '业务候选请使用专用操作更新，原草稿保留')
@@ -195,6 +197,7 @@ def save_draft(body: SaveDraft, p: P, db: DB):
     proposed=synchronize_flow_confirmations(row.data,proposed,changed_sources=changed_sources)
     from .report_configuration_handoff import protect_configuration_sources
     proposed=protect_configuration_sources(db,p,row.data,proposed)
+    proposed=invalidate_content_reviews(row.data,proposed,changed_sources=changed_sources)
     validate_configuration(proposed)
     from .typed_payload_codec_v131 import canonical_json
     if canonical_json(row.data) == canonical_json(proposed):
