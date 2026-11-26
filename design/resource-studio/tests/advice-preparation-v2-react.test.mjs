@@ -49,7 +49,7 @@ test('preparation survives a lost reply and reload without resending or claiming
    await click('确认授权');
   }
   offline=true;await act(async()=>{triggerRefresh();await new Promise(resolve=>setTimeout(resolve,10));});
-  assert.equal(availableState,true);assert.match(document.body.textContent,/建议暂不可用/);
+  assert.equal(availableState,'unavailable');assert.match(document.body.textContent,/建议暂不可用/);
   offline=false;
   authorized.a=false;
   await act(async()=>{triggerRefresh();await new Promise(resolve=>setTimeout(resolve,10));});

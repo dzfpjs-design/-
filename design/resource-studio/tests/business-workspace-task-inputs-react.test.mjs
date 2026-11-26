@@ -113,6 +113,9 @@ async function harness(run,settings={}){
   if(typeof original!=='string'||!original.startsWith('/api/')){unexpected.push({url:original});throw Error('Network access forbidden');}
   const parsed=new URL(original,'https://synthetic-workspace.invalid'),path=parsed.pathname,method=options.method||'GET';calls.push({path,query:parsed.search,method,body:options.body,headers:options.headers});
   if(method==='GET'){
+   // The two newer optional services explicitly report disabled in this legacy-workflow fixture.
+   if(path==='/api/workspace/tasks/'+taskId+'/business-advice/offline-delegations')return response({enabled:false,items:[]});
+   if(path==='/api/workspace/tasks/'+taskId+'/business-advice-v2/availability')return response({enabled:false,has_unfinished:false});
    const gate=state.coreGate;
    if(gate&&corePaths.includes(path)){
     assert.equal(options.headers['X-Workspace-ID'],account.workspace_id,'each bucket GET keeps its frozen workspace header');assert.equal(options.headers['X-CSRF-Token'],'synthetic-workspace-csrf','bucket coalescing does not replace the actual scoped requester');

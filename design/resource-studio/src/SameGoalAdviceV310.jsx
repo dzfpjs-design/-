@@ -155,6 +155,19 @@ const hasDraftWork=value=>typeof value==='string'?value.length>0:
  value===true?true:Array.isArray(value)?value.some(hasDraftWork):
  value!==null&&typeof value==='object'?Object.values(value).some(hasDraftWork):false;
 
+// When the new service cannot be checked, historical results stay readable,
+// but no action can create, send, modify, or cancel a proposal.
+export function ReadOnlyAdviceHistory({view,account,task,requestJSON,Btn,onAction}){
+ const reads=view.reads||{}, plan=view.plan;
+ return <details><summary>历史建议</summary>
+  <ReadStatus state={reads.history} label="历史建议" loading="正在读取历史建议…" failed="历史建议暂未读回，请刷新。"/>
+  {view.list&&(view.list.records?.length?view.list.records.map((row,index)=><article key={row.plan_id}><p>建议 {index+1} · {PHASES[row.phase]||'待核对'} · {clock(row.data_as_of)}</p><Button Btn={Btn} disabled={view.busy||view.loading||!!view.pending||row.plan_id===view.selectedPlanId} onClick={()=>onAction('selectPlan',row.plan_id)}>{row.plan_id===view.selectedPlanId?'正在查看':'查看'}</Button></article>):<p>暂无历史建议。</p>)}
+  <ReadStatus state={reads.plan} label="建议读取状态" loading="正在读取建议…" failed="建议暂未读回，请刷新。"/>
+  {plan?.result&&<><ActualQuestion preview={view.preview}/><Opinion result={plan.result} preview={view.preview} account={account} task={task} planId={plan.plan_id} requestJSON={requestJSON}/><ReviewScope scope={plan.source_review_scope} dataAsOf={plan.data_as_of} input={cloudInput(view.preview)?.decision_input}/></>}
+  {plan&&!plan.result&&reads.plan==='ready'&&<p>当前没有可查看的建议结果。</p>}
+ </details>;
+}
+
 export function SameGoalAdviceContentV310({view,account,task,requestJSON,Btn,onAction,onDraft,historyOnly=false}){
  if(view.denied)return <p role="alert">账号、工作区或权限已变化，资料已隐藏，请重新打开对应工作区。</p>;
  const reads=view.reads||{};
@@ -252,22 +265,25 @@ export function SameGoalAdviceContentV310({view,account,task,requestJSON,Btn,onA
 export default function SameGoalAdviceV310({account,task,Btn,requestJSON=json,onRegisterGuard,onSaved,
  storage=globalThis.localStorage,tabStorage=globalThis.sessionStorage,locks=globalThis.navigator?.locks,visible=true}){
  const [,draw]=useState(0),[localError,setLocalError]=useState(''),latest=useRef(null),lifetime=useRef(null);
- const [v2Available,setV2Available]=useState(null),v2Refresh=useRef(null);
+ const [v2Availability,setV2Availability]=useState({key:'',value:null,checking:true}),v2Refresh=useRef(null),v2Gate=useRef({key:'',value:null,checking:true});
  const continuationGuards=useRef(new Map()),formalGuards=useRef(new Map()),continuationSource=useRef(null);
  const [continuationSection,setContinuationSection]=useState({scope:'',open:false});
  const [continuationMessage,setContinuationMessage]=useState({scope:'',text:''});
  if(!lifetime.current)lifetime.current=createRetainedControllerLifecycle();
  let csrf='';try{csrf=tabStorage?.getItem('ga-setup-csrf')||'';}catch{}
  const key=JSON.stringify([account?.user_id,account?.workspace_id,account?.role,task?.id,task?.instance_id,task?.instance_release_id,csrf]);
- useEffect(()=>{setV2Available(null);},[key]);
+ if(v2Gate.current.key!==key)v2Gate.current={key,value:null,checking:true};
+ const v2Available=v2Availability.key===key?v2Availability.value:null, v2Checking=v2Availability.key!==key||v2Availability.checking;
+ const onV2Availability=value=>{if(v2Gate.current.key!==key)return;const next=value==='checking'?{...v2Gate.current,checking:true}:{key,value,checking:false};v2Gate.current=next;setV2Availability(next);};
  latest.current={key,visible,onRegisterGuard,onSaved};
- const holder=useMemo(()=>{try{return {controller:new SameGoalAdviceControllerV310({account,task,request:requestJSON,storage,session:tabStorage,locks,
+ const holder=useMemo(()=>{try{return {controller:new SameGoalAdviceControllerV310({account,task,request:(path,options)=>{if(options?.method&&options.method!=='GET'&&(v2Gate.current.key!==key||v2Gate.current.checking||![true,false].includes(v2Gate.current.value)))throw Error('业务建议状态待核对');return requestJSON(path,options);},storage,session:tabStorage,locks,
   beforePlanChange:from=>{try{const guard=continuationGuards.current.get(JSON.stringify([key,from||'']));return !guard||guard()===true;}catch{return false;}}}),error:''};}catch{return {controller:null,error:'当前任务无法打开，请重新进入。'};}},[key,requestJSON,storage,tabStorage,locks]);
  const c=holder.controller;
  const continuationScope=()=>JSON.stringify([key,c?.planId||'']);
  const continuationSafe=()=>{try{const key=continuationScope(),guard=continuationGuards.current.get(key),formal=formalGuards.current.get(key);return (!guard||guard()===true)&&(!formal||formal()===true);}catch{return false;}};
  const run=async(method,...args)=>{
   if(!c||latest.current.key!==key)return;
+  if(!['open','refresh','selectPlan'].includes(method)&&(v2Gate.current.key!==key||v2Gate.current.checking||![true,false].includes(v2Gate.current.value)))return;
   if(['selectPlan','prepare','cancel'].includes(method)&&!continuationSafe()){
    setContinuationMessage({scope:continuationScope(),text:'请先保存草案或核对申请状态。'});return;
   }
@@ -309,19 +325,19 @@ export default function SameGoalAdviceV310({account,task,Btn,requestJSON=json,on
  }setContinuationMessage({scope:'',text:''});setContinuationSection({scope:sectionScope,open:!sectionOpen});};
  return <section className="media-form same-goal-advice-v310" aria-label="本任务业务建议" hidden={!visible}>
   <div className="same-advice-heading"><h4>业务建议</h4><div className="actions"><Button Btn={Btn} disabled={!c||view?.busy||!matches||view?.denied} onClick={()=>{run('refresh');v2Refresh.current?.();}}>刷新</Button></div></div>
-  {matches&&!view?.denied&&<AdvicePreparationV2 key={key} account={account} task={task} requestJSON={requestJSON} storage={storage} locks={locks} onAvailability={setV2Available} onRefreshReady={value=>{v2Refresh.current=value;}}/>}
+  {matches&&!view?.denied&&<AdvicePreparationV2 key={key} account={account} task={task} requestJSON={requestJSON} storage={storage} locks={locks} onAvailability={onV2Availability} onRefreshReady={value=>{v2Refresh.current=value;}}/>}
   {!c?<p role="alert">{holder.error}</p>:!matches||view.denied?<p role="alert">账号、工作区或权限已变化，资料已隐藏，请重新打开对应工作区。</p>:<>
    {localError&&!view.error&&<p role="alert">{localError}</p>}
-   {v2Available===true?<details><summary>{!view.plan&&hasDraftWork(view.draft)?'继续未完成的建议':'历史建议'}</summary><SameGoalAdviceContentV310 view={view} account={account} task={task} requestJSON={requestJSON} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)} historyOnly/></details>:v2Available===false?
-    <SameGoalAdviceContentV310 view={view} account={account} task={task} requestJSON={requestJSON} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)}/>:null}
-   {continuation&&<section className="media-form" aria-label="原建议的后续办理草案">
+   {v2Available==='denied'?null:v2Available==='unavailable'?<ReadOnlyAdviceHistory view={view} account={account} task={task} requestJSON={requestJSON} Btn={Btn} onAction={run}/>:v2Available===true?<fieldset disabled={v2Checking} style={{border:0,padding:0,margin:0,minWidth:0}}><details><summary>{!view.plan&&hasDraftWork(view.draft)?'继续未完成的建议':'历史建议'}</summary><SameGoalAdviceContentV310 view={view} account={account} task={task} requestJSON={requestJSON} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)} historyOnly/></details></fieldset>:v2Available===false?
+    <fieldset disabled={v2Checking} style={{border:0,padding:0,margin:0,minWidth:0}}><SameGoalAdviceContentV310 view={view} account={account} task={task} requestJSON={requestJSON} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)}/></fieldset>:null}
+   {continuation&&v2Available!=='denied'&&<section hidden={v2Checking||(v2Available!==true&&v2Available!==false)} className="media-form" aria-label="原建议的后续办理草案">
     <div className="same-advice-heading"><div><h5>后续办理</h5><p>先拟定并保存方案，保存草案不会执行任务或操作设备。</p></div>
      <Button Btn={Btn} disabled={!sectionOpen&&(view.busy||view.loading)} aria-expanded={sectionOpen}
       onClick={toggleContinuation}>{sectionOpen?'收起办理草案':'拟定后续办理方案'}</Button></div>
     {continuationMessage.scope===sectionScope&&continuationMessage.text&&<p role="alert">{continuationMessage.text}</p>}
     {sectionMounted&&<div hidden={!sectionOpen}><SameGoalContinuationV312 key={sectionScope} account={account}
      task={task} advicePlan={continuation.plan} Btn={Btn} requestJSON={requestJSON} storage={storage}
-     tabStorage={tabStorage} locks={locks} visible={visible&&sectionOpen}
+     tabStorage={tabStorage} locks={locks} visible={visible&&sectionOpen&&!v2Checking&&(v2Available===true||v2Available===false)}
      onRegisterGuard={(guard,previous)=>{const current=continuationGuards.current.get(sectionScope);
       if(guard)continuationGuards.current.set(sectionScope,guard);
       else if(!previous||current===previous)continuationGuards.current.delete(sectionScope);}}

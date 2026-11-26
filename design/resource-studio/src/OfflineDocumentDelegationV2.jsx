@@ -23,7 +23,7 @@ export default function OfflineDocumentDelegationV2({account,task,requestJSON,st
  const base='/workspace/tasks/'+encodeURIComponent(task?.id||'')+'/business-advice/offline-delegations';
  const refresh=useCallback(async()=>{
   const generation=alive.current,sequence=++readSequence.current;setError('');
-  try{const result=await requestJSON(base);if(alive.current===generation&&readSequence.current===sequence){
+  try{const result=await requestJSON(base);if(!result||typeof result.enabled!=='boolean'||!Array.isArray(result.items)||result.items.some(item=>!item||typeof item!=='object')||(result.enabled&&typeof result.permit_committed!=='boolean')||(!result.enabled&&result.items.length!==0))throw Error('invalid authorization status');if(alive.current===generation&&readSequence.current===sequence){
    for(const item of result.items||[]){for(const [action,field] of [['grant','grant_request_id'],['revoke','revoke_request_id']]){
     const key='ga-offline-document-v2:'+scope+':'+item.job_id+':'+action;
     try{const pending=JSON.parse(storage.getItem(key)||'null');if(pending?.request_id&&pending.request_id===item[field])storage.removeItem(key);}catch{}
