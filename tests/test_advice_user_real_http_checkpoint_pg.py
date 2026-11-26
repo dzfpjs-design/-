@@ -44,6 +44,7 @@ from generic_agents.api import app
 
 
 _mark_at = time.monotonic()
+_probe = None
 
 
 def mark(stage):
@@ -52,8 +53,10 @@ def mark(stage):
     now=time.monotonic()
     path=os.environ.get('GA_TEST_TIMING_LOG')
     if path:
+        metrics = _probe.snapshot() if _probe is not None else {}
         with open(path,'a',encoding='utf-8') as out:
-            out.write(json.dumps({'stage':stage,'seconds_since_last':round(now-_mark_at,2)})+'\n')
+            out.write(json.dumps({'stage':stage,'seconds_since_last':round(now-_mark_at,2),
+                'inclusive_synthetic_metrics':metrics})+'\n')
         os.chmod(path,0o600)
     _mark_at=now
 
@@ -96,13 +99,20 @@ def run_worker_process():
     })
     # The child must never reuse a parent SQLAlchemy connection after startup.
     engine().dispose()
-    return subprocess.run([sys.executable, '-m', 'generic_agents.same_goal_advice_user_send_worker_candidate_v2', '--once'],
+    module = 'generic_agents.same_goal_advice_user_send_worker_candidate_v2'
+    if os.environ.get('GA_TEST_TIMING_LOG'):
+        env['GA_TEST_WORKER_METRICS_LOG'] = os.environ['GA_TEST_TIMING_LOG'] + '.worker'
+        module = 'tests.synthetic_advice_profiled_worker'
+    return subprocess.run([sys.executable, '-m', module, '--once'],
         env=env, capture_output=True, text=True, timeout=240)
 
 
 @pytest.mark.skipif(not all(os.environ.get(key) for key in ('GA_SYNTHETIC_FRESH_CHECKPOINT','GA_TEST_SYNTHETIC_PROVIDER_PORT','GA_TEST_SYNTHETIC_HTTP_PORT')), reason='isolated checkpoint and loopback services required')
 def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
     mark('begin')
+    if os.environ.get('GA_TEST_TIMING_LOG'):
+        from tests.synthetic_advice_performance_probe import install
+        monkeypatch.setitem(globals(), '_probe', install(monkeypatch))
     monkeypatch.setattr(settings(), 'cloud_allowed_providers', '')
     monkeypatch.setattr(settings(), 'v2_advice_setup_test_enabled', True)
     monkeypatch.setattr(settings(), 'v2_user_send_test_enabled', True)
