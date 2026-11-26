@@ -15,7 +15,7 @@ test('authorization, lost reply, refresh, revocation and role loss remain unders
  let root;try{
   const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/OfflineDocumentDelegationV2.jsx');
   root=createRoot(document.getElementById('root'));
-  let state='not_authorized',lastGrant=null,lastRevoke=null,role='admin',lost=true,failBefore=false,grantCalls=[],empty=false;
+  let state='not_authorized',lastGrant=null,lastRevoke=null,role='admin',lost=true,failBefore=false,grantCalls=[],empty=false,holdNext=false,resolveOld;
   const request=async(path,options={})=>{
    if(role==='viewer')throw Error('permission denied');
    if(options.method==='POST'){
@@ -24,6 +24,7 @@ test('authorization, lost reply, refresh, revocation and role loss remain unders
     else{state='revoked';lastRevoke=body.request_id;}
     return {state};
    }
+   if(holdNext){holdNext=false;return await new Promise(resolve=>{resolveOld=resolve;});}
    return {enabled:true,permit_committed:true,items:empty?[]:[{job_id:'job-1',grant_id:state==='authorized'?'grant-1':null,
     task_title:'林区资料',source_label:'已批准的业务资料包',state,grant_request_id:lastGrant,revoke_request_id:lastRevoke,
     expires_at:null,prepared:false,background_available:false,can_authorize:state!=='authorized',can_revoke:state==='authorized'}]};
@@ -51,5 +52,9 @@ test('authorization, lost reply, refresh, revocation and role loss remain unders
   assert.match(document.body.textContent,/无法读取授权状态/);assert.doesNotMatch(document.body.textContent,/林区资料/);
   role='admin';empty=true;await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
   assert.equal(document.body.textContent,'','no empty authorization panel interrupts the user');
+  holdNext=true;await act(async()=>dom.window.dispatchEvent(new dom.window.Event('focus')));
+  assert.ok(resolveOld);empty=false;await act(async()=>dom.window.dispatchEvent(new dom.window.Event('focus')));
+  await act(async()=>resolveOld({enabled:true,permit_committed:false,items:[]}));
+  assert.match(document.body.textContent,/授权有效/,'newly available work is discovered without an empty panel');
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
 });

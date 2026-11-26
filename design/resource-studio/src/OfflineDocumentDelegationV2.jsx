@@ -18,22 +18,22 @@ function durableRequest(storage,key,reason){
 
 export default function OfflineDocumentDelegationV2({account,task,requestJSON,storage=globalThis.sessionStorage}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(''),[agreed,setAgreed]=useState({});
- const alive=useRef(0);
+ const alive=useRef(0),readSequence=useRef(0);
  const scope=JSON.stringify([account?.workspace_id,account?.user_id,task?.id]);
  const base='/workspace/tasks/'+encodeURIComponent(task?.id||'')+'/business-advice/offline-delegations';
  const refresh=useCallback(async()=>{
-  const generation=alive.current;setError('');
-  try{const result=await requestJSON(base);if(alive.current===generation){
+  const generation=alive.current,sequence=++readSequence.current;setError('');
+  try{const result=await requestJSON(base);if(alive.current===generation&&readSequence.current===sequence){
    for(const item of result.items||[]){for(const [action,field] of [['grant','grant_request_id'],['revoke','revoke_request_id']]){
     const key='ga-offline-document-v2:'+scope+':'+item.job_id+':'+action;
     try{const pending=JSON.parse(storage.getItem(key)||'null');if(pending?.request_id&&pending.request_id===item[field])storage.removeItem(key);}catch{}
    }}
    setData(result);}}
-  catch{if(alive.current===generation){setData(null);setError('暂时无法读取授权状态，请刷新重试。');}}
+  catch{if(alive.current===generation&&readSequence.current===sequence){setData(null);setError('暂时无法读取授权状态，请刷新重试。');}}
  },[base,requestJSON,scope,storage]);
  useEffect(()=>{alive.current++;setData(null);setAgreed({});refresh();return()=>{alive.current++;};},[scope,refresh]);
  const execute=async(item,action)=>{
-  if(busy)return;const generation=alive.current,reason=action==='revoke'?'资料岗位撤销授权':'';
+  if(busy)return;const generation=alive.current,reason=action==='revoke'?'资料岗位撤销授权':'';++readSequence.current;
   const key='ga-offline-document-v2:'+scope+':'+item.job_id+':'+action;
   setBusy(item.job_id);setError('');
   try{
@@ -46,6 +46,13 @@ export default function OfflineDocumentDelegationV2({account,task,requestJSON,st
   }catch{if(alive.current===generation){setData(null);setError('操作结果尚未确认，请刷新查看。');}}
   finally{if(alive.current===generation)setBusy('');}
  };
+ useEffect(()=>{
+  if(!data?.enabled||data.items.length||error||busy)return;
+  const onFocus=()=>refresh();
+  const timer=setInterval(()=>{if(globalThis.document?.visibilityState==='visible')refresh();},30000);
+  globalThis.window?.addEventListener('focus',onFocus);
+  return()=>{clearInterval(timer);globalThis.window?.removeEventListener('focus',onFocus);};
+ },[data?.enabled,data?.items.length,error,busy,refresh]);
  if(!data&&!error)return null;
  if(data?.enabled===false)return null;
  if(!error&&data?.items.length===0)return null;
