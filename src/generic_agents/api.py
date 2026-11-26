@@ -61,6 +61,8 @@ from . import setup_recovery
 app.include_router(setup_router)
 from .setup_business_candidates import router as business_candidates_router
 app.include_router(business_candidates_router, prefix='/api/setup')
+from .setup_content_review import router as content_review_router
+app.include_router(content_review_router, prefix='/api/setup')
 from .docx_visible_text_v2_api import router as docx_visible_text_v2_router
 app.include_router(docx_visible_text_v2_router)
 from .mqtt_api import router as mqtt_router
