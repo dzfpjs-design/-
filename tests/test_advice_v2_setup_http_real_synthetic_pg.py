@@ -101,7 +101,7 @@ def test_real_synthetic_approved_sources_through_authenticated_http_and_restart(
         request_preview = {'request_id': str(uuid4()), 'expected_plan_version': state['version'],
             'expected_goal_hash': goal_hash, 'expected_mature_head_hash': head_hash, 'reason': '合成预览'}
         first = client.post(url + '/preview', json=request_preview)
-        assert first.status_code == 201, first.status_code
+        assert first.status_code == 201, first.text[:300]
         assert first.json()['can_start'] is False and first.json()['cloud_send_authorized'] is False
         engine().dispose(); client.cookies.clear()
         login_again = client.post('/api/login', json={'username': login['username'], 'password': login['password']})

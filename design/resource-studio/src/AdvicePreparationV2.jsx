@@ -24,38 +24,65 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
   const refreshReady = useRef(onRefreshReady); refreshReady.current = onRefreshReady;
   const base = '/workspace/tasks/' + encodeURIComponent(task?.id || '') + '/business-advice-v2';
   const key = 'advice-v2:' + JSON.stringify([account?.workspace_id, account?.user_id, task?.id]);
-  const call = useCallback((url, body) => requestJSON(url, {method:'POST', body:JSON.stringify(body)}), [requestJSON]);
+  const verifyIdentity=useCallback(async()=>{
+    const me=await requestJSON('/me');
+    if(me?.user_id!==account?.user_id||me?.workspace_id!==account?.workspace_id||me?.role!==account?.role)
+      throw Object.assign(Error('identity changed'),{status:403});
+  },[requestJSON,account?.user_id,account?.workspace_id,account?.role]);
+  const call = useCallback(async(url, body) => {await verifyIdentity();const result=await requestJSON(url, {method:'POST', body:JSON.stringify(body)});await verifyIdentity();return result;}, [requestJSON,verifyIdentity]);
+  const denied = useCallback((error,generation)=>{
+    if(alive.current!==generation||![401,403].includes(error?.status))return false;
+    alive.current++;reads.current.context++;reads.current.selected++;setReachable(false);setContext(null);setItems([]);setSelected('');setState(null);setDocuments([]);setChecked({});setPreview(null);setPending(null);setBusy('');setError('登录状态已变化，请重新登录。');
+    return true;
+  },[]);
   const refresh = useCallback(async () => {
     const generation = alive.current, serial = ++reads.current.context;
     try {
+      await verifyIdentity();
       const available = await requestJSON(base + '/availability');
       if (alive.current !== generation || reads.current.context !== serial) return;
-      if (available?.enabled===false) {setContext({enabled:false});availability.current?.(false);setError('');return;}
+      if (available?.enabled===false) {
+        let saved=true;try{saved=storage.getItem(key)!==null||storage.getItem(key+':active')!==null;}catch{}
+        setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);
+        if(saved){setContext({enabled:true,can_prepare:false,sources:[]});availability.current?.(true);setError('已有申请暂不可用，请刷新。');}
+        else {setContext({enabled:false});availability.current?.(false);setError('');}
+        return;
+      }
       if (available?.enabled!==true) throw Error('unavailable');
       const ctx = await requestJSON(base + '/context');
       if (alive.current !== generation || reads.current.context !== serial) return;
-      if (ctx?.enabled===false) { setContext(ctx); availability.current?.(false); return; }
+      if (ctx?.enabled===false) {
+        let saved=true;try{saved=storage.getItem(key)!==null||storage.getItem(key+':active')!==null;}catch{}
+        setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);
+        if(saved){setContext({enabled:true,can_prepare:false,sources:[]});availability.current?.(true);setError('已有申请暂不可用，请刷新。');}
+        else {setContext(ctx);availability.current?.(false);setError('');}
+        return;
+      }
       if (ctx?.enabled!==true) throw Error('unavailable');
       const list = await requestJSON(base + '/preparations');
+      await verifyIdentity();
       if (alive.current !== generation || reads.current.context !== serial) return;
+      if(list.items.length)storage.setItem(key+':active',list.items.at(-1).plan_id);else storage.removeItem(key+':active');
       setContext(ctx); availability.current?.(true); setItems(list.items); setReachable(true);setError('');
       setSelected(current => current && list.items.some(item => item.plan_id === current)
         ? current : (list.items.at(-1)?.plan_id || ''));
       return list.items;
-    } catch { if (alive.current === generation && reads.current.context === serial) {
+    } catch (error) { if(denied(error,generation))return; if (alive.current === generation && reads.current.context === serial) {
       setReachable(false);setError('建议暂不可用，请刷新。');
     } }
-  }, [base, requestJSON]);
+  }, [base, requestJSON,denied,storage,key,verifyIdentity]);
   const load = useCallback(async id => {
     const generation = alive.current, serial = ++reads.current.selected;
     if (!id) {setState(null); setDocuments([]); setPreview(null); return;}
     try {
+      await verifyIdentity();
       const current = await requestJSON(base + '/preparations/' + encodeURIComponent(id));
       let docs = [];
       if (current.phase === 'review' && current.can_preview) docs = (await requestJSON(base + '/preparations/' + encodeURIComponent(id) + '/documents')).documents;
+      await verifyIdentity();
       if (alive.current === generation && reads.current.selected === serial) {setState(current);setDocuments(docs);setChecked({});setError('');}
-    } catch {if (alive.current === generation && reads.current.selected === serial) setError('暂时无法读取资料，请刷新重试。');}
-  }, [base, requestJSON]);
+    } catch (error) {if(denied(error,generation))return;if (alive.current === generation && reads.current.selected === serial) setError('暂时无法读取资料，请刷新重试。');}
+  }, [base, requestJSON,denied,verifyIdentity]);
   useEffect(() => {alive.current++;availability.current?.(null);setReachable(false);setContext(null);setItems([]);setSelected('');setState(null);setDocuments([]);setPreview(null);
     try {setPending(JSON.parse(storage.getItem(key)||'null'));} catch {setError('无法读取待处理的申请。');}
     refresh();return () => {alive.current++;};}, [key, refresh, storage]);
@@ -67,17 +94,17 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     try {
       if(!locks?.request)throw Error('无法安全保存申请');
       await locks.request(key,{mode:'exclusive'},async()=>{
+        await verifyIdentity();
         // Another tab may have completed while this tab was waiting.
         const current=await requestJSON(base+'/preparations');
+        await verifyIdentity();
         let original=JSON.parse(storage.getItem(key)||'null');
         if(current.items.length){
           const matching=original&&current.items.find(item=>item.request_id===original.request_id);
-          if(matching){storage.removeItem(key);if(alive.current===generation)setPending(null);}
+          if(matching){storage.setItem(key+':active',matching.plan_id);if(storage.getItem(key+':active')!==matching.plan_id)throw Error('无法保存申请');storage.removeItem(key);if(alive.current===generation)setPending(null);}
           if(alive.current===generation){setSelected((matching||current.items.at(-1)).plan_id);await refresh();}
           return;
         }
-        if (original && (!Number.isFinite(Date.parse(original.expires_at))||Date.parse(original.expires_at)<=Date.now()))
-          throw Error('expired preparation');
         if (original && JSON.stringify(original.selection)!==JSON.stringify(source.selection))
           throw Error('已有待确认申请');
         if (!original) {
@@ -93,16 +120,17 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
         const result=await call(base+'/preparations',{policy_ref:issued.policy_ref,request:{request_id:original.request_id,
           expected_goal_hash:original.goal_hash,expected_mature_head_hash:original.head_hash,
           document_source:original.selection,reason:'准备业务建议'}});
+        storage.setItem(key+':active',result.plan_id);if(storage.getItem(key+':active')!==result.plan_id)throw Error('无法保存申请');
         storage.removeItem(key);
         if(alive.current===generation){setPending(null);setSelected(result.plan_id);await refresh();}
       });
-    } catch {if(alive.current===generation)setError('申请结果待确认，请刷新后重试。');}
+    } catch (error) {if(!denied(error,generation)&&alive.current===generation)setError('申请结果待确认，请刷新或联系管理员核对。');}
     finally {if(alive.current===generation)setBusy('');}
   };
   const process = async () => {
     if(busy||!reachable||!selected)return;const generation=alive.current;setBusy('process');setError('');
     try {await call(base+'/preparations/'+encodeURIComponent(selected)+'/documents',{});if(alive.current===generation)await load(selected);}
-    catch {if(alive.current===generation)setError('资料暂未整理完成，请刷新后重试。');}
+    catch (error) {if(!denied(error,generation)&&alive.current===generation)setError('资料暂未整理完成，请刷新后重试。');}
     finally {if(alive.current===generation)setBusy('');}
   };
   const authorize = async item => {
@@ -110,7 +138,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     try {await call(base+'/preparations/'+encodeURIComponent(selected)+'/consent',{
       evidence_id:item.id,expected_version:item.version,confirmed:true,reason:'用户确认发送资料分析'});
       if(alive.current===generation)await load(selected);}
-    catch {if(alive.current===generation)setError('授权结果待确认，请刷新后查看。');}
+    catch (error) {if(!denied(error,generation)&&alive.current===generation)setError('授权结果待确认，请刷新后查看。');}
     finally {if(alive.current===generation)setBusy('');}
   };
   const showPreview = async () => {
@@ -120,16 +148,15 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
       if(!request) request=save(storage,previewKey,{request_id:crypto.randomUUID(),expected_plan_version:state.version,
         expected_goal_hash:state.goal_hash,expected_mature_head_hash:state.head_hash,reason:'核对分析内容'});
       const result=await call(base+'/preparations/'+encodeURIComponent(selected)+'/preview',request);
-      const display=presentPreview(result.messages);
+      const display=presentPreview(result.display);
       if(alive.current===generation)setPreview(display);
-    } catch {if(alive.current===generation)setError('预览暂不可用，请刷新后重试。');}
+    } catch (error) {if(!denied(error,generation)&&alive.current===generation)setError('预览暂不可用，请刷新后重试。');}
     finally {if(alive.current===generation)setBusy('');}
   };
   if(!context?.enabled&&!error)return null;
   return <div className="advice-user-panel">
     {error&&<p role="alert">{error}</p>}
-    {!selected&&pending&&(!Number.isFinite(Date.parse(pending.expires_at))||Date.parse(pending.expires_at)<=Date.now())&&<p>申请已过期，请联系管理员核对。</p>}
-    {!selected&&context?.can_prepare&&context.sources.filter(source=>!pending||JSON.stringify(source.selection)===JSON.stringify(pending.selection)).map((source,index)=><button className="btn primary" key={index} type="button" disabled={!!busy||!reachable||!!pending&&(!Number.isFinite(Date.parse(pending.expires_at))||Date.parse(pending.expires_at)<=Date.now())} onClick={()=>prepare(source)}>{pending?'继续准备':'使用'+source.title}</button>)}
+    {!selected&&context?.can_prepare&&context.sources.filter(source=>!pending||JSON.stringify(source.selection)===JSON.stringify(pending.selection)).map((source,index)=><button className="btn primary" key={index} type="button" disabled={!!busy||!reachable} onClick={()=>prepare(source)}>{pending?'继续准备':'使用'+source.title}</button>)}
     {!selected&&pending&&context?.enabled&&!context.sources.some(source=>JSON.stringify(source.selection)===JSON.stringify(pending.selection))&&<p>原资料暂不可用，请联系管理员核对。</p>}
     {!selected&&context?.enabled&&!context.can_prepare&&<p>请联系管理员准备建议。</p>}
     {state?.phase==='waiting'&&(state.can_process?<button className="btn primary" type="button" disabled={!!busy||!reachable} onClick={process}>{busy==='process'?'正在整理…':'整理资料'}</button>:<p>等待资料整理</p>)}

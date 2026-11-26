@@ -305,7 +305,7 @@ export default function SameGoalAdviceV310({account,task,Btn,requestJSON=json,on
  }setContinuationMessage({scope:'',text:''});setContinuationSection({scope:sectionScope,open:!sectionOpen});};
  return <section className="media-form same-goal-advice-v310" aria-label="本任务业务建议" hidden={!visible}>
   <div className="same-advice-heading"><h4>业务建议</h4><div className="actions"><Button Btn={Btn} disabled={!c||view?.busy||!matches||view?.denied} onClick={()=>{run('refresh');v2Refresh.current?.();}}>刷新</Button></div></div>
-  {matches&&!view?.denied&&<AdvicePreparationV2 account={account} task={task} requestJSON={requestJSON} storage={storage} locks={locks} onAvailability={setV2Available} onRefreshReady={value=>{v2Refresh.current=value;}}/>}
+  {matches&&!view?.denied&&<AdvicePreparationV2 key={key} account={account} task={task} requestJSON={requestJSON} storage={storage} locks={locks} onAvailability={setV2Available} onRefreshReady={value=>{v2Refresh.current=value;}}/>}
   {!c?<p role="alert">{holder.error}</p>:!matches||view.denied?<p role="alert">账号、工作区或权限已变化，资料已隐藏，请重新打开对应工作区。</p>:<>
    {localError&&!view.error&&<p role="alert">{localError}</p>}
    {v2Available===true?<details><summary>{!view.plan&&hasDraftWork(view.draft)?'继续未完成的建议':'历史建议'}</summary><SameGoalAdviceContentV310 view={view} account={account} Btn={Btn} onAction={run} onDraft={patch=>run('updateDraft',patch)} historyOnly/></details>:v2Available===false?

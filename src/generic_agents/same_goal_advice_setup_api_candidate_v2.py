@@ -8,13 +8,14 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from . import evidence
 from . import same_goal_advice_contracts_v302 as contracts
 from . import same_goal_advice_common_inventory_v2 as inventory
 from . import same_goal_advice_context_v310 as context
 from . import same_goal_advice_file_intent_candidate_v2 as file_intent
+from . import same_goal_advice_human_preview_v2 as human_preview
 from . import same_goal_advice_prepare_document_candidate_v2 as document
 from . import same_goal_advice_prepare_writer_candidate_v2 as writer
 from . import same_goal_advice_preview_v307 as legacy_preview
@@ -26,7 +27,7 @@ from . import same_goal_advice_unlimited_store_v2 as custody
 from . import workflow_evidence_consent_wait_v199 as consent
 from .config import settings
 from .goals import snapshot
-from .models import Plan
+from .models import Audit, Plan
 from .setup_api import DB, P
 from .temporal import instant
 
@@ -215,5 +216,22 @@ def authorize_document(task_id: str, plan_id: str, body: Consent, p: P, db: DB):
 def prepare_preview(task_id: str, plan_id: str, body: legacy_preview.PreviewRequest, p: P, db: DB):
     _enabled(db)
     result = preview.prepare(db, p, task_id, plan_id, body.model_dump(mode='json'))
+    task, plan = _prepared(db, p, task_id, plan_id)
+    prep, _ = custody.read_prepared(db, p, task, plan)
+    events = old._rows(db, p, Audit, Audit.action == preview.ACTION,
+        or_(Audit.object_id == plan.id, Audit.data['plan_id'].as_string() == plan.id))
+    receipts = old._rows(db, p, Audit, Audit.action == custody.DOCUMENT_PREPARED, Audit.object_id == plan.id)
+    old.need(len(receipts) == 1)
+    chain = preview.validate_chain(db, p, task, plan, prep, receipts[0].data, events)
+    matches = [value for _, value in chain if value['request']['request_id'] == body.request_id]
+    old.need(len(matches) == 1 and matches[0]['preview_record']['preview_hash'] == result['preview_hash'])
+    value = matches[0]
+    try:
+        display = human_preview.display(value['prepared']['messages'], value['frame_snapshot'],
+            value['projection']['aliases'], task.data['object_snapshots'], value['evidence_parts'])
+    except (ValueError, KeyError, TypeError, IndexError, AttributeError):
+        raise HTTPException(409, '分析内容暂无法完整呈现，请联系管理员核对') from None
+    result.pop('messages', None)
+    result['display'] = display
     db.commit()
     return result

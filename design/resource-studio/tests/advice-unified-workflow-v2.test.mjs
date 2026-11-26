@@ -18,6 +18,7 @@ test('new preparation and existing history share one user-facing area',async()=>
  const selection={kind:'approved_source_set',source_set_ref:{source_set_id:id(6),source_set_hash:'a'.repeat(64)}};
  const permissions=Object.fromEntries(['can_prepare','can_authorize','can_preview','can_start','can_review','can_configure_quota','can_register_price'].map(key=>[key,false]));
  const request=async path=>{
+  if(path==='/me')return account;
   if(path.endsWith('/business-advice-v2/availability'))return {enabled:true};
   if(path.endsWith('/business-advice-v2/context'))return {enabled:true,can_prepare:true,sources:[{title:'批准资料',selection}],goal_hash:'a'.repeat(64),head_hash:'b'.repeat(64),expires_at:'2099-11-26T00:00:00Z',max_tokens:1024,model:'DeepSeek'};
   if(path.endsWith('/business-advice-v2/preparations'))return {items:[]};
