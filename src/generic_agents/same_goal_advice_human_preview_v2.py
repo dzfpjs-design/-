@@ -143,11 +143,13 @@ def display(messages, frame, aliases, snapshots, original_parts):
                         requirement = requirements_by_ref.get(mapping['requirement_ref'])
                         need(requirement is not None and requirement['field'] == field)
                         identities.add(requirement['entity_id'])
+        linked = bool(identities)
         if not identities:
             identities = {identity for identity, candidate in field_labels if candidate == field}
         need(identities and all((identity,field) in field_labels and identity in entities for identity in identities))
         matches = [(identity,field_labels[(identity,field)]) for identity in entities if identity in identities]
-        return matches[0][1] if len(matches) == 1 else '；'.join(entities[identity] + '：' + label for identity,label in matches)
+        readable = '；'.join(entities[identity] + '：' + label for identity,label in matches)
+        return readable if linked else '尚未建立需求关联；本地同名字段：' + readable
     def output_location(pointer, field, capability, port_ref, value_type, unit):
         need(isinstance(pointer, str) and not _UUID_TEXT.search(pointer) and isinstance(field, str) and capability in pinned_caps)
         pin = pinned_caps[capability]

@@ -19,7 +19,7 @@ test('preparation survives a lost reply and reload without resending or claiming
   const request=async(path,options={})=>{
    if(path==='/me')return {workspace_id:'w',user_id:'u',role:serverRole};
    const body=options.body?JSON.parse(options.body):null;
-   if(path.endsWith('/availability')){if(denyNext)throw Object.assign(Error('denied'),{status:403});if(offline)throw Error('offline');return {enabled:!disabled};}
+   if(path.endsWith('/availability')){if(denyNext)throw Object.assign(Error('denied'),{status:403});if(offline)throw Error('offline');return disabled?{enabled:false,has_unfinished:true}:{enabled:true};}
    if(path.endsWith('/context'))return ctx;
    if(path.endsWith('/preparations')&&!body)return {items:phase?[{plan_id:'plan',request_id:requestId,phase}]:[]};
    if(path.endsWith('/policy')){policyBodies.push(body);if(lost){lost=false;throw Error('lost reply');}return {policy_ref:{id:'policy',record_hash:'hash'}};}
@@ -137,5 +137,52 @@ test('a late document response cannot restore content after permission is denied
   await started;serverRole='viewer';
   await act(async()=>{release();await new Promise(resolve=>setTimeout(resolve,20));});
   assert.doesNotMatch(document.body.textContent,/禁止恢复的原文/);assert.match(document.body.textContent,/登录状态已变化/);
+ }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
+});
+
+test('disabled service reports an existing application on a fresh device',async()=>{
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
+ const keys=['window','document','navigator','IS_REACT_ACT_ENVIRONMENT'];
+ const old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
+ globalThis.window=dom.window;globalThis.document=dom.window.document;
+ Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});
+ let root;try{
+  const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/AdvicePreparationV2.jsx');
+  root=createRoot(document.getElementById('root'));let available=null,unfinished=true,refresh;
+  const request=async path=>{if(path==='/me')return {workspace_id:'w',user_id:'u',role:'admin'};
+   if(path.endsWith('/availability'))return {enabled:false,has_unfinished:unfinished};throw Error('unexpected');};
+  await act(async()=>root.render(React.createElement(Panel,{account:{workspace_id:'w',user_id:'u',role:'admin'},task:{id:'t'},requestJSON:request,storage:dom.window.localStorage,onAvailability:value=>{available=value;},onRefreshReady:value=>{refresh=value;}})));
+  assert.equal(dom.window.localStorage.length,0);assert.equal(available,true);
+  assert.match(document.body.textContent,/已有申请暂不可用/);
+  assert.equal([...document.querySelectorAll('button')].some(item=>item.textContent.includes('准备')),false);
+  unfinished=false;await act(async()=>{await refresh();});assert.equal(available,false);
+ }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
+});
+
+test('a late document response cannot restore content after service is disabled',async()=>{
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
+ const keys=['window','document','navigator','IS_REACT_ACT_ENVIRONMENT'];
+ const old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
+ globalThis.window=dom.window;globalThis.document=dom.window.document;
+ Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});
+ let root;try{
+  const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/AdvicePreparationV2.jsx');
+  root=createRoot(document.getElementById('root'));let disabled=false,release,entered,refresh;
+  const waiting=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
+  const request=async(path)=>{
+   if(path==='/me')return {workspace_id:'w',user_id:'u',role:'admin'};
+   if(path.endsWith('/availability'))return disabled?{enabled:false,has_unfinished:true}:{enabled:true};
+   if(path.endsWith('/context'))return {enabled:true,can_prepare:false,sources:[],model:'DeepSeek'};
+   if(path.endsWith('/preparations'))return {items:[{plan_id:'plan',request_id:'one',phase:'review'}]};
+   if(path.endsWith('/preparations/plan'))return {phase:'review',can_preview:true};
+   if(path.endsWith('/documents')){entered();await waiting;return {documents:[{id:'a',text:'已停用时不可恢复的原文',authorized:true}]};}
+   throw Error('unexpected path');
+  };
+  await act(async()=>root.render(React.createElement(Panel,{account:{workspace_id:'w',user_id:'u',role:'admin'},task:{id:'t'},requestJSON:request,storage:dom.window.localStorage,onRefreshReady:value=>{refresh=value;}})));
+  await started;disabled=true;await act(async()=>{await refresh();});
+  await act(async()=>{release();await new Promise(resolve=>setTimeout(resolve,20));});
+  assert.doesNotMatch(document.body.textContent,/已停用时不可恢复的原文/);assert.match(document.body.textContent,/已有申请暂不可用/);
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
 });

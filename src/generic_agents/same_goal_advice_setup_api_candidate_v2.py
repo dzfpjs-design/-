@@ -26,8 +26,9 @@ from . import same_goal_advice_unlimited_preview_candidate_v2 as preview
 from . import same_goal_advice_unlimited_store_v2 as custody
 from . import workflow_evidence_consent_wait_v199 as consent
 from .config import settings
+from .contracts import digest
 from .goals import snapshot
-from .models import Audit, Plan
+from .models import Audit, Plan, Task
 from .setup_api import DB, P
 from .temporal import instant
 
@@ -73,9 +74,58 @@ def _prepared(db, p, task_id, plan_id):
     return task, plan
 
 
+@old.checked
+def _disabled_has_unfinished(db, p, task):
+    """Conservatively match authenticated policies to verified terminal custody.
+
+    The caller holds the Task read lock for this entire routine. All policy,
+    authorization and v2 plan writers take the same Task lock before commit.
+    """
+    now = db.scalar(select(func.clock_timestamp()))
+    original = inventory._read(db, p, task.id, include_closed_policy_ids=True)
+    policies = old._rows(db, p, Audit, Audit.action == policy.POLICY, Audit.object_id == task.id)
+    authorizations = old._rows(db, p, Audit, Audit.action == policy.AUTHORIZATION, Audit.object_id == task.id)
+    by_id = {row.id: row for row in policies}
+    old.need(len(by_id) == len(policies))
+    authorized = set()
+    for event in authorizations:
+        data = event.data
+        old.need(type(data) is dict and type(data.get('policy_ref')) is dict)
+        ref = data['policy_ref']; row = by_id.get(ref.get('id'))
+        old.need(row is not None and row.id not in authorized and row.actor_id == event.actor_id
+            and row.created_at == event.created_at and ref == {'id':row.id, 'record_hash':digest(row.data)})
+        value, _ = policy.policy_shape(row, now)
+        body = policy.Authorize.model_validate(data.get('body')).model_dump(mode='json')
+        expected = {'schema':policy.AUTHORIZATION_SCHEMA, 'workspace_id':p.workspace_id,
+            'task_id':task.id, 'actor_id':event.actor_id, 'request_id':body['request_id'],
+            'body':body, 'body_hash':digest(body), 'policy_ref':ref,
+            'issued_at':value['issued_at'], 'cloud_send_authorized':False}
+        old.need(data == expected and event.workspace_id == p.workspace_id
+            and event.object_id == task.id and value['scope']['workspace_id'] == p.workspace_id
+            and value['scope']['task_id'] == task.id
+            and value['scope']['goal_hash'] == body['expected_goal_hash']
+            and value['mature_head_hash'] == body['expected_mature_head_hash']
+            and value['expires_at'] == instant(body['expires_at']).isoformat())
+        authorized.add(row.id)
+    # Orphaned or ambiguous audit records never establish an empty state.
+    old.need(len(authorized) == len(by_id), '原建议授权记录尚无法核对')
+    closed = set(original['closed_policy_ids'])
+    old.need(closed <= set(by_id), '原建议终态关联尚无法核对')
+    return bool(original['queued_v2'] or any(
+        row.id not in closed or instant(row.data['expires_at']) > now for row in policies))
+
+
 @router.get(BASE + '/availability')
-def availability(task_id: str, p: P):
-    return {'enabled': settings().v2_advice_setup_test_enabled}
+def availability(task_id: str, p: P, db: DB):
+    if settings().v2_advice_setup_test_enabled:
+        return {'enabled': True}
+    old._reader(db, p)
+    task = db.scalar(select(Task).where(Task.workspace_id == p.workspace_id,
+        Task.id == old.existing._id(task_id)).with_for_update(read=True)
+        .execution_options(populate_existing=True))
+    if task is None:
+        raise HTTPException(404, '任务不存在')
+    return {'enabled':False, 'has_unfinished':_disabled_has_unfinished(db, p, task)}
 
 
 @router.get(BASE + '/context')

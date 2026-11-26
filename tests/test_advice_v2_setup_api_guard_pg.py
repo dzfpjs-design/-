@@ -12,7 +12,7 @@ from generic_agents.models import CloudCall
 def test_disabled_context_has_no_actions_and_post_does_not_write(client, account):
     base = '/api/workspace/tasks/' + str(uuid4()) + '/business-advice-v2'
     assert settings().v2_advice_setup_test_enabled is False
-    assert client.get(base + '/availability').json() == {'enabled': False}
+    assert client.get(base + '/availability').status_code == 404
     assert client.get(base + '/context').json() == {'enabled': False}
     body = {'request': {'request_id': str(uuid4()), 'expected_goal_hash': 'a'*64,
         'expected_mature_head_hash': 'b'*64, 'document_source': None, 'reason': '测试'},

@@ -64,6 +64,9 @@ def test_real_synthetic_approved_sources_through_authenticated_http_and_restart(
             clock = db.scalar(select(func.clock_timestamp()))
         assert publish(client, manifest)['status'] == 'published'
         base = f'/api/workspace/tasks/{task_id}/business-advice-v2'
+        monkeypatch.setattr(settings(), 'v2_advice_setup_test_enabled', False)
+        assert client.get(base + '/availability').json() == {'enabled':False,'has_unfinished':False}
+        monkeypatch.setattr(settings(), 'v2_advice_setup_test_enabled', True)
         context_response = client.get(base + '/context')
         assert context_response.status_code == 200, context_response.status_code
         assert context_response.json()['sources'][0]['selection'] == source_ref
@@ -82,6 +85,9 @@ def test_real_synthetic_approved_sources_through_authenticated_http_and_restart(
         prepared = client.post(base + '/preparations', json={'request': request, 'policy_ref': issued.json()['policy_ref']})
         assert prepared.status_code == 201, prepared.status_code
         plan = prepared.json()['plan_id']; url = base + '/preparations/' + plan
+        monkeypatch.setattr(settings(), 'v2_advice_setup_test_enabled', False)
+        assert client.get(base + '/availability').json() == {'enabled':False,'has_unfinished':True}
+        monkeypatch.setattr(settings(), 'v2_advice_setup_test_enabled', True)
         assert client.get(url).json()['phase'] == 'waiting'
         processed = client.post(url + '/documents')
         assert processed.status_code == 200, processed.status_code

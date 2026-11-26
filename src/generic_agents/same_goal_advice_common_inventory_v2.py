@@ -51,11 +51,11 @@ def read_snapshot(db, p, task):
         return _read(reader, p, task.id, lock=False)
 
 
-def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_test_only=False):
+def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_test_only=False, include_closed_policy_ids=False):
     from . import same_goal_advice_execution_v308 as execution
     from .config import settings
 
-    old.need(type(intent_test_only) is bool and (not intent_test_only or reserved_plan_test_only is not None))
+    old.need(type(include_closed_policy_ids) is bool and type(intent_test_only) is bool and (not intent_test_only or reserved_plan_test_only is not None))
     terminal_enabled=settings().v2_terminal_history_test_enabled
     if terminal_enabled:
         from . import same_goal_advice_cloud_claim_test_v2 as terminal_guard
@@ -261,4 +261,10 @@ def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_tes
                 AuthSession.user_id == p.user_id, AuthSession.revoked.is_(False),
                 AuthSession.expires_at > func.clock_timestamp()))
             old.need(valid == p.session_id, '当前会话已过期；未读取资料')
-        return {'v1_calls': len(states), 'queued_v2': len(queued)}
+        result = {'v1_calls': len(states), 'queued_v2': len(queued)}
+        if include_closed_policy_ids:
+            # These records have passed the original cancellation or terminal
+            # verifiers above; IDs are for same-transaction internal matching.
+            result['closed_policy_ids'] = [prep['budget']['policy_ref']['id'] for _, prep, _ in closed]
+            result['closed_policy_ids'] += [prep['budget']['policy_ref']['id'] for _, prep, _, _ in settled]
+        return result

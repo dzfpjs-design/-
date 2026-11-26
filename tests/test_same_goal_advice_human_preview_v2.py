@@ -52,7 +52,7 @@ def sample():
 def test_closed_outbound_resolves_fields_sources_and_conflict_without_internal_wire():
     view = display(*sample())
     text = json.dumps(view, ensure_ascii=False)
-    for item in ['温度','对象 1（本地类型：监测点）','对象 2（本地类型：监测点）','42','38','来源 1','事实 1','事实 2','能力声明','HTTP 服务','输出字段：温度（登记路径：/temperature）','资料来源全文','资料完整原文']:
+    for item in ['温度','对象 1（本地类型：监测点）','对象 2（本地类型：监测点）','42','38','来源 1','事实 1','事实 2','能力声明','HTTP 服务','输出字段：对象 1（本地类型：监测点）：温度（登记路径：/temperature）','资料来源全文','资料完整原文']:
         assert item in text
     for item in ['hidden-id','hidden-hash','hidden-adapter','hidden system prompt','decision_input','source_ref']:
         assert item not in text
@@ -189,7 +189,7 @@ def test_registered_nested_output_resolves_against_frozen_schema_and_rejects_mis
                 'properties':{'temperature':{'type':'number','unit':'°C'}}}}}
     _replace_capability_metadata(messages, frame, change)
     result=display(messages, frame, aliases, snapshots, original_parts)
-    assert any(line['value']=='输出字段（本地名称）：分析结果 → 温度（登记路径：/result/temperature）' for line in result['lines'])
+    assert any(line['value']=='输出字段（本地名称）：分析结果 → 对象 1（本地类型：监测点）：温度（登记路径：/result/temperature）' for line in result['lines'])
     frame['capability_pins']['capabilities'][0]['data']['output_schema']['required']=[]
     with pytest.raises(UnreadablePreview):
         display(messages, frame, aliases, snapshots, original_parts)
@@ -232,7 +232,7 @@ def test_nested_json_pointer_escapes_are_resolved_and_sent_path_is_visible():
                 'properties':{'temperature':{'type':'number','unit':'°C'}}}}}
     _replace_capability_metadata(messages,frame,change)
     result=display(messages,frame,aliases,snapshots,original_parts)
-    assert any('结果详情 → 温度（登记路径：/result~1detail/temperature）' in line['value'] for line in result['lines'])
+    assert any('结果详情 → 对象 1（本地类型：监测点）：温度（登记路径：/result~1detail/temperature）' in line['value'] for line in result['lines'])
 
 
 def test_same_field_key_in_distinct_object_types_preserves_all_mapped_labels():
@@ -247,3 +247,24 @@ def test_same_field_key_in_distinct_object_types_preserves_all_mapped_labels():
     messages[2]['content'][0]['text']=json.dumps(payload,ensure_ascii=False)
     result=display(messages,frame,aliases,snapshots,original_parts)
     assert any('对象 1（本地类型：监测点）：温度' in line['value'] and '对象 2（本地类型：设备）：设备温度' in line['value'] for line in result['lines'])
+
+
+def test_unmapped_outputs_are_not_presented_as_object_coverage():
+    messages, frame, aliases, snapshots, original_parts = sample()
+    snapshots[1]['fields']=copy.deepcopy(snapshots[1]['fields']);snapshots[1]['type_name']='设备';snapshots[1]['fields'][0]['label']='设备温度'
+    frame['capability_pins']['object_snapshots_hash']=digest(snapshots)
+    payload=json.loads(messages[2]['content'][0]['text']);decision=payload['decision_input']
+    decision['candidates'][0]['requirement_mappings']=[]
+    messages[2]['content'][0]['text']=json.dumps(payload,ensure_ascii=False)
+    result=display(messages,frame,aliases,snapshots,original_parts)
+    assert any('尚未建立需求关联；本地同名字段：' in line['value'] for line in result['lines'])
+    assert any('设备温度' in line['value'] and '尚未建立需求关联' in line['value'] for line in result['lines'])
+
+
+def test_one_mapped_object_excludes_unmapped_same_key_objects():
+    messages, frame, aliases, snapshots, original_parts = sample()
+    snapshots[1]['fields']=copy.deepcopy(snapshots[1]['fields']);snapshots[1]['type_name']='设备';snapshots[1]['fields'][0]['label']='设备温度'
+    frame['capability_pins']['object_snapshots_hash']=digest(snapshots)
+    result=display(messages,frame,aliases,snapshots,original_parts)
+    output=[line['value'] for line in result['lines'] if '输出字段：' in line['value']]
+    assert output and all('对象 1（本地类型：监测点）：温度' in value and '设备温度' not in value for value in output)

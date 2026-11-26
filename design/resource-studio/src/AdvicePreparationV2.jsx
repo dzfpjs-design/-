@@ -42,8 +42,9 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
       const available = await requestJSON(base + '/availability');
       if (alive.current !== generation || reads.current.context !== serial) return;
       if (available?.enabled===false) {
-        let saved=true;try{saved=storage.getItem(key)!==null||storage.getItem(key+':active')!==null;}catch{}
-        setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);
+        if(typeof available.has_unfinished!=='boolean')throw Error('unavailable');
+        let saved=true;try{saved=available.has_unfinished||storage.getItem(key)!==null||storage.getItem(key+':active')!==null;}catch{}
+        reads.current.selected++;setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);
         if(saved){setContext({enabled:true,can_prepare:false,sources:[]});availability.current?.(true);setError('已有申请暂不可用，请刷新。');}
         else {setContext({enabled:false});availability.current?.(false);setError('');}
         return;
@@ -51,13 +52,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
       if (available?.enabled!==true) throw Error('unavailable');
       const ctx = await requestJSON(base + '/context');
       if (alive.current !== generation || reads.current.context !== serial) return;
-      if (ctx?.enabled===false) {
-        let saved=true;try{saved=storage.getItem(key)!==null||storage.getItem(key+':active')!==null;}catch{}
-        setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);
-        if(saved){setContext({enabled:true,can_prepare:false,sources:[]});availability.current?.(true);setError('已有申请暂不可用，请刷新。');}
-        else {setContext(ctx);availability.current?.(false);setError('');}
-        return;
-      }
+      if (ctx?.enabled===false) {reads.current.selected++;setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);setError('建议暂不可用，请刷新。');return;}
       if (ctx?.enabled!==true) throw Error('unavailable');
       const list = await requestJSON(base + '/preparations');
       await verifyIdentity();
@@ -68,7 +63,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
         ? current : (list.items.at(-1)?.plan_id || ''));
       return list.items;
     } catch (error) { if(denied(error,generation))return; if (alive.current === generation && reads.current.context === serial) {
-      setReachable(false);setError('建议暂不可用，请刷新。');
+      reads.current.selected++;setReachable(false);setError('建议暂不可用，请刷新。');
     } }
   }, [base, requestJSON,denied,storage,key,verifyIdentity]);
   const load = useCallback(async id => {
