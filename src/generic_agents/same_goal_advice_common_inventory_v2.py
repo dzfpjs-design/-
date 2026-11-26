@@ -61,8 +61,17 @@ def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_tes
         from . import same_goal_advice_cloud_claim_test_v2 as terminal_guard
         from . import same_goal_advice_terminal_candidate_v2 as terminal
         terminal_guard.require_test_database(db)
-        old.need(lock, '终态实验只允许受锁的专用测试库读取')
-        terminal._schema(db)
+        if not lock:
+            # A repeatable-read, read-only display cannot use the live
+            # terminal verifier's row/table locks. If a terminal exists, do
+            # not silently omit it or turn a snapshot into send authority.
+            # With no terminal, retain the pre-existing snapshot behavior.
+            table=db.scalar(text("SELECT to_regclass('public.ga_test_advice_v2_terminals')"))
+            has_terminal=(db.scalar(text('''SELECT EXISTS(SELECT 1 FROM public.ga_test_advice_v2_terminals t
+                JOIN public.plan_versions p ON p.workspace_id=t.workspace_id AND p.id=t.plan_id
+                WHERE t.workspace_id=:w AND p.task_id=:t)'''),{'w':p.workspace_id,'t':task_id}) if table else False)
+            old.need(not has_terminal, '存在已结算业务建议，快照核验尚不可用；请查看原请求状态')
+            terminal_enabled=False
     if reserved_plan_test_only is not None:
         from . import same_goal_advice_cloud_claim_test_v2 as claims
         claims.require_test_database(db)
@@ -78,6 +87,8 @@ def _read(db, p, task_id, *, lock=True, reserved_plan_test_only=None, intent_tes
         plans = old._rows(db, p, Plan, or_(
             (Plan.task_id == task.id) & Plan.data['schema'].as_string().startswith('same-goal-advice-', autoescape=True),
             Plan.data['preparation_snapshot']['scope']['task_id'].as_string() == task.id))
+        if terminal_enabled and any(type(plan.data) is dict and plan.data.get('schema')==v2.PLAN for plan in plans):
+            terminal._schema(db)
         legacy, queued, closed, settled = [], [], [], []
         for plan in plans:
             schema = plan.data.get('schema') if type(plan.data) is dict else None

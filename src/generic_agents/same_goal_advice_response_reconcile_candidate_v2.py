@@ -34,6 +34,11 @@ def reconcile(workspace_id,call_id,intent_id,*,authorize_settlement=None):
         # not install a migration, process a queue or grant another send.
         from . import same_goal_advice_terminal_candidate_v2 as terminal
         with Session(engine()) as db:
+            guard.require_disposable_database(db)
+            if authorize_settlement is not None:
+                # The callback locks and authenticates the actual operator;
+                # its commit guard must cover atomic terminal settlement too.
+                authorize_settlement(db)
             value=terminal.settle_and_record(db,workspace_id,call_id,intent_id);db.commit()
             return {'state':'settled','answer_state':value['status'],'usage_unavailable':False,
                 'retry_authorized':False,'business_result_verified':False}

@@ -224,7 +224,7 @@ def test_damaged_daily_total_blocks_terminal_and_any_next_request(started,monkey
         assert len(server.requests)==1
 
 
-def test_new_request_after_verified_terminal_and_original_request_cannot_resend(started,prepared_preview,monkeypatch):
+def test_new_request_after_verified_terminal_and_original_request_cannot_resend(started,prepared_preview,client,monkeypatch):
     from generic_agents import same_goal_advice_common_inventory_v2 as inventory
     from generic_agents import same_goal_advice_prepare_writer_candidate_v2 as writer
     from generic_agents import same_goal_advice_file_intent_candidate_v2 as file_intent
@@ -244,6 +244,10 @@ def test_new_request_after_verified_terminal_and_original_request_cannot_resend(
         with Session(engine()) as db:
             terminal.settle_and_record(db,p.workspace_id,call_id,intent);db.commit()
         monkeypatch.setattr(settings(),'v2_terminal_history_test_enabled',True)
+        monkeypatch.setattr(settings(),'v2_history_compat_test_enabled',True)
+        path='/api/workspace/tasks/'+s['task_id']+'/business-advice/preparations'
+        first_history=client.get(path)
+        assert first_history.status_code==200,first_history.text
         prep=copy.deepcopy(s['prep']);original_request=copy.deepcopy(prep['request'])
         new_request=copy.deepcopy(original_request);new_request['request_id']=str(uuid4())
         new_request['reason']='合成的第二次独立建议申请'
@@ -297,6 +301,8 @@ def test_new_request_after_verified_terminal_and_original_request_cannot_resend(
             owned=lease.acquire(db,p,s['task_id'],created['plan_id']);db.commit()
         with Session(engine()) as db:
             allocated=reserve.reserve(db,p,s['task_id'],created['plan_id'],owned['job_id'],owned['lease_token']);db.commit()
+        active_history=client.get(path)
+        assert active_history.status_code==200,active_history.text
         second_args=(p,s['task_id'],created['plan_id'],owned['job_id'],owned['lease_token'],allocated['cloud_call_id'])
         second=dispatch.execute_once(*second_args)
         with Session(engine()) as db:
@@ -307,6 +313,8 @@ def test_new_request_after_verified_terminal_and_original_request_cannot_resend(
             ledger=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,Job.kind=='cloud_budget'))
             assert (ledger.data['calls'],ledger.data['tokens'])==(2,10)
             assert db.scalar(select(func.count()).select_from(Audit).where(Audit.action==terminal.ACTION))==2
+        final_history=client.get(path)
+        assert final_history.status_code==200,final_history.text
         from generic_agents import same_goal_advice_terminal_paging_test_v2 as paging
         with Session(engine()) as db:
             summary=paging.scan(db,p,s['task_id'],page_size=1)
@@ -315,6 +323,22 @@ def test_new_request_after_verified_terminal_and_original_request_cannot_resend(
             db.rollback()
         with pytest.raises(HTTPException):dispatch.execute_once(*second_args)
         assert len(server.requests)==2
+
+
+def test_budget_http_reports_terminal_as_needing_snapshot_review(started,client,monkeypatch):
+    from generic_agents.config import settings
+    from tests.test_goal_budget_display_advice_versions_candidate_pg import setup_context
+    s,args,opinion=setup(started);_install();port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
+    with provider(port,content=json.dumps(opinion),usage={'prompt_tokens':3,'completion_tokens':2,'total_tokens':5}):
+        first=dispatch.execute_once(*args);p=args[0];call_id=args[-1]
+        with Session(engine()) as db:
+            terminal.settle_and_record(db,p.workspace_id,call_id,first['intent_audit_id']);db.commit()
+        monkeypatch.setattr(settings(),'v2_terminal_history_test_enabled',True)
+        setup_context(monkeypatch,s)
+        path='/api/workspace/tasks/'+s['task_id']+'/goal/budget-display'
+        response=client.get(path)
+        assert response.status_code==409
+        assert '已结算业务建议' in response.json()['detail'] and '尚不可用' in response.json()['detail']
 
 
 def test_concurrent_same_new_request_after_terminal_creates_one_plan(started,monkeypatch):
