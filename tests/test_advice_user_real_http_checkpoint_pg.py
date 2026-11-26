@@ -66,7 +66,7 @@ def run_worker_process():
     """One independently started worker process; no production credentials."""
     cfg = settings()
     allowed = ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'PYTHONPATH',
-        'GA_TEST_PG_DATA_DIR', 'GA_TEST_PG_SYSTEM_IDENTIFIER', 'GA_TEST_SYNTHETIC_PROVIDER_PORT')
+        'GA_TEST_DATABASE_URL', 'GA_TEST_PG_DATA_DIR', 'GA_TEST_PG_SYSTEM_IDENTIFIER', 'GA_TEST_SYNTHETIC_PROVIDER_PORT')
     env = {key: os.environ[key] for key in allowed if key in os.environ}
     env.update({
         'GA_DATABASE_URL': str(cfg.database_url), 'GA_REDIS_URL': cfg.redis_url,
