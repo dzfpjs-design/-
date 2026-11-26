@@ -106,3 +106,36 @@ test('a changed session cannot apply an old preview even before rerender',()=>en
  sessionStorage.setItem('ga-setup-csrf','second-session');await act(async()=>button('加入业务清单').click());assert.equal(saves,0);
  await act(async()=>dom.window.dispatchEvent(new dom.window.Event('focus')));assert.doesNotMatch(document.body.textContent,/森林巡护|内部原句/);
 }));
+
+test('source recheck refreshes material status after adopting a changed candidate revision',()=>environment(async({Component,root})=>{
+ const initial={businesses:[],flows:{},businessCandidates:bundle},updatedBundle={...bundle,material:{...material,version:3}};
+ const saved={revision:5,configuration:{...initial,businessCandidates:updatedBundle}},account={user_id:'u',username:'name',workspace_id:'w',role:'admin'};
+ let release,started,refreshes=0;const pending=new Promise(resolve=>{release=resolve;}),adopting=new Promise(resolve=>{started=resolve;});
+ function Harness(){const [workspace,setWorkspace]=useState(initial),[rows,setRows]=useState([material]);
+  return React.createElement(Component,{bundle:workspace.businessCandidates,workspace,materials:rows,materialReadStatus:'ready',canManage:true,account,Btn,
+   prepareDraft:async()=>4,onAdopt:async()=>{setWorkspace(saved.configuration);started();await pending;},onRefreshMaterials:async()=>{refreshes++;setRows([{...material,version:3}]);},
+   onCommit:()=>true,request:async()=>({draft:saved,preview:{...response,material:{...material,version:3}}})});}
+ await act(async()=>root.render(React.createElement(Harness)));await act(async()=>button('重新核对依据').click());await adopting;
+ assert.equal(button('查看候选').disabled,true);await act(async()=>{release();await Promise.resolve();});
+ assert.equal(refreshes,1);assert.equal(button('查看候选').disabled,false);
+}));
+
+test('an adopted recheck never refreshes another session even after an account ABA switch',()=>environment(async({Component,root})=>{
+ const initial={businesses:[],flows:{},businessCandidates:bundle},saved={revision:5,configuration:initial};
+ const one={user_id:'u1',username:'one',workspace_id:'w',role:'admin'},two={user_id:'u2',username:'two',workspace_id:'w',role:'admin'};
+ let release,started,refreshes=0;const pending=new Promise(resolve=>{release=resolve;}),adopting=new Promise(resolve=>{started=resolve;});
+ const props={bundle,workspace:initial,materials:[material],materialReadStatus:'ready',canManage:true,Btn,prepareDraft:async()=>4,
+  onAdopt:async()=>{started();await pending;},onRefreshMaterials:async()=>{refreshes++;},onCommit:()=>true,request:async()=>({draft:saved,preview:response})};
+ await act(async()=>root.render(React.createElement(Component,{...props,account:one})));await act(async()=>button('重新核对依据').click());await adopting;
+ await act(async()=>root.render(React.createElement(Component,{...props,account:two})));await act(async()=>root.render(React.createElement(Component,{...props,account:one})));
+ await act(async()=>{release();await Promise.resolve();});assert.equal(refreshes,0);
+}));
+
+test('an unmounted source recheck does not refresh its former workspace',()=>environment(async({Component,root})=>{
+ const initial={businesses:[],flows:{},businessCandidates:bundle},saved={revision:5,configuration:initial},account={user_id:'u',workspace_id:'w',role:'admin'};
+ let release,started,refreshes=0;const pending=new Promise(resolve=>{release=resolve;}),adopting=new Promise(resolve=>{started=resolve;});
+ const props={bundle,workspace:initial,materials:[material],materialReadStatus:'ready',canManage:true,account,Btn,prepareDraft:async()=>4,
+  onAdopt:async()=>{started();await pending;},onRefreshMaterials:async()=>{refreshes++;},onCommit:()=>true,request:async()=>({draft:saved,preview:response})};
+ await act(async()=>root.render(React.createElement(Component,props)));await act(async()=>button('重新核对依据').click());await adopting;
+ await act(async()=>root.render(null));await act(async()=>{release();await Promise.resolve();});assert.equal(refreshes,0);
+}));
