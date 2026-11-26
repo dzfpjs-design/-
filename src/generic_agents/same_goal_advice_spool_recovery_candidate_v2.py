@@ -51,7 +51,8 @@ def recover(workspace_id,call_id,intent_id,permit_id,*,authorize_capture=None):
             if authorize_capture is not None:
                 authorize_capture(db)
             db.commit()
-            outcome=reconcile.reconcile(workspace_id,call_id,intent_id)
+            outcome=(reconcile.reconcile(workspace_id,call_id,intent_id,authorize_settlement=authorize_capture)
+                if authorize_capture is not None else reconcile.reconcile(workspace_id,call_id,intent_id))
             return {**outcome,'spool_state':'not_checked'}
     raw,receipt=spool.load(settings().v2_response_spool_root,context)
     with Session(engine()) as db:
@@ -62,5 +63,6 @@ def recover(workspace_id,call_id,intent_id,permit_id,*,authorize_capture=None):
         store.need(_context(db,workspace_id,call_id,intent_id,permit_id)==context)
         storage.capture(db,workspace_id,call_id,intent_id,raw,receipt)
         db.commit()
-    outcome=reconcile.reconcile(workspace_id,call_id,intent_id)
+    outcome=(reconcile.reconcile(workspace_id,call_id,intent_id,authorize_settlement=authorize_capture)
+        if authorize_capture is not None else reconcile.reconcile(workspace_id,call_id,intent_id))
     return {**outcome,'spool_state':'retained'}

@@ -13,11 +13,12 @@ test('recover, lost reply, refresh and role changes stay understandable',async()
  const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});
  let root;try{
   const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/AdviceResponseRecoveryV2.jsx');
-  root=createRoot(document.getElementById('root'));let state='ready',role='admin',lost=true,posts=0,enabled=true;
-  const request=async(_path,options={})=>{
+  root=createRoot(document.getElementById('root'));let state='ready',role='admin',lost=true,posts=0,enabled=true,multi=false;
+  const request=async(path,options={})=>{
    if(role!=='admin')throw Error('permission lost');
    if(options.method==='POST'){posts++;state='settled';if(lost){lost=false;throw Error('lost reply');}return {state:'settled'};}
-   return {enabled,items:enabled?[{permit_id:'permit-1',state,recorded_at:'2026-11-25T12:00:00Z'}]:[]};
+   if(path.includes('?cursor='))return {enabled:true,items:[{permit_id:'permit-2',state:'needs_attention',recorded_at:'2026-11-24T12:00:00Z'}],next_cursor:null};
+   return {enabled,items:enabled?[{permit_id:'permit-1',state,recorded_at:'2026-11-25T12:00:00Z'}]:[],next_cursor:multi?'next-page':null};
   };
   const render=()=>React.createElement(Panel,{account:{workspace_id:'w',user_id:'u',role},task:{id:'t'},requestJSON:request});
   await act(async()=>root.render(render()));
@@ -26,11 +27,22 @@ test('recover, lost reply, refresh and role changes stay understandable',async()
   await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='恢复结果并核对用量').click());
   assert.match(document.body.textContent,/恢复结果尚未确认/);assert.equal(posts,1);
   await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新状态').click());
-  assert.match(document.body.textContent,/首答和用量已保存/);assert.equal(posts,1);
+  assert.match(document.body.textContent,/首答已保存，账本待核/);assert.equal(posts,1);
   await act(async()=>{root.unmount();root=createRoot(document.getElementById('root'));root.render(render());});
-  assert.match(document.body.textContent,/首答和用量已保存/);
+  assert.match(document.body.textContent,/首答已保存，账本待核/);
+  state='settled_usage_unknown';await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新状态').click());
+  assert.match(document.body.textContent,/首答已保存，实际用量待核/);
+  assert.match(document.body.textContent,/模型未返回实际用量，系统暂按预留量记录/);
+  assert.doesNotMatch(document.body.textContent,/首答和用量已保存/);
+  state='failed';await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新状态').click());
+  assert.match(document.body.textContent,/原响应已保存，业务建议未生成，账本待核/);
+  state='failed_usage_unknown';await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新状态').click());
+  assert.match(document.body.textContent,/业务建议未生成，实际用量待核/);
   state='needs_attention';await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新状态').click());
   assert.match(document.body.textContent,/不要重复发送/);assert.equal(document.querySelectorAll('button').length,1);
+  multi=true;await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新状态').click());
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='加载更多记录').click());
+  assert.equal(document.querySelectorAll('article').length,2);
   role='viewer';await act(async()=>root.render(render()));assert.equal(document.body.textContent,'');
   role='admin';enabled=false;await act(async()=>root.render(render()));assert.equal(document.body.textContent,'');
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}

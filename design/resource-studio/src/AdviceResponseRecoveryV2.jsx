@@ -3,7 +3,10 @@ import React,{useCallback,useEffect,useRef,useState} from 'react';
 const STATES={
  ready:'已找到完整首答，可以恢复保存',
  needs_settlement:'首答已保存，等待核对用量',
- settled:'首答和用量已保存',
+ settled:'首答已保存，账本待核',
+ settled_usage_unknown:'首答已保存，实际用量待核',
+ failed:'原响应已保存，业务建议未生成，账本待核',
+ failed_usage_unknown:'原响应已保存，业务建议未生成，实际用量待核',
  needs_attention:'首答不完整或原记录需要核对',
 };
 
@@ -27,6 +30,13 @@ export default function AdviceResponseRecoveryV2({account,task,requestJSON,onRec
    if(alive.current===generation){setData(null);setError('恢复结果尚未确认，请刷新状态。系统不会再次发送原请求。');}
   }finally{if(alive.current===generation)setBusy('');}
  };
+ const loadMore=async()=>{
+  if(busy||!data?.next_cursor)return;const generation=alive.current,cursor=data.next_cursor;setBusy('page');setError('');
+  try{const page=await requestJSON(base+'?cursor='+encodeURIComponent(cursor));
+   if(alive.current===generation)setData(old=>old?.enabled&&old.next_cursor===cursor?({...page,items:[...old.items,...page.items]}):old);
+  }catch{if(alive.current===generation)setError('加载更多记录失败，请重试或刷新。');}
+  finally{if(alive.current===generation)setBusy('');}
+ };
  if(account?.role!=='admin'||(!data&&!error)||data?.enabled===false)return null;
  return <section className="media-form" aria-label="业务建议结果恢复">
   <div className="same-advice-heading"><div><h4>业务建议结果恢复</h4>
@@ -42,7 +52,11 @@ export default function AdviceResponseRecoveryV2({account,task,requestJSON,onRec
    {item.state==='needs_attention'&&<p>系统无法确认完整首答，请联系管理员核对原记录；不要重复发送。</p>}
    {(item.state==='ready'||item.state==='needs_settlement')&&<button type="button" disabled={!!busy}
     onClick={()=>recover(item)}>{busy===item.permit_id?'正在恢复…':'恢复结果并核对用量'}</button>}
-   {item.state==='settled'&&<p>结果已保存，业务内容仍需按原流程核对。</p>}
+   {item.state==='settled'&&<p>已记录模型返回的用量；同日账本尚需逐笔核对，业务内容仍需按原流程核对。</p>}
+   {item.state==='settled_usage_unknown'&&<p>模型未返回实际用量，系统暂按预留量记录；不会再次发送原请求。业务内容仍需按原流程核对。</p>}
+   {item.state==='failed'&&<p>请求失败或响应格式不符合要求；系统已记录模型返回的用量，同日账本尚需逐笔核对，不会再次发送原请求。</p>}
+   {item.state==='failed_usage_unknown'&&<p>请求失败或响应格式不符合要求，模型未返回实际用量，系统暂按预留量记录；不会再次发送原请求。</p>}
   </article>)}
+  {data?.next_cursor&&<button type="button" disabled={!!busy} onClick={loadMore}>{busy==='page'?'正在加载…':'加载更多记录'}</button>}
  </section>;
 }
