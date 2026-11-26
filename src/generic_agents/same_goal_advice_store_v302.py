@@ -170,6 +170,33 @@ def _saved(db,p,task,plan):
     return prep,job
 
 
+def _discover_reserved_history_test_only(db,p,task):
+    """Identify one candidate, then let common inventory verify every original.
+
+    This detector is not an authority. It can only run in the isolated test
+    database and cannot authorize creation, sending, or a retry. Unknown,
+    duplicate, inconsistent and post-permit states remain closed.
+    """
+    from .same_goal_advice_cloud_claim_test_v2 import ACTION as reservation_action, require_test_database
+    from .same_goal_advice_transport_intent_candidate_v2 import ACTION as intent_action
+    from .same_goal_advice_unlimited_store_v2 import PLAN as versioned_plan
+    require_test_database(db)
+    plans=_rows(db,p,Plan,Plan.data['schema'].as_string()==versioned_plan,or_(
+        Plan.task_id==task.id,Plan.data['preparation_snapshot']['scope']['task_id'].as_string()==task.id))
+    ids=[plan.id for plan in plans]
+    if not ids:return None,False
+    events=_rows(db,p,Audit,Audit.action.in_([reservation_action,intent_action]),Audit.object_id.in_(ids))
+    reserved=[event for event in events if event.action==reservation_action]
+    intents=[event for event in events if event.action==intent_action]
+    need(len(reserved)<=1 and len(intents)<=1)
+    if not reserved:
+        need(not intents)
+        return None,False
+    plan_id=reserved[0].object_id
+    need(not intents or intents[0].object_id==plan_id)
+    return plan_id,bool(intents)
+
+
 def _inventory(db,p,task,*,history_compatible=False,reserved_plan_test_only=None,intent_test_only=False):
     # v2 remains in a separate experimental release. History may ignore it
     # only after full custody verification, with a Task lock preventing a
@@ -191,6 +218,10 @@ def _inventory(db,p,task,*,history_compatible=False,reserved_plan_test_only=None
                 Plan.data['preparation_snapshot']['scope']['task_id'].as_string()==task.id)).limit(1)))
         if has_v2:
             from .same_goal_advice_common_inventory_v2 import read as read_versions
+            from .config import settings
+            if (reserved_plan_test_only is None and intent_test_only is False
+                    and settings().v2_history_compat_test_enabled):
+                reserved_plan_test_only,intent_test_only=_discover_reserved_history_test_only(db,p,task)
             if reserved_plan_test_only is None and intent_test_only is False:
                 read_versions(db,p,task)
             else:
