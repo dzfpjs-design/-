@@ -341,6 +341,61 @@ def test_budget_http_reports_terminal_as_needing_snapshot_review(started,client,
         assert '已结算业务建议' in response.json()['detail'] and '尚不可用' in response.json()['detail']
 
 
+@pytest.mark.parametrize('change',['replace','delete'])
+def test_budget_http_with_terminal_fails_closed_when_file_changes_during_snapshot(started,client,monkeypatch,change):
+    from pathlib import Path
+    import tempfile
+    from generic_agents import same_goal_advice_common_inventory_v2 as inventory
+    from generic_agents.config import settings
+    from generic_agents.models import Evidence, Plan
+    from tests.test_goal_budget_display_advice_versions_candidate_pg import setup_context
+    s,args,opinion=setup(started);_install();port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
+    with provider(port,content=json.dumps(opinion),usage={'prompt_tokens':3,'completion_tokens':2,'total_tokens':5}):
+        first=dispatch.execute_once(*args);p=args[0]
+        with Session(engine()) as db:
+            terminal.settle_and_record(db,p.workspace_id,args[-1],first['intent_audit_id']);db.commit()
+            plan=db.get(Plan,args[2]);file=db.get(Evidence,plan.data['document_preparation']['evidence_ref']['evidence_id'])
+            target=Path(settings().storage_dir)/file.storage_key
+        monkeypatch.setattr(settings(),'v2_terminal_history_test_enabled',True);setup_context(monkeypatch,s)
+        original=inventory._read;changed={'done':False}
+        def during_snapshot(*a,**kw):
+            if not kw.get('lock',True) and not changed['done']:
+                if change=='delete':target.unlink()
+                else:
+                    fd,name=tempfile.mkstemp(dir=target.parent)
+                    with os.fdopen(fd,'wb') as out:out.write(b'synthetic replacement');out.flush();os.fsync(out.fileno())
+                    os.replace(name,target)
+                changed['done']=True
+            return original(*a,**kw)
+        monkeypatch.setattr(inventory,'_read',during_snapshot)
+        result=client.get('/api/workspace/tasks/'+s['task_id']+'/goal/budget-display')
+        assert changed['done'] and result.status_code==409
+        assert '已结算业务建议' in result.json()['detail']
+
+
+def test_budget_http_with_terminal_does_not_expose_counts_if_session_revoked_mid_snapshot(started,client,monkeypatch):
+    from generic_agents import same_goal_advice_common_inventory_v2 as inventory
+    from generic_agents.config import settings
+    from generic_agents.models import AuthSession
+    from tests.test_goal_budget_display_advice_versions_candidate_pg import setup_context
+    s,args,opinion=setup(started);_install();port=int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
+    with provider(port,content=json.dumps(opinion),usage={'prompt_tokens':3,'completion_tokens':2,'total_tokens':5}):
+        first=dispatch.execute_once(*args);p=args[0]
+        with Session(engine()) as db:terminal.settle_and_record(db,p.workspace_id,args[-1],first['intent_audit_id']);db.commit()
+        monkeypatch.setattr(settings(),'v2_terminal_history_test_enabled',True);setup_context(monkeypatch,s)
+        original=inventory._read;revoked={'done':False}
+        def during_snapshot(*a,**kw):
+            if not kw.get('lock',True) and not revoked['done']:
+                with Session(engine()) as db:db.get(AuthSession,p.session_id).revoked=True;db.commit()
+                revoked['done']=True
+            return original(*a,**kw)
+        monkeypatch.setattr(inventory,'_read',during_snapshot)
+        path='/api/workspace/tasks/'+s['task_id']+'/goal/budget-display'
+        result=client.get(path)
+        assert revoked['done'] and result.status_code==409 and 'calls' not in result.json()
+        assert client.get(path).status_code==401
+
+
 def test_concurrent_same_new_request_after_terminal_creates_one_plan(started,monkeypatch):
     from generic_agents import same_goal_advice_prepare_writer_candidate_v2 as writer
     from generic_agents import same_goal_advice_unlimited_contracts_v2 as v2contracts
