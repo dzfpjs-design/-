@@ -62,6 +62,7 @@ def restore_to_disposable_test_db(root_name):
     root = root_path.resolve()
     require(root.parent == temp and root.name.startswith('advice-fresh-mature-checkpoint-'))
     require(root.is_dir() and root.stat().st_uid == os.getuid() and root.stat().st_mode & 0o077 == 0)
+    require(not (root / 'PREFLIGHT_ONLY').exists())
     entries = list(root.rglob('*'))
     require(all(not item.is_symlink() and (item.is_dir() or item.is_file())
         and item.stat().st_uid == os.getuid() and (not item.is_file() or item.stat().st_nlink == 1) for item in entries))
