@@ -7,26 +7,39 @@ It never returns raw evidence, model text, credentials or internal references.
 from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import engine
 from .gateway import ModelBlocked
-from .models import Audit, CloudCall
+from .models import Audit, CloudCall, Plan
 from .setup_api import DB, P
 from .temporal import instant
 from .workflow_goal_evaluation_models_v288 import GoalEvaluationV288, row_values
 from . import same_goal_advice_contracts_v302 as contracts
 from . import same_goal_advice_first_response_candidate_v2 as response
 from . import same_goal_advice_first_response_storage_candidate_v2 as storage
-from . import same_goal_advice_recovery_api_candidate_v2 as recovery_api
 from . import same_goal_advice_source_scope_v309 as source_scope
 from . import same_goal_advice_spool_recovery_candidate_v2 as recovery
 from . import same_goal_advice_unlimited_preview_candidate_v2 as preview
+from . import same_goal_advice_unlimited_store_v2 as custody
+from . import same_goal_advice_prepare_writer_candidate_v2 as guard
+from . import same_goal_advice_store_v302 as old
+from . import same_goal_advice_dispatch_permit_candidate_v2 as permits
+from . import same_goal_advice_transport_intent_candidate_v2 as intents
+from . import same_goal_advice_cloud_claim_test_v2 as claims
+from . import same_goal_advice_cloud_reservation_candidate_v2 as reservation
 
 router = APIRouter()
 BASE = '/tasks/{task_id}/business-advice/evidence-explanation'
+
+
+def _access(db, p, task_id):
+    """Match existing same-goal read permissions; never grant a write."""
+    guard.require_disposable_database(db)
+    custody._lock_current_reader(db, p)
+    old.existing._task(db, p, task_id)
 
 
 def _one_observation_freshness(fact, sources, recorded, age, now):
@@ -73,9 +86,15 @@ def _observation_meta(db, workspace, task_id, original, cloud):
     if row is None:
         return {}
     checked = row_values(row.data)
-    if (checked['record_hash'] != row.record_hash or row.record_hash != evaluation_ref['record_hash']
-            or checked['id'] != row.id or checked['workspace_id'] != workspace
-            or checked['task_id'] != task_id):
+    fields = ('id', 'version', 'workspace_id', 'task_id', 'goal_version', 'generation',
+              'goal_hash', 'preparation_policy_hash', 'record_hash', 'cut_at')
+    if (any(getattr(row, name) != checked[name] for name in fields)
+            or row.record_hash != evaluation_ref['record_hash']
+            or checked['workspace_id'] != workspace or checked['task_id'] != task_id
+            or row.generation != source_record['evaluation_generation']
+            or row.data['cut_at'] != source_record['evaluation_cut']
+            or row.data['original_query_ref'] != source_record['original_query_ref']
+            or row.data['evaluation_query_ref'] != source_record['evaluation_query_ref']):
         raise ValueError('original evaluation changed')
     policy = row.data['preparation_policy']
     if policy.get('time_basis') != 'rolling_latest':
@@ -171,18 +190,48 @@ def _read_one(workspace, task_id, permit_id, call_id, intent_id):
             intent_audit_id=intent_id, schema=contracts.model_value_schema())
         # All reference and supplied-source checks precede any display.
         contracts.check_model_value(cloud, opinion)
-        freshness = _observation_meta(db, workspace, task_id, shown.data, cloud)
+        cited = set(opinion['recommendation']['supporting_fact_refs'])
+        has_observation = any(fact['fact_ref'] in cited and fact['kind'] == 'observation'
+                              for fact in cloud['facts'])
+        freshness = _observation_meta(db, workspace, task_id, shown.data, cloud) if has_observation else {}
         value = _derive(cloud, opinion, freshness)
         db.rollback()
         return value
 
 
 @router.get(BASE)
-def listing(task_id: str, p: P, db: DB, cursor: str | None = None):
+def listing(task_id: str, p: P, db: DB, plan_id: str | None = None):
     if not settings().v2_advice_evidence_explanation_enabled:
         return {'enabled': False, 'items': []}
-    # Existing recovery access requires authenticated admin and disposable PG.
-    identities, next_cursor = recovery_api._identities(db, p, task_id, cursor=cursor)
+    if plan_id is None:
+        raise HTTPException(422, '请选择需要查看依据的建议')
+    # Never attach another plan's evidence to the currently visible advice.
+    # Scope read access to the current account/workspace and disposable PG.
+    _access(db, p, task_id)
+    identity = old.existing._id(plan_id)
+    plan = db.scalar(select(Plan).where(Plan.workspace_id == p.workspace_id,
+        Plan.task_id == task_id, Plan.id == identity).with_for_update(read=True, nowait=True))
+    if plan is None or type(plan.data) is not dict or plan.data.get('schema') != custody.PLAN:
+        return {'enabled': True, 'items': []}
+    calls = select(CloudCall.id).where(CloudCall.workspace_id == p.workspace_id,
+        CloudCall.data['same_goal_advice_unlimited_v2']['plan_id'].as_string() == identity)
+    events = list(db.scalars(select(Audit).where(Audit.workspace_id == p.workspace_id,
+        or_(Audit.action.in_([permits.ACTION, intents.ACTION, claims.ACTION]),
+            Audit.data['schema'].as_string().in_([permits.SCHEMA, intents.SCHEMA, reservation.SCHEMA])),
+        or_(Audit.object_id == identity, Audit.data['plan_id'].as_string() == identity,
+            Audit.data['cloud_call_id'].as_string().in_(calls), Audit.data['call_id'].as_string().in_(calls)))
+        .order_by(Audit.created_at, Audit.id).limit(5)))
+    permit_events = [event for event in events if event.action == permits.ACTION]
+    identities = []
+    if len(events) < 5 and len(permit_events) == 1:
+        event = permit_events[0]; value = event.data if type(event.data) is dict else {}
+        intent = value.get('intent_ref')
+        identities = [(event.id, value.get('cloud_call_id'), intent.get('id') if type(intent) is dict else None,
+            event.created_at.isoformat(), True)]
+    elif events:
+        identities = [(None, None, None, events[0].created_at.isoformat(), False)]
+    elif db.scalar(select(func.count()).select_from(calls.subquery())):
+        identities = [(None, None, None, plan.created_at.isoformat(), False)]
     db.rollback()
     items = []
     for permit_id, call_id, intent_id, recorded_at, is_permit in identities:
@@ -194,5 +243,5 @@ def listing(task_id: str, p: P, db: DB, cursor: str | None = None):
             except (HTTPException, ModelBlocked, ValueError, TypeError, KeyError, AttributeError, IndexError):
                 pass
         items.append(entry)
-    recovery_api._access(db, p, task_id)
-    return {'enabled': True, 'items': items, 'next_cursor': next_cursor}
+    _access(db, p, task_id)
+    return {'enabled': True, 'items': items}

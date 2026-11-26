@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from generic_agents.config import settings
 from generic_agents.db import engine
-from generic_agents.models import Audit, CloudCall
+from generic_agents.models import Audit, CloudCall, Membership, Plan, User, Workspace
 from generic_agents import same_goal_advice_deepseek_adapter_candidate_v2 as adapter
 from generic_agents import same_goal_advice_evidence_explain_candidate_v2 as subject
 from generic_agents import same_goal_advice_unlimited_preview_candidate_v2 as preview
@@ -94,12 +95,51 @@ def test_http_displays_only_verified_original_and_rejects_tampered_preview(start
         with provider(port, content=json.dumps(opinion), usage={'prompt_tokens':3,'completion_tokens':2,'total_tokens':5}) as server:
             result = adapter.execute_synthetic_test_only(*args)
             assert result['state'] == 'settled' and len(server.requests) == 1
-        url = '/api/workspace/tasks/'+args[1]+'/business-advice/evidence-explanation'
+        base = '/api/workspace/tasks/'+args[1]+'/business-advice/evidence-explanation'
+        url = base + '?plan_id=' + args[2]
         result = client.get(url)
         assert result.status_code == 200, result.text
         data = result.json()
         assert data['enabled'] and len(data['items']) == 1 and data['items'][0]['state'] == 'ready'
+        monkeypatch.setattr(settings(), 'v2_advice_recovery_console_enabled', False)
+        assert client.get(url).json()['items'][0]['state'] == 'ready'
+        assert client.get(base+'?plan_id='+str(uuid4())).json() == {'enabled':True,'items':[]}
+        assert client.get(base).status_code == 422
         assert 'fact_ref' not in result.text and 'source_id' not in result.text and 'reasoning' not in result.text
+        with Session(engine()) as db:
+            user = db.scalar(select(User).where(User.username == account[0]))
+            other = Workspace(name='隔离工作区'); db.add(other); db.flush()
+            db.add(Membership(user_id=user.id, workspace_id=other.id, role='admin')); db.commit()
+            other_id, user_id = other.id, user.id
+        client.headers['X-Workspace-ID'] = other_id
+        assert client.get(url).status_code in (403, 404, 409)
+        client.headers['X-Workspace-ID'] = account[2]
+        with Session(engine()) as db:
+            user = db.scalar(select(User).where(User.username == account[0]))
+            member = db.scalar(select(Membership).where(Membership.user_id == user_id, Membership.workspace_id == account[2]))
+            member.role = 'viewer'; db.commit()
+        # Evidence is read-only: a current viewer can inspect their own
+        # workspace just as in the existing advice history.
+        viewer = client.get(url)
+        assert viewer.status_code == 200 and viewer.json()['items'][0]['state'] == 'ready'
+        with Session(engine()) as db:
+            member = db.scalar(select(Membership).where(Membership.user_id == user_id, Membership.workspace_id == account[2]))
+            member.role = 'admin'; db.commit()
+        original_reader = subject._read_one
+        def downgrade_after_read(*reader_args):
+            evidence = original_reader(*reader_args)
+            with Session(engine()) as changing:
+                row = changing.scalar(select(Membership).where(Membership.user_id == user_id, Membership.workspace_id == account[2]))
+                row.role = 'viewer'; changing.commit()
+            return evidence
+        monkeypatch.setattr(subject, '_read_one', downgrade_after_read)
+        # A stale admin session cannot disclose a result after its role changed
+        # between reading the originals and final authorization recheck.
+        assert client.get(url).status_code in (403, 409)
+        monkeypatch.setattr(subject, '_read_one', original_reader)
+        with Session(engine()) as db:
+            member = db.scalar(select(Membership).where(Membership.user_id == user_id, Membership.workspace_id == account[2]))
+            member.role = 'admin'; db.commit()
         with Session(engine()) as db:
             event = db.scalar(select(Audit).where(Audit.action == preview.ACTION))
             value = copy.deepcopy(event.data)
@@ -108,3 +148,10 @@ def test_http_displays_only_verified_original_and_rejects_tampered_preview(start
         result = client.get(url)
         assert result.status_code == 200 and result.json()['items'][0]['state'] == 'needs_review'
         assert len(server.requests) == 1
+        # Another plan in this task is never allowed to borrow this result's
+        # evidence. A legacy plan has no matching V2 evidence panel.
+        with Session(engine()) as db:
+            other_plan = Plan(workspace_id=account[2], task_id=args[1], status='cancelled',
+                              data={'schema':'same-goal-advice-execution-v302'})
+            db.add(other_plan); db.commit(); other_id = other_plan.id
+        assert client.get(base+'?plan_id='+other_id).json() == {'enabled':True,'items':[]}
