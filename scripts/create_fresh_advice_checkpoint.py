@@ -8,11 +8,16 @@ import argparse
 import json
 import os
 from pathlib import Path
-import signal
 import socket
 import subprocess
+import sys
 import tempfile
 import time
+
+try:
+    from scripts.run_retained_user_advice_checkpoint import _await_test_result, _stop_test_process_group
+except ModuleNotFoundError:
+    from run_retained_user_advice_checkpoint import _await_test_result, _stop_test_process_group
 
 
 def write_status(root, value):
@@ -36,28 +41,6 @@ def free_port(excluded):
     raise RuntimeError('no isolated port')
 
 
-def stop_test_group(process):
-    try: os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError: return True
-    except OSError: return False
-    try: process.wait(timeout=10)
-    except subprocess.TimeoutExpired: pass
-    except OSError: return False
-    try: os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError: return True
-    except OSError: return False
-    try:
-        if process.poll() is None: process.wait(timeout=10)
-    except (OSError, subprocess.TimeoutExpired): return False
-    deadline = time.monotonic() + 5
-    while True:
-        try: os.killpg(process.pid, 0)
-        except ProcessLookupError: return True
-        except OSError: return False
-        if time.monotonic() >= deadline: return False
-        time.sleep(0.05)
-
-
 def run(pg, pytest_bin, timeout, preflight=False, preflight_fail=False, preflight_bad_system=False):
     pg, pytest_bin = Path(pg).resolve(), Path(pytest_bin).resolve()
     repo = Path(__file__).resolve().parents[1]
@@ -78,7 +61,7 @@ def run(pg, pytest_bin, timeout, preflight=False, preflight_fail=False, prefligh
     gateway_port = free_port({pg_port})
     env = {k: os.environ[k] for k in ('HOME', 'TMPDIR', 'LANG', 'LC_ALL') if k in os.environ}
     env.update(PATH=str(pg) + ':/usr/bin:/bin:/usr/sbin:/sbin', DEEPSEEK_API_KEY='', DASHSCOPE_API_KEY='')
-    started = False
+    start_attempted = False
     status = {'state': 'initializing', 'checkpoint': str(checkpoint), 'cluster_stopped': False,
         'test_processes_stopped': True}
     write_status(root, status)
@@ -87,10 +70,10 @@ def run(pg, pytest_bin, timeout, preflight=False, preflight_fail=False, prefligh
         subprocess.run([str(pg / 'initdb'), '-D', str(data), '-U', 'advice_test', '-A', 'trust',
             '--no-locale', '-E', 'UTF8'], env=env, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, check=True, timeout=60)
+        start_attempted = True
         subprocess.run([str(pg / 'pg_ctl'), '-D', str(data), '-l', str(root / 'postgres.log'), '-o',
             f'-h 127.0.0.1 -p {pg_port} -k {root}', '-w', 'start'], env=env,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=60)
-        started = True
         sid = subprocess.check_output([str(pg / 'psql'), '-h', '127.0.0.1', '-p', str(pg_port),
             '-U', 'advice_test', '-d', 'postgres', '-Atc', 'select system_identifier from pg_control_system()'],
             env=env, text=True, timeout=15).strip()
@@ -112,30 +95,41 @@ def run(pg, pytest_bin, timeout, preflight=False, preflight_fail=False, prefligh
         began = time.monotonic()
         fd = os.open(root / 'test.log', os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, 'w') as out:
-            proc = subprocess.Popen(['/usr/bin/sandbox-exec', '-p', profile, str(pytest_bin), '-q', '-s',
-                'tests/test_synthetic_checkpoint_seed_preflight_pg.py' if preflight else
-                'tests/test_same_goal_advice_offline_fresh_checkpoint_pg.py'], cwd=repo, env=env,
-                stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+            result_read, result_write = os.pipe()
+            try:
+                proc = subprocess.Popen(['/usr/bin/sandbox-exec', '-p', profile, sys.executable,
+                    str(repo / 'scripts' / 'synthetic_process_anchor.py'), str(result_write),
+                    str(pytest_bin), '-q', '-s',
+                    'tests/test_synthetic_checkpoint_seed_preflight_pg.py' if preflight else
+                    'tests/test_same_goal_advice_offline_fresh_checkpoint_pg.py'], cwd=repo, env=env,
+                    stdin=subprocess.PIPE, stdout=out, stderr=subprocess.STDOUT, start_new_session=True,
+                    pass_fds=(result_write,))
+            except BaseException:
+                os.close(result_read); os.close(result_write); raise
+            os.close(result_write)
             status['test_processes_stopped'] = False
             try:
-                code = proc.wait(timeout=timeout)
-                status.update(state='passed' if code == 0 else 'failed', exit_code=code)
-            except subprocess.TimeoutExpired:
-                status['state'] = 'timeout'
+                code = _await_test_result(result_read, timeout)
+                status.update(state='timeout' if code is None else 'finished', exit_code=code)
+            except (OSError, RuntimeError):
+                status['state'] = 'process_identity_unconfirmed'
             finally:
-                status['test_processes_stopped'] = stop_test_group(proc)
-                if not status['test_processes_stopped'] and status['state'] == 'passed':
-                    status['state'] = 'process_cleanup_unconfirmed'
+                os.close(result_read)
+                status['test_processes_stopped'] = _stop_test_process_group(proc)
+                if status['state'] == 'finished':
+                    status['state'] = ('passed' if status['exit_code'] == 0 else 'failed') if status['test_processes_stopped'] else 'process_cleanup_unconfirmed'
         status['elapsed_seconds'] = round(time.monotonic() - began)
     finally:
-        if started:
-            result = subprocess.run([str(pg / 'pg_ctl'), '-D', str(data), '-m', 'fast', '-w', 'stop'],
-                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-            status['cluster_stopped'] = result.returncode == 0
-        else:
-            status['cluster_stopped'] = True
+        if start_attempted:
+            try:
+                result = subprocess.run([str(pg / 'pg_ctl'), '-D', str(data), '-m', 'fast', '-w', 'stop'],
+                    env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+                status['cluster_stopped'] = result.returncode == 0
+            except (OSError, subprocess.TimeoutExpired):
+                status['cluster_stopped'] = False
+        else: status['cluster_stopped'] = True
         write_status(root, status)
-    return 0 if status['state'] == 'passed' and status['cluster_stopped'] else 1
+    return 0 if status['state'] == 'passed' and status['cluster_stopped'] and status['test_processes_stopped'] else 1
 
 
 def main():
