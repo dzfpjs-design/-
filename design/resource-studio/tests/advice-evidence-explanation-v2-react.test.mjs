@@ -68,7 +68,8 @@ test('one selected plan controls visible evidence and stale responses cannot cro
   const late=planId=>React.createElement(Panel,{account,task,planId,requestJSON:delayed});
   await act(async()=>root.render(late('old-plan')));await act(async()=>root.render(late('new-plan')));
   await act(async()=>resolveOld({enabled:true,items:[{state:'ready',evidence:evidence()}]}));assert.equal(document.body.textContent,'');
-  const seen=[], api=async path=>{seen.push(path);return {enabled:true,items:[{state:'ready',evidence:evidence()}]}};
+  const seen=[], api=async path=>{seen.push(path);const id=new URL(path,'http://localhost').searchParams.get('plan_id');
+   return {enabled:true,items:id==='plan-A'?[{state:'ready',evidence:evidence()}]:[]};};
   const result={model_value:{recommendation:{candidate_ref:'candidate',reason:'请进一步观察',supporting_fact_refs:[]},candidate_reviews:[{candidate_ref:'candidate'}],source_reviews:[],conflicts:[]}};
   const opinion=(value,planId)=>React.createElement(Opinion,{result:value,account,task,planId,requestJSON:api});
   await act(async()=>root.render(opinion(result,'plan-A')));
@@ -77,6 +78,7 @@ test('one selected plan controls visible evidence and stale responses cannot cro
   const before=seen.length;await act(async()=>root.render(opinion({model_value:{...result.model_value,recommendation:{candidate_ref:null}}},'plan-A')));
   assert.equal(seen.length,before);assert.equal(document.querySelector('[aria-label="建议依据"]'),null);
   await act(async()=>root.render(opinion(result,'plan-B')));assert.match(seen.at(-1),/plan_id=plan-B$/);
+  assert.equal(document.querySelector('[aria-label="建议依据"]'),null);
   const afterPlanB=seen.length;await act(async()=>root.render(opinion(null,'plan-B')));
   assert.equal(seen.length,afterPlanB);assert.equal(document.querySelector('[aria-label="建议依据"]'),null);
   await act(async()=>root.render(opinion(result,'')));assert.equal(seen.length,afterPlanB);
