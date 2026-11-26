@@ -21,6 +21,7 @@ from . import same_goal_advice_unlimited_plan_candidate_v2 as candidate
 from . import same_goal_advice_unlimited_store_v2 as v2
 from . import workspace_advice_nonce_candidate_v2 as nonces
 from .contracts import digest
+from .config import settings
 from .models import Audit, Job, Plan, uid
 from .relations import lock_current_actor
 
@@ -86,7 +87,8 @@ def prepare(db, p, task_id, body, policy_ref):
         if cancellations: result['state'] = 'cancelled_expired'
         return result
     old.need(basis['queued_v2'] == 0)
-    old.need(not any(old._preparation_open(row[0]) for row in old._inventory(db, p, task)),
+    old.need(not any(old._preparation_open(row[0]) for row in old._inventory(db, p, task,
+        history_compatible=settings().v2_terminal_history_test_enabled)),
         '原业务建议未结清，未创建第二个准备任务')
     proposal = candidate.derive_candidate(db, p, task.id, request, reference)
     prep = proposal['preparation_candidate']; plan_id = prep['scope']['analysis_plan_id']

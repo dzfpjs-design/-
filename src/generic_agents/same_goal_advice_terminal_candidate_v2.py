@@ -89,12 +89,22 @@ def _captured(db, workspace_id, call_id, intent_id):
 
 def _daily(db, call):
     day=call.data.get('day')
+    # The shared daily total cannot prove a particular call merely by being
+    # larger than it. In the disposable database, fence concurrent call
+    # writers and reconcile the whole day's live per-call charges exactly.
+    db.execute(text('LOCK TABLE public.cloud_model_calls IN SHARE MODE NOWAIT'))
     row=db.scalar(select(Job).where(Job.workspace_id==call.workspace_id,
         Job.idempotency_key=='cloud-budget:'+str(day)).with_for_update().execution_options(populate_existing=True))
     store.need(row is not None and row.kind=='cloud_budget' and row.status=='internal'
         and type(row.data) is dict and row.data.get('day')==day
         and type(row.data.get('tokens')) is int and row.data['tokens']>=0
         and type(row.data.get('calls')) is int and row.data['calls']>=1,'原日账本无法核对')
+    count,total,minimum=db.execute(select(func.count(CloudCall.id),func.coalesce(func.sum(CloudCall.charged_tokens),0),
+        func.min(CloudCall.charged_tokens)).where(CloudCall.workspace_id==call.workspace_id,
+        CloudCall.data['day'].as_string()==day)).one()
+    store.need(type(count) is int and type(total) is int and type(minimum) is int and minimum>=0
+        and row.data['calls']==count and row.data['tokens']==total,
+        '原日账本与逐笔调用不一致；保留原记录等待核对')
     return row
 
 

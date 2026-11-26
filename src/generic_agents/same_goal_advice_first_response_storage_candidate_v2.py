@@ -69,7 +69,8 @@ def _require_schema(db):
 
 
 def _original(db, workspace_id, call_id, intent_id):
-    guard.require_disposable_database(db)
+    from . import same_goal_advice_cloud_claim_test_v2 as claims
+    claims.require_test_database(db)
     _id(workspace_id); _id(call_id); _id(intent_id)
     # Fixed service module, never a caller-provided validator or principal.
     pin = gate.check_original(db, workspace_id, call_id, intent_id)

@@ -57,7 +57,9 @@ def check_original(db, workspace_id, cloud_call_id, intent_audit_id):
     sessions, policy expiry or the current lease token. It checks actual
     database rows and original receipt links, including original lease times.
     """
-    guard.require_disposable_database(db)
+    # The versioned inventory binds an isolated Session to the already-checked
+    # transaction Connection. Check that Connection's actual cluster identity.
+    claims.require_test_database(db)
     # Local import avoids a module cycle: the permit writer calls the separate
     # pre-permit local-absence check from the storage module.
     from . import same_goal_advice_dispatch_permit_candidate_v2 as permit_contract

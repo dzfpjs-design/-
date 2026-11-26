@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     v2_deepseek_dispatch_enabled: bool = False
     # Compatibility discovery is an isolated-test experiment, not a release switch.
     v2_history_compat_test_enabled: bool = False
+    # Terminal-history experiment is disabled and hard-fenced to disposable PG.
+    v2_terminal_history_test_enabled: bool = False
     # Separate, test-only private response spool; never a report directory.
     v2_response_spool_enabled: bool = False
     v2_response_spool_root: Path | None = None
