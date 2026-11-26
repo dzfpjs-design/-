@@ -94,6 +94,51 @@ def _read_private(path):
     return value
 
 
+def _explicit_candidate_fields(candidates):
+    business_fields = {'key', 'name', 'trigger', 'output', 'inference_reason', 'sources', 'steps'}
+    step_fields = {'key', 'name', 'purpose', 'agent', 'role', 'output', 'condition',
+                   'next_key', 'else_key', 'inference_reason', 'sources'}
+    source_fields = {'source_text', 'quote'}
+    def sources_valid(sources):
+        return (isinstance(sources, list) and all(isinstance(source, dict)
+                and set(source) == source_fields for source in sources))
+    if not isinstance(candidates, list) or not candidates:
+        return False
+    for item in candidates:
+        if (not isinstance(item, dict) or set(item) != business_fields
+                or not isinstance(item.get('key'), str) or not item['key']
+                or not sources_valid(item['sources']) or not isinstance(item['steps'], list)
+                or not item['steps']):
+            return False
+        if any(not isinstance(step, dict) or set(step) != step_fields or not sources_valid(step['sources'])
+               for step in item['steps']):
+            return False
+    return len({item['key'] for item in candidates}) == len(candidates)
+
+
+def _preview_matches(preview, bundle):
+    if (not isinstance(preview, dict) or preview.get('material') != bundle['material']
+            or not isinstance(preview.get('candidates'), list)
+            or len(preview['candidates']) != len(bundle['candidates'])):
+        return False
+    for result, original in zip(preview['candidates'], bundle['candidates']):
+        if not isinstance(result, dict) or set(result) != set(original) | {'citations', 'unresolved_sources'}:
+            return False
+        if not isinstance(result['citations'], list) or not isinstance(result['unresolved_sources'], list):
+            return False
+        if not isinstance(result.get('steps'), list) or len(result['steps']) != len(original['steps']):
+            return False
+        other = {key: value for key, value in result.items() if key not in ('citations', 'unresolved_sources', 'steps')}
+        if other != {key: value for key, value in original.items() if key != 'steps'}:
+            return False
+        for step, original_step in zip(result['steps'], original['steps']):
+            if (not isinstance(step, dict) or set(step) != set(original_step) | {'citations', 'unresolved_sources'}
+                    or not isinstance(step['citations'], list) or not isinstance(step['unresolved_sources'], list)
+                    or {key: value for key, value in step.items() if key not in ('citations', 'unresolved_sources')} != original_step):
+                return False
+    return True
+
+
 def _credentials(fd):
     try:
         info = os.fstat(fd)
@@ -201,17 +246,11 @@ def _valid_draft(value):
 def import_candidates(api, credentials, candidate):
     _identity(api, credentials)
     bundle = copy.deepcopy(candidate)
-    if (not bundle['candidates'] or any(not isinstance(item, dict) or not isinstance(item.get('key'), str)
-            or not item['key'] for item in bundle['candidates'])
-            or len({item['key'] for item in bundle['candidates']}) != len(bundle['candidates'])):
+    if not _explicit_candidate_fields(bundle['candidates']):
         raise ImportStopped('候选业务无法核对，未提交候选。')
     bundle['material'] = _find_material(api, bundle['material'])
     preview = _require_ok(api, 'POST', '/api/setup/candidates/preview', bundle)
-    if (not isinstance(preview, dict) or preview.get('material') != bundle['material']
-            or not isinstance(preview.get('candidates'), list)
-            or len(preview['candidates']) != len(bundle['candidates'])
-            or any(not isinstance(item, dict) for item in preview['candidates'])
-            or [item.get('key') for item in preview['candidates']] != [item['key'] for item in bundle['candidates']]):
+    if not _preview_matches(preview, bundle):
         raise ImportStopped('候选预览结果无法核对，未提交候选。')
     _identity(api, credentials)
     draft = _require_ok(api, 'GET', '/api/setup/draft')
