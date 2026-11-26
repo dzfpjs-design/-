@@ -53,6 +53,7 @@ def install(monkeypatch):
     from generic_agents import same_goal_advice_store_v302 as old
     from generic_agents import same_goal_advice_unlimited_store_v2 as store
     from generic_agents import same_goal_advice_common_inventory_v2 as inventory
+    from generic_agents import same_goal_advice_read_session_v2 as read_session
 
     probe = SyntheticAdviceProbe()
     probe.wrap(monkeypatch, orm, 'decode_payload', 'orm_decode', lengths=True)
@@ -60,4 +61,5 @@ def install(monkeypatch):
     probe.wrap(monkeypatch, old, '_rows', 'read_rows')
     probe.wrap(monkeypatch, store, '_read_queued', 'read_preparation')
     probe.wrap(monkeypatch, inventory, '_read', 'read_inventory')
+    probe.wrap(monkeypatch, read_session, '_check_loaded_state', 'check_loaded_state')
     return probe
