@@ -13,17 +13,17 @@ const STATES={
 
 export default function AdviceResponseRecoveryV2({account,task,requestJSON,onRecovered}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState('');
- const alive=useRef(0);
+ const alive=useRef(0),readSequence=useRef(0);
  const scope=JSON.stringify([account?.workspace_id,account?.user_id,task?.id]);
  const base='/workspace/tasks/'+encodeURIComponent(task?.id||'')+'/business-advice/response-recovery';
  const refresh=useCallback(async()=>{
-  const generation=alive.current;setError('');
-  try{const result=await requestJSON(base);if(alive.current===generation)setData(result);}
-  catch{if(alive.current===generation){setData(null);setError('暂时无法读取建议状态，请刷新重试。');}}
+  const generation=alive.current,sequence=++readSequence.current;setError('');
+  try{const result=await requestJSON(base);if(alive.current===generation&&readSequence.current===sequence)setData(result);}
+  catch{if(alive.current===generation&&readSequence.current===sequence){setData(null);setError('暂时无法读取建议状态，请刷新重试。');}}
  },[base,requestJSON,scope]);
  useEffect(()=>{alive.current++;setData(null);if(account?.role==='admin')refresh();return()=>{alive.current++;};},[scope,account?.role,refresh]);
  const recover=async item=>{
-  if(busy)return;const generation=alive.current;setBusy(item.permit_id);setError('');
+  if(busy)return;const generation=alive.current;++readSequence.current;setBusy(item.permit_id);setError('');
   try{
    await requestJSON(base+'/'+encodeURIComponent(item.permit_id)+'/recover',{method:'POST'});
    if(alive.current===generation){await refresh();if(onRecovered)onRecovered();}
@@ -32,12 +32,19 @@ export default function AdviceResponseRecoveryV2({account,task,requestJSON,onRec
   }finally{if(alive.current===generation)setBusy('');}
  };
  const loadMore=async()=>{
-  if(busy||!data?.next_cursor)return;const generation=alive.current,cursor=data.next_cursor;setBusy('page');setError('');
+  if(busy||!data?.next_cursor)return;const generation=alive.current,cursor=data.next_cursor,sequence=++readSequence.current;setBusy('page');setError('');
   try{const page=await requestJSON(base+'?cursor='+encodeURIComponent(cursor));
-   if(alive.current===generation)setData(old=>old?.enabled&&old.next_cursor===cursor?({...page,items:[...old.items,...page.items]}):old);
-  }catch{if(alive.current===generation)setError('加载更多记录失败，请重试或刷新。');}
+   if(alive.current===generation&&readSequence.current===sequence)setData(old=>old?.enabled&&old.next_cursor===cursor?({...page,items:[...old.items,...page.items]}):old);
+  }catch{if(alive.current===generation&&readSequence.current===sequence)setError('加载更多记录失败，请重试或刷新。');}
   finally{if(alive.current===generation)setBusy('');}
  };
+ useEffect(()=>{
+  if(account?.role!=='admin'||!data?.enabled||data.items.length||error||busy)return;
+  const onFocus=()=>refresh();
+  const timer=setInterval(()=>{if(globalThis.document?.visibilityState==='visible')refresh();},30000);
+  globalThis.window?.addEventListener('focus',onFocus);
+  return()=>{clearInterval(timer);globalThis.window?.removeEventListener('focus',onFocus);};
+ },[account?.role,data?.enabled,data?.items.length,error,busy,refresh]);
  if(account?.role!=='admin'||(!data&&!error)||data?.enabled===false)return null;
  if(!error&&data?.items.length===0&&!data?.next_cursor)return null;
  return <section className="media-form advice-user-panel" aria-label="建议状态">

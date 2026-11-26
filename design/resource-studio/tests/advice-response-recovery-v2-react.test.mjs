@@ -13,10 +13,11 @@ test('recover, lost reply, refresh and role changes stay understandable',async()
  const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});
  let root;try{
   const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/AdviceResponseRecoveryV2.jsx');
-  root=createRoot(document.getElementById('root'));let state='ready',role='admin',lost=true,posts=0,enabled=true,multi=false,empty=false;
+  root=createRoot(document.getElementById('root'));let state='ready',role='admin',lost=true,posts=0,enabled=true,multi=false,empty=false,holdNext=false,resolveOld;
   const request=async(path,options={})=>{
    if(role!=='admin')throw Error('permission lost');
    if(options.method==='POST'){posts++;state='settled';if(lost){lost=false;throw Error('lost reply');}return {state:'settled'};}
+   if(holdNext){holdNext=false;return await new Promise(resolve=>{resolveOld=resolve;});}
    if(path.includes('?cursor='))return {enabled:true,items:[{permit_id:'permit-2',state:'needs_attention',recorded_at:'2026-11-24T12:00:00Z'}],next_cursor:null};
    return {enabled,items:enabled&&!empty?[{permit_id:'permit-1',state,recorded_at:'2026-11-25T12:00:00Z'}]:[],next_cursor:multi?'next-page':null};
   };
@@ -45,6 +46,10 @@ test('recover, lost reply, refresh and role changes stay understandable',async()
   assert.equal(document.querySelectorAll('article').length,2);
   empty=true;multi=false;await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
   assert.equal(document.body.textContent,'','no empty recovery panel interrupts the user');
+  holdNext=true;await act(async()=>dom.window.dispatchEvent(new dom.window.Event('focus')));
+  assert.ok(resolveOld);empty=false;await act(async()=>dom.window.dispatchEvent(new dom.window.Event('focus')));
+  await act(async()=>resolveOld({enabled:true,items:[],next_cursor:null}));
+  assert.match(document.body.textContent,/需要核对/,'a newly pending item appears when returning to the page');
   role='viewer';await act(async()=>root.render(render()));assert.equal(document.body.textContent,'');
   role='admin';enabled=false;await act(async()=>root.render(render()));assert.equal(document.body.textContent,'');
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
