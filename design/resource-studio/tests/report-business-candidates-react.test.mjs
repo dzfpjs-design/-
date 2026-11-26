@@ -52,6 +52,14 @@ test('explicit source recheck adopts server state and keeps remaining uncertaint
  assert.match(document.body.textContent,/部分依据仍待核/);
 }));
 
+test('edited content skipped by the server is not presented as fully verified',()=>environment(async({Component,root})=>{
+ const initial={businesses:[],flows:{},businessCandidates:bundle},saved={revision:5,configuration:initial};
+ const props={bundle,workspace:initial,materials:[material],materialReadStatus:'ready',canManage:true,account:{user_id:'u',workspace_id:'w'},Btn,
+  prepareDraft:async()=>4,onAdopt:async()=>{},onCommit:()=>true,request:async()=>({draft:saved,preview:{...response,material:{...material,status:'parsed'}},recheck:{skipped:1}})};
+ await act(async()=>root.render(React.createElement(Component,props)));await act(async()=>button('重新核对依据').click());
+ assert.match(document.body.textContent,/部分已修改内容未自动核验/);assert.doesNotMatch(document.body.textContent,/依据已全部核对/);
+}));
+
 test('failed source recheck preserves existing work and does not claim success',()=>environment(async({Component,root})=>{
  const initial={businesses:[],flows:{},businessCandidates:bundle};let saves=0;
  const props={bundle,workspace:initial,materials:[material],materialReadStatus:'ready',canManage:true,account:{user_id:'u',workspace_id:'w'},Btn,
@@ -114,10 +122,10 @@ test('source recheck refreshes material status after adopting a changed candidat
  function Harness(){const [workspace,setWorkspace]=useState(initial),[rows,setRows]=useState([material]);
   return React.createElement(Component,{bundle:workspace.businessCandidates,workspace,materials:rows,materialReadStatus:'ready',canManage:true,account,Btn,
    prepareDraft:async()=>4,onAdopt:async()=>{setWorkspace(saved.configuration);started();await pending;},onRefreshMaterials:async()=>{refreshes++;setRows([{...material,version:3}]);},
-   onCommit:()=>true,request:async()=>({draft:saved,preview:{...response,material:{...material,version:3}}})});}
+   onCommit:()=>true,request:async()=>({draft:saved,preview:{...response,material:{...material,version:3}},recheck:{skipped:1}})});}
  await act(async()=>root.render(React.createElement(Harness)));await act(async()=>button('重新核对依据').click());await adopting;
  assert.equal(button('查看候选').disabled,true);await act(async()=>{release();await Promise.resolve();});
- assert.equal(refreshes,1);assert.equal(button('查看候选').disabled,false);
+ assert.equal(refreshes,1);assert.equal(button('查看候选').disabled,false);assert.match(document.body.textContent,/部分已修改内容未自动核验/);
 }));
 
 test('an adopted recheck never refreshes another session even after an account ABA switch',()=>environment(async({Component,root})=>{
