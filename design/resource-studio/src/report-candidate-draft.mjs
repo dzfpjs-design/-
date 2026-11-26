@@ -6,6 +6,7 @@ const unsafeNames = new Set(['__proto__', 'prototype', 'constructor']);
 const reasons = new Set(['not_found', 'ambiguous', 'invalid_quote', 'material_changed', 'invalid_material']);
 const problem = () => { throw Error('候选内容或资料状态已变化，请重新核对。'); };
 const text = value => typeof value === 'string';
+export const candidateNameKey = value => String(value).trim().normalize('NFKC').toUpperCase().toLowerCase();
 
 function checkUnresolved(items, materialID) {
   if (!Array.isArray(items)) problem();
@@ -65,11 +66,11 @@ export function addReportCandidate(workspace, bundle, preview, key, materials, r
   const material = bundle.material;
   if (['id', 'hash', 'version', 'engine'].some(field => preview.material[field] !== material[field])) problem();
   if (!text(candidate.name) || !candidate.name.trim() || candidate.name !== candidate.name.trim()
-      || unsafeNames.has(candidate.name) || !text(candidate.trigger) || !text(candidate.output)
+      || unsafeNames.has(candidateNameKey(candidate.name)) || !text(candidate.trigger) || !text(candidate.output)
       || !text(candidate.inference_reason) || !Array.isArray(candidate.steps) || !candidate.steps.length) problem();
   if (!sameInput(source, candidate, ['key', 'name', 'trigger', 'output', 'inference_reason', 'sources'])
       || !Array.isArray(source.steps) || source.steps.length !== candidate.steps.length) problem();
-  if (candidate.name !== source.name || businessNames(workspace).some(name => name.trim() === candidate.name)
+  if (candidate.name !== source.name || businessNames(workspace).some(name => candidateNameKey(name) === candidateNameKey(candidate.name))
       || Object.hasOwn(workspace.flows || {}, candidate.name)) throw Error('该业务已存在，请在业务清单中修改。');
   const ids = new Map();
   for (const step of candidate.steps) {
@@ -99,4 +100,21 @@ export function addReportCandidate(workspace, bundle, preview, key, materials, r
     inferenceReason: candidate.inference_reason, confirmedAt: null, confirmedSignature: null};
   return {...workspace, businesses: [...(workspace.businesses || []), candidate.name],
     flows: {...(workspace.flows || {}), [candidate.name]: flow}};
+}
+
+// Apply a reviewed set in memory first. The caller commits exactly once only
+// after every selected, non-conflicting entry has passed the same checks.
+export function addReportCandidates(workspace, bundle, preview, keys, materials, readStatus, newID = () => crypto.randomUUID()) {
+  if (!Array.isArray(keys) || !keys.length || new Set(keys).size !== keys.length || !Array.isArray(preview?.candidates)) problem();
+  let next = workspace;
+  const added = [], skipped = [];
+  for (const key of keys) {
+    const item = preview.candidates.find(candidate => candidate?.key === key);
+    if (!item || !text(item.name)) problem();
+    const existing = businessNames(next).some(name => candidateNameKey(name) === candidateNameKey(item.name));
+    if (existing) { skipped.push(item.name); continue; }
+    next = addReportCandidate(next, bundle, preview, key, materials, readStatus, newID);
+    added.push(item.name);
+  }
+  return {workspace: next, added, skipped};
 }
