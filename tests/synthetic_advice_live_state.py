@@ -4,6 +4,17 @@ from pathlib import Path
 import stat
 
 
+def read_fake_credential(fd):
+    """Consume only the fixed local fake-service credential, never a live key."""
+    try:
+        value = os.read(fd, 4097)
+    finally:
+        os.close(fd)
+    if value != b'synthetic-only':
+        raise RuntimeError('synthetic flow permits only the fixed fake credential')
+    return value.decode('ascii')
+
+
 def mark_attempt():
     root = Path(os.environ['GA_SYNTHETIC_RUN_ROOT'])
     if not root.is_absolute() or root.is_symlink():

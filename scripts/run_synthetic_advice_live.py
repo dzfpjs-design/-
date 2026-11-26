@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Run one synthetic provider attempt through a private fixed-host tunnel.
 
-Only a synthetic checkpoint is accepted by the independently checked restore
-routine; this never accesses an application database. Fake is the default.
-Provider credentials for live mode arrive through an already-open pipe and are
-never inherited via environment, written to disk or printed. Both results and
-an unknown send are retained in a private independent PG; never auto-retry.
+The restore guard validates file integrity, not whether a caller-supplied
+checkpoint was truly generated from synthetic data. Until that provenance has
+an independent trust boundary, live dispatch is disabled. Fake is the default
+and only executable mode; historical live evidence remains unchanged.
 """
 import argparse
 import base64
@@ -16,7 +15,6 @@ from pathlib import Path
 import secrets
 import socket
 import ssl
-import stat
 import subprocess
 import sys
 import tempfile
@@ -59,11 +57,9 @@ def main():
     parser.add_argument('--mode', choices=('fake', 'live'), default='fake')
     parser.add_argument('--credential-fd', type=int, help='read end of a provider credential pipe, live only')
     args = parser.parse_args()
-    if args.mode == 'live' and (args.credential_fd is None or args.credential_fd < 3):
-        raise RuntimeError('live mode requires an already-open credential pipe')
-    if args.mode == 'live' and not stat.S_ISFIFO(os.fstat(args.credential_fd).st_mode):
-        raise RuntimeError('provider credentials must be supplied through a pipe')
-    if args.mode == 'fake' and args.credential_fd is not None:
+    if args.mode == 'live':
+        raise RuntimeError('live mode disabled: synthetic checkpoint provenance is not independently verified')
+    if args.credential_fd is not None:
         raise RuntimeError('fake mode accepts no credential')
     pg = Path(args.pg_bin).resolve(strict=True)
     checkpoint = Path(args.checkpoint)
@@ -127,10 +123,7 @@ def main():
         finally:
             listener.close()
     threading.Thread(target=serve_tunnel, daemon=True).start()
-    if args.mode == 'fake':
-        credential_fd, write_fd = os.pipe(); os.write(write_fd, b'synthetic-only'); os.close(write_fd)
-    else:
-        credential_fd = args.credential_fd
+    credential_fd, write_fd = os.pipe(); os.write(write_fd, b'synthetic-only'); os.close(write_fd)
     sock = socket.socket(); sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]; sock.close()
     # Neither the generated request ID nor the cluster is reused on reruns.
     run_id = str(uuid.uuid4()); database = 'ga_test_' + uuid.uuid4().hex[:12]

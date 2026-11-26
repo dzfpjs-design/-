@@ -1,17 +1,23 @@
 """No external network: exercise target restrictions and one-attempt fence."""
 import os
 from pathlib import Path
+import hashlib
+import json
 import socket
+import sys
 import tempfile
 import threading
 import unittest
 import ssl
 import subprocess
+from uuid import uuid4
 from unittest.mock import patch
 
 import httpx
 
 from scripts.synthetic_once_proxy import provider_address, tunnel
+from scripts.run_synthetic_advice_live import main as runner_main
+from tests.synthetic_advice_live_state import read_fake_credential
 
 
 class ProxyTests(unittest.TestCase):
@@ -22,6 +28,46 @@ class ProxyTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_forged_synthetic_manifest_cannot_activate_live_mode(self):
+        checkpoint = self.root/'advice-fresh-mature-checkpoint-forged'
+        checkpoint.mkdir(mode=0o700)
+        fake_dump = b'not verified as synthetic'
+        (checkpoint/'synthetic-mature.pgcustom').write_bytes(fake_dump)
+        fake_key = b'synthetic-checkpoint-test-key'
+        key_file = checkpoint/'synthetic-test-gateway.key'
+        key_file.write_bytes(fake_key); os.chmod(key_file, 0o600)
+        (checkpoint/'evidence').mkdir(mode=0o700)
+        (checkpoint/'manifest.json').write_text(json.dumps({
+            'schema': 'isolated-synthetic-fresh-mature-checkpoint-v1',
+            'task_id': str(uuid4()),
+            'dump_sha256': hashlib.sha256(fake_dump).hexdigest(),
+            'key_sha256': hashlib.sha256(fake_key).hexdigest(), 'files': {},
+        }))
+        argv = ['runner', '--checkpoint', str(checkpoint), '--pg-bin', '/usr/bin',
+                '--mode', 'live', '--credential-fd', '3']
+        with patch.object(sys, 'argv', argv), patch('socket.socket', side_effect=AssertionError('network reached')):
+            with self.assertRaisesRegex(RuntimeError, 'live mode disabled'):
+                runner_main()
+        self.assertFalse((self.root/'provider-connect-attempt').exists())
+
+    def test_direct_bootstrap_rejects_live_mode_before_importing_backend(self):
+        env = {'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(Path(__file__).resolve().parents[1]),
+               'GA_SYNTHETIC_PROVIDER_MODE': 'live'}
+        result = subprocess.run([sys.executable, '-m', 'tests.synthetic_advice_live_bootstrap'],
+                                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b'synthetic bootstrap permits fake provider only', result.stderr)
+
+    def test_fake_provider_never_accepts_a_live_credential(self):
+        for supplied, accepted in [(b'synthetic-only', True), (b'not-a-real-test-key', False)]:
+            read_fd, write_fd = os.pipe()
+            os.write(write_fd, supplied); os.close(write_fd)
+            if accepted:
+                self.assertEqual(read_fake_credential(read_fd), 'synthetic-only')
+            else:
+                with self.assertRaisesRegex(RuntimeError, 'fixed fake credential'):
+                    read_fake_credential(read_fd)
 
     def _exchange(self, request, expected_auth=None):
         client, proxy = socket.socketpair()

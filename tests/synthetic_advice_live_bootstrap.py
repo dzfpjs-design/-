@@ -2,6 +2,10 @@
 from pathlib import Path
 import os
 import re
+
+if os.environ.get('GA_SYNTHETIC_PROVIDER_MODE') != 'fake':
+    raise RuntimeError('synthetic bootstrap permits fake provider only')
+
 from pytest import MonkeyPatch
 from generic_agents.config import settings
 from generic_agents.db import engine, migrate

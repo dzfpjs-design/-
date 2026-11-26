@@ -39,6 +39,8 @@ from tests.synthetic_advice_fresh_checkpoint_restore import restore_to_disposabl
 @pytest.mark.skipif(not os.environ.get('GA_SYNTHETIC_FRESH_CHECKPOINT') or not os.environ.get('GA_TEST_SYNTHETIC_PROVIDER_PORT'),
     reason='requires isolated synthetic fresh checkpoint and loopback provider')
 def run_synthetic_mature_flow(monkeypatch):
+    if os.environ.get('GA_SYNTHETIC_PROVIDER_MODE') != 'fake':
+        raise RuntimeError('synthetic flow permits fake provider only')
     monkeypatch.setattr(settings(),'cloud_allowed_providers','')
     task_id=restore_to_disposable_test_db(os.environ['GA_SYNTHETIC_FRESH_CHECKPOINT'])
     print('RESTORED_PRIVATE_CHECKPOINT',flush=True)
@@ -171,13 +173,10 @@ def run_synthetic_mature_flow(monkeypatch):
         from generic_agents import same_goal_advice_deepseek_adapter_candidate_v2 as adapter
         from generic_agents import same_goal_advice_dispatch_permit_candidate_v2 as permits
         from tests.synthetic_advice_mock_state import save_state, read_state
-        from tests.synthetic_advice_live_state import mark_attempt
+        from tests.synthetic_advice_live_state import mark_attempt, read_fake_credential
         from pathlib import Path
         fd = int(os.environ['GA_SYNTHETIC_KEY_FD'])
-        raw = os.read(fd, 4097); os.close(fd)
-        if not 12 <= len(raw) <= 4096 or b'\n' in raw or b'\r' in raw:
-            raise RuntimeError('invalid credential pipe')
-        secret = raw.decode('utf-8'); del raw
+        secret = read_fake_credential(fd)
         monkeypatch.setattr(settings(), 'cloud_allowed_providers', 'deepseek')
         monkeypatch.setattr(settings(), 'deepseek_api_key', SecretStr(secret))
         monkeypatch.setattr(settings(), 'v2_deepseek_dispatch_enabled', True)
@@ -186,7 +185,8 @@ def run_synthetic_mature_flow(monkeypatch):
         real_client = httpx.AsyncClient
         proxy_port = int(os.environ['GA_SYNTHETIC_PROXY_PORT'])
         mode = os.environ['GA_SYNTHETIC_PROVIDER_MODE']
-        assert mode in {'fake', 'live'} and 1 <= proxy_port <= 65535
+        if mode != 'fake' or not 1 <= proxy_port <= 65535:
+            raise RuntimeError('synthetic flow permits fake provider only')
         def restricted_client(**kwargs):
             # Called after the original permit is committed. Persist immutable
             # references and a conservative attempt marker before opening a
@@ -200,9 +200,8 @@ def run_synthetic_mature_flow(monkeypatch):
             token = os.environ['GA_SYNTHETIC_PROXY_TOKEN']
             assert re.fullmatch(r'[0-9a-f]{64}', token)
             options = dict(kwargs, proxy='http://once:'+token+'@127.0.0.1:'+str(proxy_port))
-            if mode == 'fake':
-                import ssl
-                options['verify'] = ssl.create_default_context(cafile=os.environ['GA_SYNTHETIC_FAKE_CA'])
+            import ssl
+            options['verify'] = ssl.create_default_context(cafile=os.environ['GA_SYNTHETIC_FAKE_CA'])
             return real_client(**options)
         monkeypatch.setattr(adapter.httpx, 'AsyncClient', restricted_client)
         result=adapter.execute(p,task_id,created['plan_id'],leased['job_id'],leased['lease_token'],allocated['cloud_call_id'])
