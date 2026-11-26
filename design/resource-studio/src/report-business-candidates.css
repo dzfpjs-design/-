@@ -1,0 +1,19 @@
+dialog:has(.business-candidate-dialog){width:calc(100vw - 32px);max-width:980px;max-height:calc(100dvh - 32px)}
+.business-candidate-dialog{padding:16px 20px 20px}
+.business-candidate-tools,.business-candidate-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.business-candidate-tools{margin-bottom:12px;color:#4f6486}
+.business-candidate-layout{display:grid;grid-template-columns:minmax(160px,220px) minmax(0,1fr);gap:16px;min-height:260px}
+.business-candidate-list{display:flex;flex-direction:column;gap:6px;max-height:min(58dvh,560px);overflow:auto}
+.business-candidate-list button{border:1px solid #dbe5f3;border-radius:8px;background:#fff;color:#20365f;text-align:left;padding:10px 12px;display:flex;flex-direction:column;gap:2px;cursor:pointer}
+.business-candidate-list button[aria-pressed=true]{border-color:#1467ed;background:#edf5ff;color:#075bd6}
+.business-candidate-list small,.business-candidate-detail li>span{color:#637697}
+.business-candidate-detail{min-width:0;max-height:min(58dvh,560px);overflow:auto;border:1px solid #e1eaf6;border-radius:8px;padding:14px 16px}
+.business-candidate-detail h3{margin:0 0 8px}
+.business-candidate-detail p{margin:6px 0}
+.business-candidate-detail ol{padding-left:22px}
+.business-candidate-detail li{padding:5px 0}
+.business-candidate-detail li>span{display:block}
+.business-candidate-detail summary{color:#075bd6;cursor:pointer}
+.setup-candidate-evidence blockquote{margin:8px 0;padding:8px 12px;border-left:3px solid #1674fa;background:#f2f7ff;overflow-wrap:anywhere}
+.business-candidate-actions{justify-content:flex-end;margin-top:14px}
+@media(max-width:700px){.business-candidate-dialog{padding:12px}.business-candidate-layout{grid-template-columns:minmax(0,1fr);min-height:0}.business-candidate-list{flex-direction:row;overflow-x:auto;max-height:none;padding-bottom:3px}.business-candidate-list button{flex:0 0 150px}.business-candidate-detail{max-height:45dvh}.business-candidate-tools .row{flex-wrap:wrap}}
