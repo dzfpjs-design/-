@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     v2_advice_evidence_explanation_enabled: bool = False
     # Isolated integration only: the production workflow is not wired yet.
     v2_advice_setup_test_enabled: bool = False
+    # User-send integration is limited to a disposable test database.
+    v2_user_send_test_enabled: bool = False
+    v2_user_send_worker_enabled: bool = False
     # Recovery console is deliberately restricted to isolated test databases.
     v2_advice_recovery_console_enabled: bool = False
     # Candidate only: even if enabled it remains guarded to a disposable DB.
