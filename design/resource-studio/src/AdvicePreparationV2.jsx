@@ -29,7 +29,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     if(me?.user_id!==account?.user_id||me?.workspace_id!==account?.workspace_id||me?.role!==account?.role)
       throw Object.assign(Error('identity changed'),{status:403});
   },[requestJSON,account?.user_id,account?.workspace_id,account?.role]);
-  const call = useCallback(async(url, body, generation) => {await verifyIdentity();if(alive.current!==generation)throw Error('state changed');const result=await requestJSON(url, {method:'POST', body:JSON.stringify(body)});await verifyIdentity();return result;}, [requestJSON,verifyIdentity]);
+  const call = useCallback(async(url, body, generation) => {await verifyIdentity();if(alive.current!==generation)throw Error('state changed');const result=await requestJSON(url, {method:'POST', body:JSON.stringify(body)});if(alive.current!==generation)throw Error('state changed');await verifyIdentity();return result;}, [requestJSON,verifyIdentity]);
   const denied = useCallback((error,generation)=>{
     if(alive.current!==generation||![401,403].includes(error?.status))return false;
     alive.current++;reads.current.context++;reads.current.selected++;setReachable(false);setContext(null);setItems([]);setSelected('');setState(null);setDocuments([]);setChecked({});setPreview(null);setPending(null);setBusy('');setError('登录状态已变化，请重新登录。');
@@ -39,6 +39,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     const generation = alive.current, serial = ++reads.current.context;
     try {
       await verifyIdentity();
+      if(alive.current!==generation||reads.current.context!==serial)return;
       const available = await requestJSON(base + '/availability');
       if (alive.current !== generation || reads.current.context !== serial) return;
       if (available?.enabled===false) {
@@ -59,6 +60,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
       if (ctx?.enabled===false) {alive.current++;reads.current.selected++;setBusy('');setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);setError('建议暂不可用，请刷新。');return;}
       if (ctx?.enabled!==true) throw Error('unavailable');
       const list = await requestJSON(base + '/preparations');
+      if(alive.current!==generation||reads.current.context!==serial)return;
       await verifyIdentity();
       if (alive.current !== generation || reads.current.context !== serial) return;
       if(list.items.length)storage.setItem(key+':active',list.items.at(-1).plan_id);else storage.removeItem(key+':active');
@@ -75,9 +77,12 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     if (!id) {setState(null); setDocuments([]); setPreview(null); return;}
     try {
       await verifyIdentity();
+      if(alive.current!==generation||reads.current.selected!==serial)return;
       const current = await requestJSON(base + '/preparations/' + encodeURIComponent(id));
+      if(alive.current!==generation||reads.current.selected!==serial)return;
       let docs = [];
       if (current.phase === 'review' && current.can_preview) docs = (await requestJSON(base + '/preparations/' + encodeURIComponent(id) + '/documents')).documents;
+      if(alive.current!==generation||reads.current.selected!==serial)return;
       await verifyIdentity();
       if (alive.current === generation && reads.current.selected === serial) {setState(current);setDocuments(docs);setChecked({});setError('');}
     } catch (error) {if(denied(error,generation))return;if (alive.current === generation && reads.current.selected === serial) setError('暂时无法读取资料，请刷新重试。');}
@@ -96,7 +101,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
         await verifyIdentity();if(alive.current!==generation)return;
         // Another tab may have completed while this tab was waiting.
         const current=await requestJSON(base+'/preparations');
-        await verifyIdentity();if(alive.current!==generation)return;
+        if(alive.current!==generation)return;await verifyIdentity();if(alive.current!==generation)return;
         let original=JSON.parse(storage.getItem(key)||'null');
         if(current.items.length){
           const matching=original&&current.items.find(item=>item.request_id===original.request_id);

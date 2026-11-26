@@ -196,10 +196,10 @@ for (const operation of ['process','authorize','preview']) test(`disabling while
  const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});
  let root;try{
   const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/AdvicePreparationV2.jsx');
-  root=createRoot(document.getElementById('root'));let disabled=false,release,entered,refresh,docReads=0;
+  root=createRoot(document.getElementById('root'));let disabled=false,release,entered,refresh,docReads=0,meReads=0;
   const waiting=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
   const request=async(path,options={})=>{
-   if(path==='/me')return {workspace_id:'w',user_id:'u',role:'admin'};
+   if(path==='/me'){meReads++;return {workspace_id:'w',user_id:'u',role:'admin'};}
    if(path.endsWith('/availability'))return disabled?{enabled:false,has_unfinished:true}:{enabled:true};
    if(path.endsWith('/context'))return {enabled:true,can_prepare:false,sources:[],model:'DeepSeek'};
    if(path.endsWith('/preparations'))return {items:[{plan_id:'plan',request_id:'one',phase:operation==='process'?'waiting':'review'}]};
@@ -212,10 +212,10 @@ for (const operation of ['process','authorize','preview']) test(`disabling while
   if(operation==='authorize')await act(async()=>document.querySelector('input[type=checkbox]').click());
   const label={process:'整理资料',authorize:'确认授权',preview:'查看分析内容'}[operation];
   await act(async()=>[...document.querySelectorAll('button')].find(item=>item.textContent===label).click());await started;
-  disabled=true;await act(async()=>{await refresh();});const before=docReads;
+  disabled=true;await act(async()=>{await refresh();});const before=docReads,beforeMe=meReads;
   await act(async()=>{release();await new Promise(resolve=>setTimeout(resolve,20));});
   assert.match(document.body.textContent,/已有申请暂不可用/);
-  assert.doesNotMatch(document.body.textContent,/敏感资料|迟到的分析|迟到的原文/);assert.equal(docReads,before);
+  assert.doesNotMatch(document.body.textContent,/敏感资料|迟到的分析|迟到的原文/);assert.equal(docReads,before);assert.equal(meReads,beforeMe);
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
 });
 
@@ -282,5 +282,40 @@ test('a delayed identity check cannot start a write after service is disabled',a
   holdIdentity=true;await act(async()=>[...document.querySelectorAll('button')].find(item=>item.textContent==='查看分析内容').click());await started;
   disabled=true;await act(async()=>{await refresh();});await act(async()=>{release();await new Promise(resolve=>setTimeout(resolve,20));});
   assert.equal(writes,0);assert.match(document.body.textContent,/已有申请暂不可用/);
+ }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
+});
+
+test('a stale refresh does not request availability after delayed identity',async()=>{
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
+ const keys=['window','document','navigator','IS_REACT_ACT_ENVIRONMENT'];const old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
+ globalThis.window=dom.window;globalThis.document=dom.window.document;Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});let root;try{
+  const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/AdvicePreparationV2.jsx');
+  let first=true,release,entered,refresh,availabilityReads=0;
+  const waiting=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
+  const request=async path=>{if(path==='/me'){if(first){first=false;entered();await waiting;}return {workspace_id:'w',user_id:'u',role:'admin'};}
+   if(path.endsWith('/availability')){availabilityReads++;return {enabled:false,has_unfinished:true};}throw Error('unexpected');};
+  root=createRoot(document.getElementById('root'));await act(async()=>root.render(React.createElement(Panel,{account:{workspace_id:'w',user_id:'u',role:'admin'},task:{id:'t'},requestJSON:request,storage:dom.window.localStorage,onRefreshReady:value=>{refresh=value;}})));
+  await started;await act(async()=>{await refresh();});await act(async()=>{release();await new Promise(resolve=>setTimeout(resolve,20));});
+  assert.equal(availabilityReads,1);assert.match(document.body.textContent,/已有申请暂不可用/);
+ }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
+});
+
+test('a stale status response cannot start a document read after disable',async()=>{
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
+ const keys=['window','document','navigator','IS_REACT_ACT_ENVIRONMENT'];const old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
+ globalThis.window=dom.window;globalThis.document=dom.window.document;Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});let root;try{
+  const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/AdvicePreparationV2.jsx');
+  let disabled=false,release,entered,refresh,docReads=0;const waiting=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
+  const request=async path=>{if(path==='/me')return {workspace_id:'w',user_id:'u',role:'admin'};
+   if(path.endsWith('/availability'))return disabled?{enabled:false,has_unfinished:true}:{enabled:true};
+   if(path.endsWith('/context'))return {enabled:true,can_prepare:false,sources:[]};
+   if(path.endsWith('/preparations'))return {items:[{plan_id:'plan',request_id:'one'}]};
+   if(path.endsWith('/preparations/plan')){entered();await waiting;return {phase:'review',can_preview:true};}
+   if(path.endsWith('/documents')){docReads++;return {documents:[]};}throw Error('unexpected');};
+  root=createRoot(document.getElementById('root'));await act(async()=>root.render(React.createElement(Panel,{account:{workspace_id:'w',user_id:'u',role:'admin'},task:{id:'t'},requestJSON:request,storage:dom.window.localStorage,onRefreshReady:value=>{refresh=value;}})));
+  await started;disabled=true;await act(async()=>{await refresh();});await act(async()=>{release();await new Promise(resolve=>setTimeout(resolve,20));});
+  assert.equal(docReads,0);assert.match(document.body.textContent,/已有申请暂不可用/);
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
 });

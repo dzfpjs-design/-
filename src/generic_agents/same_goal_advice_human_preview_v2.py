@@ -108,6 +108,11 @@ def display(messages, frame, aliases, snapshots, original_parts):
         need(isinstance(ref, str) and ref not in pinned_caps and isinstance(item.get('data'), dict))
         pinned_caps[ref] = item
     need(set(pinned_caps) == {item['capability_ref'] for item in decision['capabilities']})
+    for ref, pin in pinned_caps.items():
+        name = pin['data'].get('name')
+        if (isinstance(name, str) and re.fullmatch(r'[A-Za-z0-9_\-\u4e00-\u9fff]{1,80}', name)
+                and not _UUID_TEXT.search(name) and not re.fullmatch(r'[0-9a-fA-F]{24,}', name)):
+            refs[('capability_ref', ref)] += ' · ' + name + '（本地）'
     ports = {}
     for capability in decision['capabilities']:
         for port in capability['output_ports'] + capability['information_targets']:

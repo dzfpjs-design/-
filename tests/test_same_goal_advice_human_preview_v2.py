@@ -268,3 +268,15 @@ def test_one_mapped_object_excludes_unmapped_same_key_objects():
     result=display(messages,frame,aliases,snapshots,original_parts)
     output=[line['value'] for line in result['lines'] if '输出字段：' in line['value']]
     assert output and all('对象 1（本地类型：监测点）：温度' in value and '设备温度' not in value for value in output)
+
+
+def test_only_safe_frozen_capability_name_is_displayed_as_local():
+    messages, frame, aliases, snapshots, original_parts = sample()
+    pin=frame['capability_pins']['capabilities'][0]
+    pin['data']['name']='温度分析'
+    result=display(messages,frame,aliases,snapshots,original_parts)
+    assert any('能力 1 · 温度分析（本地）' in line['value'] for line in result['lines'])
+    pin['data']['name']='0123456789abcdef0123456789abcdef'
+    result=display(messages,frame,aliases,snapshots,original_parts)
+    assert not any('0123456789abcdef' in line['value'] for line in result['lines'])
+    assert any(line['value']=='能力 1' for line in result['lines'])
