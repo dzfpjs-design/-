@@ -9,3 +9,5 @@ test('rejects revoked target and role mismatch without switching',async()=>{cons
 test('rejects late responses after ABA or changed credentials',async()=>{const h=harness();h.options.readIdentity=async id=>{h.change();return id==='a'?a:b};await assert.rejects(verifyWorkspaceSwitch(h.options),/会话已变化/);const j=harness();j.options.waitDraft=async()=>j.map.set('ga-setup-csrf-workspace','other');await assert.rejects(verifyWorkspaceSwitch(j.options),/会话已变化/);});
 
 test('locks interactions before identity reads and flushes edits before switching',async()=>{const h=harness();h.options.lock=()=>h.calls.push('lock');const r=await verifyWorkspaceSwitch(h.options);assert.equal(r.identity.workspace_id,'b');assert.deepEqual(h.calls,['guard','save','lock','a','b','guard','save']);});
+
+test('network failure leaves the original workspace binding untouched',async()=>{const h=harness();h.options.readIdentity=async()=>{const e=Error('network timeout');e.name='AbortError';throw e};await assert.rejects(verifyWorkspaceSwitch(h.options),/timeout/);assert.equal(h.map.get('ga-setup-csrf-workspace'),'a');});

@@ -70,3 +70,4 @@ fieldset:has(> .business-workspace){min-width:0;max-width:100%}
 .state-background{margin:16px 0;padding:14px;border:1px solid #dce7f8;border-radius:8px;background:#f5f9ff;overflow-wrap:anywhere}
 .workspace-switcher{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:14px}.workspace-switcher select{max-width:180px;padding:6px 8px;border:1px solid #cad7eb;border-radius:6px;background:#fff;color:#21385f}
 .workspace-switch-progress{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:#ffffffb8;color:#17335e;font-weight:600;font-size:16px}
+.workspace-switcher select{width:clamp(150px,20vw,300px);max-width:35vw}@media(max-width:700px){.workspace-switcher select{width:120px;max-width:30vw}}
