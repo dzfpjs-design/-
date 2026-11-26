@@ -85,6 +85,9 @@ def validate_configuration(value):
         raise HTTPException(422, '配置格式不完整，原记录保留')
     if len(json.dumps(value, ensure_ascii=False).encode()) > 2 * 1024 * 1024:
         raise HTTPException(413, '配置超过2MB，请拆分或减少恢复历史')
+    from .setup_business_candidates import validate_bundle, validate_unresolved
+    if value.get('businessCandidates') is not None:
+        validate_bundle(value['businessCandidates'])
     if not isinstance(value.get('instanceProfile', {}), dict) or not isinstance(value.get('flows', {}), dict):
         raise HTTPException(422, '领域或流程配置格式不完整')
     if any(not isinstance(value.get('instanceProfile',{}).get(k,''),str) for k in ['name','domain','goal']):
@@ -109,6 +112,10 @@ def validate_configuration(value):
         if not isinstance(f.get('inferenceReason',''),str):
             raise HTTPException(422,'业务依据说明必须是文字')
         for item in [f,*f.get('steps',[])]:
+            validate_unresolved(item.get('candidateUnresolvedSources', []))
+            if 'candidateKey' in item and (not isinstance(item['candidateKey'], str)
+                    or not re.fullmatch(r'[a-z][a-z0-9_]{0,39}', item['candidateKey'])):
+                raise HTTPException(422, '候选业务标识无法核对，原草稿保留')
             citations=item.get('citations',[])
             if not isinstance(citations,list) or len(citations)>50 or any(not isinstance(c,dict) or any(not isinstance(c.get(k),str) for k in ['material_id','block_id','quote']) for c in citations):
                 raise HTTPException(422,'原文引用需包含资料、段落和引用文字')
@@ -150,6 +157,10 @@ def save_draft(body: SaveDraft, p: P, db: DB):
         raise HTTPException(409, '业务改名范围无法核对，原配置保留。')
     validate_configuration(submitted)
     row = draft(db, p, True); check_version(row, body.revision)
+    from .setup_business_candidates import protect_transitions
+    if submitted.get('businessCandidates') != row.data.get('businessCandidates'):
+        raise HTTPException(409, '业务候选请使用专用操作更新，原草稿保留')
+    protect_transitions(db, p, row.data, submitted)
     from .setup_automation import synchronize_reviews
     from .setup_automation_instruction_guard import protect_automation_instruction_transition
     protect_automation_instruction_transition(row.data,submitted,explicit_rename=rename_intent)
@@ -168,6 +179,8 @@ def save_draft(body: SaveDraft, p: P, db: DB):
         metadata = {'note': str(m.get('note', ''))[:5000], 'kind': str(m.get('kind', '业务资料'))[:100]}
         archived = bool(m.get('archived', False))
         if material.archived != archived or any(material.data.get(k, '' if k == 'note' else '业务资料') != v for k, v in metadata.items()):
+            if type(m.get('version')) is not int or m['version'] != material.version:
+                raise HTTPException(409, '资料信息已被修改，请重新读取后保存；原草稿保留')
             audit(db, p, 'setup.material.metadata', material.id, {'archived': archived})
             material.archived = archived; material.data = {**material.data, **metadata}; material.version += 1
             changed_sources.add(material.id)
