@@ -153,3 +153,13 @@ def test_material_reparse_invalidates_even_unresolved_source_review(client):
                                                   'configuration': approved['configuration']})
     assert result.status_code == 200, result.text
     assert 'candidateContentReview' not in result.json()['configuration']['flows']['日常检查']
+
+
+def test_candidate_provenance_change_invalidates_content_review(client):
+    from generic_agents.setup_content_review import invalidate_content_reviews
+    draft = stage(client)
+    approved = confirm(client, draft['revision']).json()['draft']['configuration']
+    for key, value in [('candidateKey', 'different'), ('candidateBasisHash', 'changed')]:
+        changed = copy.deepcopy(approved)
+        changed['flows']['日常检查'][key] = value
+        assert 'candidateContentReview' not in invalidate_content_reviews(approved, changed)['flows']['日常检查']

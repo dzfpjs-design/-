@@ -1,11 +1,14 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {json} from './runtime-api';
 import {flowFor, flowSignature} from './setup-schema';
-import {sameSignature} from './content-signature';
+import {sameSignature,stableStringify} from './content-signature';
 import {flowSourceIds} from './flow-sources.mjs';
 
 function token() { try { return globalThis.sessionStorage?.getItem('ga-setup-csrf') || ''; } catch { return ''; } }
-function signature(workspace, flow) { try { return flowSignature(workspace, flow); } catch { return ''; } }
+export function draftContentSignature(workspace,flow,business) { try {
+ return stableStringify({business,flow:JSON.parse(flowSignature(workspace,flow)),
+  candidateKey:flow.candidateKey??null,candidateBasisHash:flow.candidateBasisHash??null});
+ } catch { return ''; } }
 function sourcesCurrent(workspace,flow,canonicalMaterials,readStatus){
  const ids=new Set(flowSourceIds(flow));
  for(const item of [flow,...(flow?.steps||[])]){const pending=item?.candidateUnresolvedSources||[];if(!Array.isArray(pending))return false;
@@ -26,7 +29,7 @@ export default function DraftContentReview({account, business, flow, workspace, 
  if(identity.current.scope!==scope)identity.current={scope,epoch:identity.current.epoch+1};
  const epoch=identity.current.epoch, mounted=useRef(false), generation=useRef(0), abort=useRef(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const current=signature(workspace,flow),saved=flow?.candidateContentReview;
+ const current=draftContentSignature(workspace,flow,business),saved=flow?.candidateContentReview;
  const basisCurrent=sourcesCurrent(workspace,flow,canonicalMaterials,materialStatusRead);
  const confirmed=!!saved&&saved.business===business&&!!current&&basisCurrent&&sameSignature(saved.signature,current);
  useEffect(()=>{generation.current++;abort.current?.abort();setBusy(false);setError('');setNotice('');},[scope,business]);
@@ -40,13 +43,13 @@ export default function DraftContentReview({account, business, flow, workspace, 
   try {
    const revision=await prepareDraft();if(!valid())return;
    const latest=liveWorkspace?.()||workspace;
-   if(signature(latest,flowFor(latest,business))!==current)throw Error('业务内容已变化，请重新核对。');
+   if(draftContentSignature(latest,flowFor(latest,business),business)!==current)throw Error('业务内容已变化，请重新核对。');
    sent=true;
    const result=await request('/setup/candidates/content-review',{method:'POST',body:JSON.stringify({revision,business,action}),signal:control.signal});
    if(!valid())return;
    if(!result?.draft||!Number.isInteger(result.draft.revision)||!result.draft.configuration)throw Error('确认结果暂未核对，请刷新查看。');
    const still=liveWorkspace?.()||workspace;
-   if(signature(still,flowFor(still,business))!==current)throw Error('草案内容已变化，请先保存并刷新查看确认状态。');
+   if(draftContentSignature(still,flowFor(still,business),business)!==current)throw Error('草案内容已变化，请先保存并刷新查看确认状态。');
    await onAdopt(result.draft,{actor_id:account.user_id,workspace_id:account.workspace_id});
    if(valid())setNotice(action==='confirm'?'草案内容已确认。':'已取消草案内容确认。');
   } catch(e) {
