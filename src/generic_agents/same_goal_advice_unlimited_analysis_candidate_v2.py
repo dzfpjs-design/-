@@ -4,10 +4,12 @@ Every result is derived from persisted current task, approved documents and the
 existing mature-goal readers.  It is not authority to send or to bypass any
 future preview, per-model consent, budget, idempotency or worker checks.
 """
+import copy
 from uuid import UUID
 from sqlalchemy import func, select
 from . import same_goal_advice_analysis_v305 as analysis
 from . import same_goal_advice_frame_v305 as frames
+from . import same_goal_advice_file_intent_candidate_v2 as current_guard
 from . import same_goal_advice_prepare_document_candidate_v2 as documents
 from . import same_goal_advice_quota_v304 as quota
 from . import same_goal_advice_read_session_v2 as isolation
@@ -23,14 +25,22 @@ from .temporal import instant
 
 
 @store.checked
-def build_current(db, p, task, plan, *, started=False, reserved_test_only=False, intent_test_only=False):
+def build_current(db, p, task, plan, *, started=False, reserved_test_only=False, intent_test_only=False, worker_proof=None):
     """Read current originals for the authenticated business actor only."""
     store.need(type(started) is bool and type(reserved_test_only) is bool and type(intent_test_only) is bool
         and (not reserved_test_only or started) and (not intent_test_only or reserved_test_only)
         and type(p) is Principal and p.role in {'admin', 'operator'}
         and type(task) is Task and type(plan) is Plan)
-    try: UUID(p.session_id)
-    except (ValueError, TypeError, AttributeError): store.need(False, '需要当前业务岗位登录会话')
+    proof=copy.deepcopy(worker_proof)
+    if proof is None:
+        try: UUID(p.session_id)
+        except (ValueError, TypeError, AttributeError): store.need(False, '需要当前业务岗位登录会话')
+    else:
+        store.need(started and p.session_id == 'worker')
+        from . import same_goal_advice_dispatch_control_candidate_v2 as control
+        checked_control=control.verify_worker(db,proof)
+        store.need(checked_control['workspace_id']==p.workspace_id and checked_control['actor_id']==p.user_id
+            and checked_control['task_id']==task.id and checked_control['plan_id']==plan.id)
     with isolation.isolated(db, task.id) as reader:
         current = store.existing._task(reader, p, task.id, lock=True)
         current_plan = store._fresh(reader, p, Plan, plan.id)
@@ -40,6 +50,10 @@ def build_current(db, p, task, plan, *, started=False, reserved_test_only=False,
             reserved_test_only=reserved_test_only,intent_test_only=intent_test_only)
         prep,job=result[:2]
         store.need(p.role == 'admin' or p.user_id == prep['business_actor_id'])
+        if proof is not None:
+            checked_control=current_guard._worker_scope(reader,p,current.id,prep['budget']['policy_ref'],proof)
+            store.need(checked_control['plan_id']==current_plan.id)
+
         checked = authority.current_policy(reader, p, current.id, prep['budget']['policy_ref'],
             reserved_plan_test_only=current_plan.id if reserved_test_only else None,
             intent_test_only=intent_test_only)
@@ -58,17 +72,32 @@ def build_current(db, p, task, plan, *, started=False, reserved_test_only=False,
         # Source resolution may take time; an originally valid session/policy
         # can expire naturally while the Task/actor rows remain locked.
         custody._lock_current_reader(reader, p)
-        row = reader.execute(select(func.clock_timestamp(), AuthSession.expires_at, Audit)
-            .select_from(AuthSession).join(Audit, Audit.id == prep['budget']['policy_ref']['id'])
-            .where(AuthSession.id == p.session_id, AuthSession.user_id == p.user_id,
-                AuthSession.revoked.is_(False), Audit.workspace_id == p.workspace_id,
-                Audit.object_id == current.id, Audit.action == policy.POLICY)
-            .with_for_update(read=True, of=[AuthSession, Audit])
-            .execution_options(populate_existing=True)).one_or_none()
-        store.need(row is not None)
-        now, session_expires, event = row
-        store.need(now.tzinfo is not None and session_expires > now
-            and digest(event.data) == prep['budget']['policy_ref']['record_hash'])
+        if proof is None:
+            row = reader.execute(select(func.clock_timestamp(), AuthSession.expires_at, Audit)
+                .select_from(AuthSession).join(Audit, Audit.id == prep['budget']['policy_ref']['id'])
+                .where(AuthSession.id == p.session_id, AuthSession.user_id == p.user_id,
+                    AuthSession.revoked.is_(False), Audit.workspace_id == p.workspace_id,
+                    Audit.object_id == current.id, Audit.action == policy.POLICY)
+                .with_for_update(read=True, of=[AuthSession, Audit])
+                .execution_options(populate_existing=True)).one_or_none()
+            store.need(row is not None)
+            now, session_expires, event = row
+            store.need(now.tzinfo is not None and session_expires > now)
+        else:
+            # This separate ORM Session shares the caller's DB transaction but
+            # not its info dict. Verify the actual control/grant/session here,
+            # rather than treating context copied from the caller as authority.
+            checked_control=current_guard._worker_scope(reader,p,current.id,prep['budget']['policy_ref'],proof)
+            store.need(checked_control['plan_id']==current_plan.id)
+            now=reader.scalar(select(func.clock_timestamp()))
+            event=reader.scalar(select(Audit).where(Audit.id==prep['budget']['policy_ref']['id'],
+                Audit.workspace_id==p.workspace_id,Audit.object_id==current.id,Audit.action==policy.POLICY)
+                .with_for_update(read=True).execution_options(populate_existing=True))
+            store.need(event is not None and now.tzinfo is not None)
+        store.need(digest(event.data) == prep['budget']['policy_ref']['record_hash'])
         saved, limits = policy.policy_shape(event, now)
         store.need(instant(saved['expires_at']) > now and digest(limits) == digest(prep['budget']))
-        return frame
+    if proof is not None:
+        checked_control=current_guard._worker_scope(db,p,task.id,prep['budget']['policy_ref'],proof)
+        store.need(checked_control['plan_id']==plan.id)
+    return frame

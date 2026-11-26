@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 
 from sqlalchemy import func, select, text
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.exc import ArgumentError
 
 from . import same_goal_advice_common_inventory_v2 as inventory
@@ -34,7 +34,8 @@ def require_disposable_database(db):
     except ArgumentError: old.need(False, '缺少有效测试数据库配置，未创建任务')
     expected_directory = Path(os.environ.get('GA_TEST_PG_DATA_DIR', '')).resolve()
     expected_identifier = os.environ.get('GA_TEST_PG_SYSTEM_IDENTIFIER', '')
-    url = db.get_bind().url
+    bound = db.get_bind()
+    url = bound.engine.url if isinstance(bound, Connection) else bound.url
     old.need(url.drivername.startswith('postgresql') and url.host == '127.0.0.1'
         and url.port and url.username in {'advice_test', 'counter_test'} and url.password is None
         and type(url.database) is str and re.fullmatch(r'ga_test_[0-9a-f]{12}', url.database) is not None

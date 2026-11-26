@@ -24,10 +24,26 @@ KIND = 'advice_v2_file_intent'
 SCHEMA = 'same-goal-advice-file-intent-v2'
 ACTION = 'same_goal_advice.file_intent_candidate_v2'
 
-def _check_current(db, p, task_id, policy_ref):
-    """Check only authenticated original policy/session; never renew either."""
-    try: UUID(p.session_id)
-    except (ValueError, TypeError, AttributeError): old.need(False, '需要有效登录会话，未登记或写入资料')
+def _worker_scope(db, p, task_id, policy_ref, worker_proof):
+    """Check an actual fenced worker lease and its original user grant.
+
+    This is a source-read guard only, not a dispatch permit. The caller must
+    recheck the proof in each transaction, including isolated child Sessions.
+    """
+    from . import same_goal_advice_dispatch_control_candidate_v2 as control
+    from .security import Principal
+    old.need(type(p) is Principal and p.session_id == 'worker' and p.role in {'admin','operator'})
+    checked=control.verify_worker(db,worker_proof)
+    old.need(checked['workspace_id']==p.workspace_id and checked['actor_id']==p.user_id
+        and checked['task_id']==task_id and checked['transport_authorized'] is False)
+    old._reader(db,p,write=True)
+    plan=db.scalar(select(Plan).where(Plan.workspace_id==p.workspace_id,Plan.task_id==task_id,
+        Plan.id==checked['plan_id']).with_for_update(read=True).execution_options(populate_existing=True))
+    old.need(plan is not None and plan.data['preparation_snapshot']['budget']['policy_ref']==policy_ref)
+    return checked
+
+
+def _policy_only(db, p, task_id, policy_ref):
     old._reader(db, p, write=True); v2._lock_current_reader(db, p)
     row = db.scalar(select(Audit).where(Audit.workspace_id == p.workspace_id, Audit.object_id == task_id,
         Audit.id == policy_ref['id'], Audit.action == policy.POLICY).with_for_update(read=True))
@@ -35,6 +51,16 @@ def _check_current(db, p, task_id, policy_ref):
     old.need(row is not None and digest(row.data) == policy_ref['record_hash'])
     saved, _ = policy.policy_shape(row, clock)
     old.need(policy.instant(saved['expires_at']) > clock, '原政策已到期；未登记或继续写入资料')
+
+
+def _check_current(db, p, task_id, policy_ref, *, worker_proof=None):
+    """Check authenticated original policy and either HTTP or worker grant."""
+    if worker_proof is None:
+        try: UUID(p.session_id)
+        except (ValueError, TypeError, AttributeError): old.need(False, '需要有效登录会话，未登记或写入资料')
+    else:
+        _worker_scope(db,p,task_id,policy_ref,worker_proof)
+    _policy_only(db,p,task_id,policy_ref)
 
 def _unbind_commit_guard(db):
     prior=db.info.pop('v2_file_intent_commit_guard',None)
@@ -55,14 +81,33 @@ def _clear_guard_after_rollback(session, transaction):
         current=current.parent
 
 
-def _bind_commit_guard(db, p, task_id, policy_ref):
+def _bind_commit_guard(db, p, task_id, policy_ref, *, worker_proof=None):
     # A source read or filesystem operation may cross the expiry boundary.
     # Keep the exact original pinned and recheck the DB clock at commit.
-    identity = (p.workspace_id, p.user_id, p.role, p.session_id, task_id, digest(policy_ref))
+    proof=copy.deepcopy(worker_proof)
+    identity = (p.workspace_id, p.user_id, p.role, p.session_id, task_id, digest(policy_ref),
+        digest(proof) if proof is not None else None)
     prior = db.info.get('v2_file_intent_commit_guard')
     if prior is not None:
         old.need(prior[0] == identity and event.contains(db, 'before_commit', prior[1])); return
-    def check(session): _check_current(session, p, task_id, policy_ref)
+    if proof is not None:
+        # Binds independent original-delegation and live-control commit guards.
+        # Those guards remain valid when this transaction itself adds its one
+        # permit; verify_worker would incorrectly reject that permit at commit.
+        _worker_scope(db,p,task_id,policy_ref,proof)
+    def check(session):
+        if proof is None:
+            _check_current(session, p, task_id, policy_ref)
+        else:
+            from . import same_goal_advice_dispatch_control_candidate_v2 as control
+            original=session.info.get('v2_delegation_original_guard')
+            lease=session.info.get('v2_dispatch_control_guard')
+            old.need(original is not None and lease is not None
+                and event.contains(session,'before_commit',original[1])
+                and event.contains(session,'before_commit',lease[1])
+                and lease[0]==(p.workspace_id,proof['control_id'],proof['lease_token']))
+            _policy_only(session,p,task_id,policy_ref)
+
     if not db.info.get('v2_file_intent_guard_cleanup_installed'):
         event.listen(db,'after_transaction_end',_clear_guard_after_root)
         event.listen(db,'after_soft_rollback',_clear_guard_after_rollback)

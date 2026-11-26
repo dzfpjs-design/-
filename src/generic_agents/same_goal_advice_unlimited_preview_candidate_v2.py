@@ -154,7 +154,7 @@ def _public(plan,prep,value):
 
 
 @store.checked
-def verify_current_for_start(db,p,task,plan,prep,event,*,started=False,reserved_test_only=False,intent_test_only=False):
+def verify_current_for_start(db,p,task,plan,prep,event,*,started=False,reserved_test_only=False,intent_test_only=False,worker_proof=None):
     """Recheck the saved preview against current originals, without starting.
 
     Callers must authenticate the preview chain and hold the task/actor locks.
@@ -173,10 +173,17 @@ def verify_current_for_start(db,p,task,plan,prep,event,*,started=False,reserved_
     store.need(saved_event is not None and digest(saved_event.data)==digest(event.data)
         and saved_event.data['preview_generation']==len(events))
     original=saved_event.data
-    current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'])
-    frame=(frame_builder.build_current(db,p,task,plan,started=True,reserved_test_only=reserved_test_only,
-        intent_test_only=intent_test_only) if started
-        else frame_builder.build_current(db,p,task,plan))
+    if worker_proof is None:
+        current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'])
+        frame=(frame_builder.build_current(db,p,task,plan,started=True,reserved_test_only=reserved_test_only,
+            intent_test_only=intent_test_only) if started else frame_builder.build_current(db,p,task,plan))
+    else:
+        store.need(started)
+        checked_control=current_guard._worker_scope(db,p,task.id,prep['budget']['policy_ref'],worker_proof)
+        store.need(checked_control['plan_id']==plan.id)
+        current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'],worker_proof=worker_proof)
+        frame=frame_builder.build_current(db,p,task,plan,started=True,reserved_test_only=reserved_test_only,
+            intent_test_only=intent_test_only,worker_proof=worker_proof)
     store.need(digest(frame)==digest(original['frame_snapshot'])
         and frame['source_record']==original['source_record'] and frame['model_pin']==prep['model_pin'])
     model=legacy._model(db,p,prep,live=True)
@@ -202,7 +209,10 @@ def verify_current_for_start(db,p,task,plan,prep,event,*,started=False,reserved_
         and prepared['dispatch_options_hash']==saved['model_options_hash'])
     money.check_quote(original['money_quote'],None,now=db.scalar(select(func.clock_timestamp())),prepared=prepared,
         model_pin=prep['model_pin'],model_snapshot=model.data,limits=prep['budget'])
-    current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'])
+    if worker_proof is None:
+        current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'])
+    else:
+        current_guard._check_current(db,p,task.id,prep['budget']['policy_ref'],worker_proof=worker_proof)
     return frame
 
 
