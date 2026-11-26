@@ -116,6 +116,9 @@ def validate_configuration(value):
             if 'candidateKey' in item and (not isinstance(item['candidateKey'], str)
                     or not re.fullmatch(r'[a-z][a-z0-9_]{0,39}', item['candidateKey'])):
                 raise HTTPException(422, '候选业务标识无法核对，原草稿保留')
+            if 'candidateBasisHash' in item and (not isinstance(item['candidateBasisHash'], str)
+                    or not re.fullmatch(r'[0-9a-f]{64}', item['candidateBasisHash'])):
+                raise HTTPException(422, '候选依据标识无法核对，原草稿保留')
             citations=item.get('citations',[])
             if not isinstance(citations,list) or len(citations)>50 or any(not isinstance(c,dict) or any(not isinstance(c.get(k),str) for k in ['material_id','block_id','quote']) for c in citations):
                 raise HTTPException(422,'原文引用需包含资料、段落和引用文字')
