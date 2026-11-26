@@ -32,13 +32,14 @@ RESULT_KEY='advice_result_v308'
 OPERATION = 'same-goal-advice-operation-v302'
 DOCUMENT_PREPARATION = 'same-goal-advice-document-preparation-v304'
 MAX_ROWS = 1000
+INVENTORY_LIMIT_MESSAGE = '业务建议相关记录较多，暂时无法核对，请联系管理员。'
 need, checked = existing.need, existing.checked
 
 
 def _rows(db,p,model,*where):
     rows=list(db.scalars(select(model).where(model.workspace_id==p.workspace_id,*where)
         .limit(MAX_ROWS+1).execution_options(populate_existing=True)))
-    need(len(rows)<=MAX_ROWS);return rows
+    need(len(rows)<=MAX_ROWS, INVENTORY_LIMIT_MESSAGE);return rows
 
 
 def _fresh(db,p,model,identity):
