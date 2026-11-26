@@ -1,13 +1,14 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
+import './advice-user-compact.css';
 
 const STATES={
- ready:'已找到完整首答，可以恢复保存',
- needs_settlement:'首答已保存，等待核对用量',
- settled:'首答已保存，账本待核',
- settled_usage_unknown:'首答已保存，实际用量待核',
- failed:'原响应已保存，业务建议未生成，账本待核',
- failed_usage_unknown:'原响应已保存，业务建议未生成，实际用量待核',
- needs_attention:'首答不完整或原记录需要核对',
+ ready:'建议待恢复',
+ needs_settlement:'建议待完成',
+ settled:'建议已保存 · 用量记录待核',
+ settled_usage_unknown:'建议已保存 · 实际用量待核',
+ failed:'建议未生成 · 用量记录待核',
+ failed_usage_unknown:'建议未生成 · 实际用量待核',
+ needs_attention:'需要核对',
 };
 
 export default function AdviceResponseRecoveryV2({account,task,requestJSON,onRecovered}){
@@ -18,7 +19,7 @@ export default function AdviceResponseRecoveryV2({account,task,requestJSON,onRec
  const refresh=useCallback(async()=>{
   const generation=alive.current;setError('');
   try{const result=await requestJSON(base);if(alive.current===generation)setData(result);}
-  catch{if(alive.current===generation){setData(null);setError('暂时无法读取结果保存状态，请稍后刷新。');}}
+  catch{if(alive.current===generation){setData(null);setError('暂时无法读取建议状态，请刷新重试。');}}
  },[base,requestJSON,scope]);
  useEffect(()=>{alive.current++;setData(null);if(account?.role==='admin')refresh();return()=>{alive.current++;};},[scope,account?.role,refresh]);
  const recover=async item=>{
@@ -27,7 +28,7 @@ export default function AdviceResponseRecoveryV2({account,task,requestJSON,onRec
    await requestJSON(base+'/'+encodeURIComponent(item.permit_id)+'/recover',{method:'POST'});
    if(alive.current===generation){await refresh();if(onRecovered)onRecovered();}
   }catch{
-   if(alive.current===generation){setData(null);setError('恢复结果尚未确认，请刷新状态。系统不会再次发送原请求。');}
+   if(alive.current===generation){setData(null);setError('恢复结果尚未确认，请刷新查看，勿重复提交。');}
   }finally{if(alive.current===generation)setBusy('');}
  };
  const loadMore=async()=>{
@@ -38,25 +39,17 @@ export default function AdviceResponseRecoveryV2({account,task,requestJSON,onRec
   finally{if(alive.current===generation)setBusy('');}
  };
  if(account?.role!=='admin'||(!data&&!error)||data?.enabled===false)return null;
- return <section className="media-form" aria-label="业务建议结果恢复">
-  <div className="same-advice-heading"><div><h4>业务建议结果恢复</h4>
-   <p>核对已经接收的模型首答及用量记录，恢复不会再次发送请求。</p></div>
-   <button type="button" disabled={!!busy} onClick={refresh}>刷新状态</button></div>
+ if(!error&&data?.items.length===0&&!data?.next_cursor)return null;
+ return <section className="media-form advice-user-panel" aria-label="建议状态">
+  <div className="advice-user-heading"><h4>建议状态</h4>
+   <button className="btn" type="button" disabled={!!busy} onClick={refresh}>刷新</button></div>
   {error&&<p role="alert">{error}</p>}
-  {data?.items.length===0&&<p>当前业务没有需要核对的原请求。</p>}
-  {data?.items.map(item=><article className="media-form" key={item.permit_id}>
-   <p>原请求时间：{item.recorded_at?new Date(item.recorded_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}):'待核对'}（北京时间）</p>
-   <p>核对依据：{item.state==='needs_attention'?'原请求记录或首答完整性尚未确认。':
-    item.state==='ready'?'已核对原请求和一次性派发记录，找到完整加密首答。':'已核对原请求及已保存的首答。'}</p>
-   <p>当前状态：<strong>{STATES[item.state]||'原记录需要核对'}</strong></p>
-   {item.state==='needs_attention'&&<p>系统无法确认完整首答，请联系管理员核对原记录；不要重复发送。</p>}
-   {(item.state==='ready'||item.state==='needs_settlement')&&<button type="button" disabled={!!busy}
-    onClick={()=>recover(item)}>{busy===item.permit_id?'正在恢复…':'恢复结果并核对用量'}</button>}
-   {item.state==='settled'&&<p>已记录模型返回的用量；同日账本尚需逐笔核对，业务内容仍需按原流程核对。</p>}
-   {item.state==='settled_usage_unknown'&&<p>模型未返回实际用量，系统暂按预留量记录；不会再次发送原请求。业务内容仍需按原流程核对。</p>}
-   {item.state==='failed'&&<p>请求失败或响应格式不符合要求；系统已记录模型返回的用量，同日账本尚需逐笔核对，不会再次发送原请求。</p>}
-   {item.state==='failed_usage_unknown'&&<p>请求失败或响应格式不符合要求，模型未返回实际用量，系统暂按预留量记录；不会再次发送原请求。</p>}
+  {data?.items.map(item=><article className="advice-user-item" key={item.permit_id}>
+   <p>{item.recorded_at?new Date(item.recorded_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}):'时间待核对'} · <strong>{STATES[item.state]||'需要核对'}</strong></p>
+   {item.state==='needs_attention'&&<p>请联系管理员核对，勿重复提交。</p>}
+   {(item.state==='ready'||item.state==='needs_settlement')&&<button className="btn primary" type="button" disabled={!!busy}
+    onClick={()=>recover(item)}>{busy===item.permit_id?'正在恢复…':'恢复建议'}</button>}
   </article>)}
-  {data?.next_cursor&&<button type="button" disabled={!!busy} onClick={loadMore}>{busy==='page'?'正在加载…':'加载更多记录'}</button>}
+  {data?.next_cursor&&<button className="btn" type="button" disabled={!!busy} onClick={loadMore}>{busy==='page'?'正在加载…':'查看更多'}</button>}
  </section>;
 }

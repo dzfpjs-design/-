@@ -85,13 +85,13 @@ async function harness(fn){
 
 test('linked and old unlinked analyses explain their distinct relation to the stopped step',{concurrency:false},async()=>harness(async h=>{
  h.view.plan.continues_stopped_reasoning=true;await h.render();
- assert.match(h.container.querySelector('[aria-label="原步骤后续分析"]').textContent,/任务才可能结束/);
+ assert.match(h.container.querySelector('[aria-label="原步骤后续分析"]').textContent,/仍需完成后续办理和目标核验/);
  assert.equal(h.container.querySelector('[aria-label="原分析需要核对"]'),null);
  h.view.plan.continues_stopped_reasoning=false;h.view.plan.stopped_reasoning_unlinked=true;await h.render();
- assert.match(h.container.querySelector('[aria-label="原分析需要核对"]').textContent,/不能直接作为后续分析发送/);
+ assert.match(h.container.querySelector('[aria-label="原分析需要核对"]').textContent,/不能直接发送/);
  assert.equal(h.container.querySelector('[aria-label="原步骤后续分析"]'),null);
  h.view.draft.preview_checked=true;h.view.draft.start_reason='已核对';await h.render();
- assert.equal(h.button('明确开始一次分析').disabled,true);
+ assert.equal(h.button('开始分析').disabled,true);
 }));
 
 test('initial evaluation limitation is shown before local preparation without disabling it',{concurrency:false},async()=>harness(async h=>{
@@ -104,7 +104,7 @@ test('initial evaluation limitation is shown before local preparation without di
  const input=h.field('本次整理资料的说明');
  assert.ok(notice && input && (notice.compareDocumentPosition(input)&h.dom.window.Node.DOCUMENT_POSITION_FOLLOWING));
  assert.match(notice.textContent,/不能.*生成.*预览/);
- assert.equal(h.button('整理批准资料').disabled,false);
+ assert.equal(h.button('整理资料').disabled,false);
  h.view.reads.context='failed';await h.render();
  assert.equal(h.container.querySelector('[aria-label="首次评价的分析限制"]'),null);
 }));
@@ -114,10 +114,10 @@ test('each original has a separate model authorization and exact Evidence callba
  assert.equal(h.container.querySelectorAll('[aria-label="批准的业务资料"]').length,1);
  const original=h.container.querySelector('[aria-label="批准的业务资料"]');
  assert.equal(original.querySelector('details').open,false);
- assert.equal([...original.querySelectorAll('button')].find(node=>node.textContent==='保存本份资料授权').disabled,true);
+ assert.equal([...original.querySelectorAll('button')].find(node=>node.textContent==='确认授权').disabled,true);
  await h.edit('授权说明：批准的业务资料','本次仅授权已核对的摘录。');
  await h.click(original.querySelector('input[type=checkbox]'));
- const authorize=[...original.querySelectorAll('button')].find(node=>node.textContent==='保存本份资料授权');
+ const authorize=[...original.querySelectorAll('button')].find(node=>node.textContent==='确认授权');
  assert.equal(authorize.disabled,false);await h.click(authorize);
  assert.deepEqual(h.commands,[['authorizeEvidence',id(11)]]);
  assert.equal(h.view.draft.consent_checked[id(10)],undefined);
@@ -137,7 +137,7 @@ test('cold-ready result places original data time and limited excerpt scope besi
 
 test('a saved answer cannot open review during finalization or when current review permission is absent',{concurrency:false},async()=>harness(async h=>{
  ready(h.view);h.view.plan.phase='closing';h.view.plan.human_review_available=false;await h.render();
- assert.equal(h.container.querySelector('[aria-label="保存本次人工决定"]'),null);assert.ok(h.text().includes('完成后台与费用核对'));
+ assert.equal(h.container.querySelector('[aria-label="保存本次人工决定"]'),null);assert.ok(h.text().includes('结果保存中，完成后可审核'));
  h.view.plan.phase='ready_for_review';h.view.plan.human_review_available=true;h.view.context.permissions.can_review=false;
  h.view.draft.review_decision='accepted';h.view.draft.review_reason='原人稿继续保留';await h.render();
  assert.equal(h.button('保存本次决定').disabled,true);assert.equal(h.field('作出此决定的理由').value,'原人稿继续保留');
@@ -146,39 +146,39 @@ test('a saved answer cannot open review during finalization or when current revi
 test('missing original document read blocks saving a review while retaining the human choice and reason',{concurrency:false},async()=>harness(async h=>{
  ready(h.view);h.view.documents=null;h.view.draft.review_decision='rejected';h.view.draft.review_reason='等待原依据读回后保存。';await h.render();
  assert.equal(h.button('保存本次决定').disabled,true);assert.equal(h.field('作出此决定的理由').value,'等待原依据读回后保存。');
- assert.ok(h.text().includes('原依据全文尚未读回'));assert.deepEqual(h.commands,[]);
+ assert.ok(h.text().includes('依据尚未读回'));assert.deepEqual(h.commands,[]);
 }));
 
 test('actual anonymous text is deliberately expandable and Start needs fresh displayed confirmation plus a separate endpoint flag',{concurrency:false},async()=>harness(async h=>{
  assert.equal(h.container.querySelector('.same-advice-sent').open,false);
- assert.ok(h.text().includes('¥0.12'));assert.ok(h.text().includes('实际供应商账单尚未核实'));
- assert.equal(h.button('明确开始一次分析').disabled,true);
+ assert.ok(h.text().includes('¥0.12'));assert.ok(h.text().includes('实际费用以供应商账单为准'));
+ assert.equal(h.button('开始分析').disabled,true);
  h.view.draft.preview_checked=true;h.view.draft.start_reason='已核对当前匿名全文和本次上限';await h.render();
- assert.equal(h.view.preview.can_start,false);assert.equal(h.button('明确开始一次分析').disabled,false);
- h.view.preview.start_endpoint_available=false;await h.render();assert.equal(h.button('明确开始一次分析').disabled,true);
+ assert.equal(h.view.preview.can_start,false);assert.equal(h.button('开始分析').disabled,false);
+ h.view.preview.start_endpoint_available=false;await h.render();assert.equal(h.button('开始分析').disabled,true);
  assert.deepEqual(h.commands,[]);
 }));
 
 test('pending commands block fresh writes and only expose explicit original recovery and exact-body continuation',{concurrency:false},async()=>harness(async h=>{
  h.view.pending={operation:'start'};h.view.notFound=true;h.view.draft.preview_checked=true;h.view.draft.start_reason='已保存的人稿';await h.render();
- assert.equal(h.button('明确开始一次分析').disabled,true);
- await h.click(h.button('核对原申请结果'));await h.click(h.button('按原内容继续原申请'));
+ assert.equal(h.button('开始分析').disabled,true);
+ await h.click(h.button('查看处理结果'));await h.click(h.button('继续原申请'));
  assert.deepEqual(h.commands,[['recover'],['resendOriginal']]);
 }));
 
 test('saved command with incomplete result blocks new work and an explicitly rejected original has a separate retain-and-edit action',{concurrency:false},async()=>harness(async h=>{
  h.view.needsCheck=true;h.view.draft.preview_checked=true;h.view.draft.start_reason='保留原开始理由';await h.render();
- assert.equal(h.button('明确开始一次分析').disabled,true);assert.ok(h.text().includes('原申请已保存，结果原件仍需核对'));
- await h.click(h.button('核对已保存申请的原结果'));assert.deepEqual(h.commands,[['recover']]);
+ assert.equal(h.button('开始分析').disabled,true);assert.ok(h.text().includes('建议结果待核对'));
+ await h.click(h.button('核对结果'));assert.deepEqual(h.commands,[['recover']]);
  h.view.needsCheck=false;h.view.pending={operation:'start'};h.view.pendingRejected={status:409,message:'原价格依据已过期，原正文保留。'};await h.render();
- await h.click(h.button('保留被拒请求，修改输入'));assert.deepEqual(h.commands,[['recover'],['releaseRejected']]);
+ await h.click(h.button('修改输入'));assert.deepEqual(h.commands,[['recover'],['releaseRejected']]);
 }));
 
 test('blocked new configuration keeps saved historical advice and human reason visible without offering a new prepare',{concurrency:false},async()=>harness(async h=>{
  ready(h.view);h.view.context.permissions.can_prepare=false;h.view.context.blocked_reasons=[{code:'model_unavailable',message:'指定模型当前已停用。',section:'model'}];
  h.view.draft.review_reason='已经写下的核查理由不应因模型停用丢失。';await h.render();
  assert.ok(h.text().includes('指定模型当前已停用'));assert.ok(h.text().includes('建议先做人工复核'));
- assert.equal(h.field('作出此决定的理由').value,h.view.draft.review_reason);assert.equal(h.button('整理批准资料'),undefined);
+ assert.equal(h.field('作出此决定的理由').value,h.view.draft.review_reason);assert.equal(h.button('整理资料'),undefined);
 }));
 
 test('model quotations stay escaped and technical errors do not dump JSON, internal identities or debug details',{concurrency:false},async()=>harness(async h=>{
@@ -186,7 +186,7 @@ test('model quotations stay escaped and technical errors do not dump JSON, inter
  h.view.error='{"invocation_id":"'+id(80)+'","traceback":"private-stack"}';await h.render();
  assert.equal(h.container.querySelector('img'),null);assert.ok(h.text().includes('<img src='));
  assert.ok(!h.text().includes(id(80))&&!h.text().includes('private-stack'));
- assert.ok(h.text().includes('原操作暂未核对完成'));
+ assert.ok(h.text().includes('操作未完成'));
 }));
 
 test('ordinary business users never see administrator fee commands even when a DTO flag is present',{concurrency:false},async()=>harness(async h=>{
@@ -203,7 +203,7 @@ test('administrator can explicitly register official price without a Plan but cu
  assert.equal(h.container.querySelector('[aria-label="管理员费用设置"]').open,false);
  assert.equal(h.button('更新官方价格依据').disabled,true);assert.equal(h.field('本次分析费用上限').disabled,true);
  await h.edit('更新官方价格依据的说明','按当前官方价目更新本任务费用依据。');await h.click(h.button('更新官方价格依据'));
- assert.deepEqual(h.commands,[['registerPrice']]);assert.ok(h.text().includes('不会发送业务原文或调用分析模型'));
+ assert.deepEqual(h.commands,[['registerPrice']]);assert.ok(h.text().includes('费用上限仅适用于本次分析'));
  assert.ok(h.text().includes('币种待官方价格核对'));assert.equal(h.button('保存本次分析费用上限').disabled,true);
 }));
 
@@ -215,24 +215,24 @@ test('administrator quota keeps money as exact human text and submits only the f
  assert.equal(h.view.draft.quota_cost,'0.10');assert.equal(typeof h.view.draft.quota_cost,'string');
  assert.equal(h.button('保存本次分析费用上限').disabled,false);assert.equal(h.button('更新官方价格依据').disabled,true);
  await h.click(h.button('保存本次分析费用上限'));assert.deepEqual(h.commands,[['configureQuota']]);
- assert.ok(h.text().includes('¥0.25'));assert.ok(h.text().includes('已有未到期政策时，由服务器保留原政策'));
+ assert.ok(h.text().includes('¥0.25'));assert.ok(h.text().includes('金额最多两位小数'));
 }));
 
 test('cancellation consumes the explicit original server permission rather than inferring from a queued or running phase',{concurrency:false},async()=>harness(async h=>{
- assert.equal(h.button('确认取消并保留原记录'),undefined);
+ assert.equal(h.button('确认取消'),undefined);
  h.view.plan.phase='send_queued';h.view.plan.cancel_available=true;await h.render();
- assert.equal(h.button('确认取消并保留原记录').disabled,true);
+ assert.equal(h.button('确认取消').disabled,true);
  await h.edit('取消本次申请的原因','原申请尚未实际调用模型，明确取消并保留资料。');
- assert.equal(h.button('确认取消并保留原记录').disabled,false);await h.click(h.button('确认取消并保留原记录'));
+ assert.equal(h.button('确认取消').disabled,false);await h.click(h.button('确认取消'));
  assert.deepEqual(h.commands,[['cancel']]);
- h.view.plan.cancel_available=false;await h.render();assert.equal(h.button('确认取消并保留原记录'),undefined);
+ h.view.plan.cancel_available=false;await h.render();assert.equal(h.button('确认取消'),undefined);
 }));
 
 test('preparation explanation remains an audit draft while the actual question comes only from the saved preview',{concurrency:false},async()=>harness(async h=>{
  const originalPlan=copy(h.view.plan),originalPreview=copy(h.view.preview);
  h.view.plan=null;h.view.preview=null;h.view.documents=null;await h.render();
  assert.equal(h.field('这次希望分析什么'),undefined);assert.ok(h.field('本次整理资料的说明'));
- assert.ok(h.text().includes('不修改实际模型问题'));assert.equal(h.container.querySelector('[aria-label="本次实际分析问题"]'),null);
+ assert.ok(h.text().includes('分析问题沿用任务内容'));assert.equal(h.container.querySelector('[aria-label="本次实际分析问题"]'),null);
  await h.edit('本次整理资料的说明','只记录本次整理申请的说明，不是替换模型问题。');
  assert.equal(h.view.draft.prepare_reason,'只记录本次整理申请的说明，不是替换模型问题。');
  h.view.plan=originalPlan;h.view.preview=copy(originalPreview);await h.render();
@@ -259,16 +259,16 @@ test('official USD amounts retain their own currency in preview and quota withou
 }));
 
 test('only an already reviewed round can explicitly prepare another round, keeping the previous answer, decision and reasons',{concurrency:false},async()=>harness(async h=>{
- ready(h.view);await h.render();assert.equal(h.button('整理批准资料'),undefined);assert.equal(h.button('新增下一份资料整理申请'),undefined);
+ ready(h.view);await h.render();assert.equal(h.button('整理资料'),undefined);assert.equal(h.button('新增建议'),undefined);
  h.view.plan.phase='reviewed';h.view.plan.human_review_available=false;
  h.view.plan.reviews=[{decision:'accepted',reason:'已核对原建议，保留本次采用决定。',reviewed_at:'2026-11-02T12:20:00Z'}];
  h.view.draft.selected_document_source=copy(h.view.context.document_sources[0].selection);
  h.view.draft.prepare_reason='在原目标下继续整理下一份资料。';h.view.draft.review_reason='上一份人工作业理由继续保留。';
  const originalResult=copy(h.view.plan.result),originalReviews=copy(h.view.plan.reviews),originalReason=h.view.draft.review_reason;
- h.view.context.permissions.can_prepare=false;await h.render();assert.equal(h.button('新增下一份资料整理申请').disabled,true);
- assert.ok(h.text().includes('上一份建议和已保存的人工决定继续保留'));assert.ok(h.text().includes(originalReviews[0].reason));
- h.view.context.permissions.can_prepare=true;await h.render();assert.equal(h.button('新增下一份资料整理申请').disabled,false);
- await h.click(h.button('新增下一份资料整理申请'));assert.deepEqual(h.commands,[['prepare']]);
+ h.view.context.permissions.can_prepare=false;await h.render();assert.equal(h.button('新增建议').disabled,true);
+ assert.ok(h.text().includes('上一份建议和决定仍可查看'));assert.ok(h.text().includes(originalReviews[0].reason));
+ h.view.context.permissions.can_prepare=true;await h.render();assert.equal(h.button('新增建议').disabled,false);
+ await h.click(h.button('新增建议'));assert.deepEqual(h.commands,[['prepare']]);
  assert.deepEqual(h.view.plan.result,originalResult);assert.deepEqual(h.view.plan.reviews,originalReviews);assert.equal(h.view.draft.review_reason,originalReason);
 }));
 
@@ -278,7 +278,7 @@ test('a cold-checked original answer appears while current context and history a
  h.view.draft.review_decision='accepted';h.view.draft.review_reason='这份原答的待保存理由仍保留。';await h.render();
  assert.ok(h.text().includes('建议先做人工复核'));assert.ok(h.text().includes('仅审阅已提供的摘录'));
  assert.ok(h.container.querySelector('[aria-label="作出决定前的资料时间与审阅范围"]').textContent.includes('20:00:00'));
- assert.ok(h.text().includes('当前办理条件仍在核对中'));assert.ok(h.text().includes('正在读取已保存的建议申请目录'));
+ assert.ok(h.text().includes('正在核对办理条件'));assert.ok(h.text().includes('正在读取历史建议'));
  assert.equal(h.container.querySelector('[role="alert"]'),null);assert.equal(h.button('保存本次决定').disabled,true);
  assert.equal(h.field('作出此决定的理由').value,h.view.draft.review_reason);assert.deepEqual(h.commands,[]);
 }));
@@ -286,8 +286,8 @@ test('a cold-checked original answer appears while current context and history a
 test('failed current context cannot reuse an earlier permission object while independently read originals remain visible',{concurrency:false},async()=>harness(async h=>{
  ready(h.view);h.view.reads.context='failed';h.view.reads.history='failed';h.view.list=null;
  h.view.draft.review_decision='accepted';h.view.draft.review_reason='保留已经填写的决定理由。';await h.render();
- assert.ok(h.text().includes('建议先做人工复核'));assert.ok(h.text().includes('当前办理条件暂未读回'));
- assert.ok(h.text().includes('历史申请目录暂未读回'));assert.ok(!h.text().includes('当前任务还没有保存的建议申请'));
+ assert.ok(h.text().includes('建议先做人工复核'));assert.ok(h.text().includes('办理条件暂未读回'));
+ assert.ok(h.text().includes('历史建议暂未读回'));assert.ok(!h.text().includes('暂无历史建议'));
  assert.equal(h.button('保存本次决定').disabled,true);assert.equal(h.field('作出此决定的理由').value,h.view.draft.review_reason);
  assert.equal(h.container.querySelector('[aria-label="管理员费用设置"]'),null);assert.deepEqual(h.commands,[]);
 }));
@@ -295,16 +295,16 @@ test('failed current context cannot reuse an earlier permission object while ind
 test('document failure and a separately loading preview do not erase the proved answer or masquerade as empty sources',{concurrency:false},async()=>harness(async h=>{
  ready(h.view);h.view.documents=null;h.view.preview=null;h.view.busy=true;h.view.loading=true;
  h.view.reads.documents='failed';h.view.reads.preview='loading';await h.render();
- assert.ok(h.text().includes('建议先做人工复核'));assert.ok(h.text().includes('资料全文暂未读回'));
- assert.ok(h.text().includes('正在单独读取这份原申请保存的匿名全文与费用预览'));
- assert.ok(!h.text().includes('资料原文尚未开始读取'));assert.equal(h.button('保存本次决定').disabled,true);
+ assert.ok(h.text().includes('建议先做人工复核'));assert.ok(h.text().includes('资料暂未读回'));
+ assert.ok(h.text().includes('正在读取发送预览'));
+ assert.ok(!h.text().includes('资料尚未读取'));assert.equal(h.button('保存本次决定').disabled,true);
  assert.deepEqual(h.commands,[]);
 }));
 
 test('permission denial hides all sensitive successful branches even during a progressive read',{concurrency:false},async()=>harness(async h=>{
  ready(h.view);h.view.denied=true;h.view.loading=true;h.view.busy=true;h.view.reads.context='loading';
  h.view.draft.review_reason='必须隐藏的本机人工理由';await h.render();
- assert.ok(h.text().includes('原资料与回答已隐藏'));assert.ok(!h.text().includes('建议先做人工复核'));
+ assert.ok(h.text().includes('资料已隐藏'));assert.ok(!h.text().includes('建议先做人工复核'));
  assert.ok(!h.text().includes('已批准的原文摘录')&&!h.text().includes('必须隐藏的本机人工理由'));
  assert.equal(h.container.querySelector('[aria-label="保存本次人工决定"]'),null);assert.equal(h.container.querySelector('textarea'),null);
  assert.deepEqual(h.commands,[]);

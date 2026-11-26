@@ -15,7 +15,7 @@ test('authorization, lost reply, refresh, revocation and role loss remain unders
  let root;try{
   const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/OfflineDocumentDelegationV2.jsx');
   root=createRoot(document.getElementById('root'));
-  let state='not_authorized',lastGrant=null,lastRevoke=null,role='admin',lost=true,failBefore=false,grantCalls=[];
+  let state='not_authorized',lastGrant=null,lastRevoke=null,role='admin',lost=true,failBefore=false,grantCalls=[],empty=false;
   const request=async(path,options={})=>{
    if(role==='viewer')throw Error('permission denied');
    if(options.method==='POST'){
@@ -24,30 +24,32 @@ test('authorization, lost reply, refresh, revocation and role loss remain unders
     else{state='revoked';lastRevoke=body.request_id;}
     return {state};
    }
-   return {enabled:true,permit_committed:true,items:[{job_id:'job-1',grant_id:state==='authorized'?'grant-1':null,
+   return {enabled:true,permit_committed:true,items:empty?[]:[{job_id:'job-1',grant_id:state==='authorized'?'grant-1':null,
     task_title:'林区资料',source_label:'已批准的业务资料包',state,grant_request_id:lastGrant,revoke_request_id:lastRevoke,
     expires_at:null,prepared:false,background_available:false,can_authorize:state!=='authorized',can_revoke:state==='authorized'}]};
   };
   const render=()=>React.createElement(Panel,{account:{workspace_id:'workspace',user_id:'user'},task:{id:'task'},requestJSON:request,storage:dom.window.sessionStorage});
   await act(async()=>root.render(render()));
-  assert.match(document.body.textContent,/后台自动处理尚未启用/);assert.match(document.body.textContent,/不能保证撤回/);
+  assert.match(document.body.textContent,/暂不能自动整理/);assert.doesNotMatch(document.body.textContent,/派发许可|账本|测试/);
   await act(async()=>document.querySelector('input[type=checkbox]').click());
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='授权离线整理').click());
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='确认授权').click());
   assert.match(document.body.textContent,/结果尚未确认/);assert.doesNotMatch(document.body.textContent,/林区资料/);
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新状态').click());
-  assert.match(document.body.textContent,/授权有效/);assert.equal(dom.window.sessionStorage.length,0);
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
+  assert.match(document.body.textContent,/授权有效/);assert.match(document.body.textContent,/已提交的分析请求可能无法撤回/);assert.equal(dom.window.sessionStorage.length,0);
   await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='撤销授权').click());
   assert.match(document.body.textContent,/已撤销/);
   await act(async()=>{root.unmount();root=createRoot(document.getElementById('root'));root.render(render());});
   assert.match(document.body.textContent,/已撤销/);
   failBefore=true;await act(async()=>document.querySelector('input[type=checkbox]').click());
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='授权离线整理').click());
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='确认授权').click());
   assert.match(document.body.textContent,/结果尚未确认/);
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新状态').click());
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
   if(!document.querySelector('input[type=checkbox]').checked)await act(async()=>document.querySelector('input[type=checkbox]').click());
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='授权离线整理').click());
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='确认授权').click());
   assert.equal(grantCalls.length,3);assert.notEqual(grantCalls[0],grantCalls[1]);assert.equal(grantCalls[1],grantCalls[2]);
-  role='viewer';await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新状态').click());
-  assert.match(document.body.textContent,/无法读取资料授权状态/);assert.doesNotMatch(document.body.textContent,/林区资料/);
+  role='viewer';await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
+  assert.match(document.body.textContent,/无法读取授权状态/);assert.doesNotMatch(document.body.textContent,/林区资料/);
+  role='admin';empty=true;await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
+  assert.equal(document.body.textContent,'','no empty authorization panel interrupts the user');
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
 });
