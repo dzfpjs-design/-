@@ -37,12 +37,28 @@ def current_context(workspace_id,call_id,intent_id,permit_id):
         return _context(db,workspace_id,call_id,intent_id,permit_id)
 
 
-def recover(workspace_id,call_id,intent_id,permit_id):
+def recover(workspace_id,call_id,intent_id,permit_id,*,authorize_capture=None):
     """Authenticate, capture, and settle, each DB phase separate from file IO."""
     store.need(settings().v2_response_spool_enabled and settings().v2_response_spool_root is not None)
     context=current_context(workspace_id,call_id,intent_id,permit_id)
+    # If a previous attempt durably captured the original bytes but crashed
+    # before settlement, the saved original is sufficient. Do not require a
+    # now-missing spool or attempt to reconstruct/replace those bytes.
+    with Session(engine()) as db:
+        store.need(_context(db,workspace_id,call_id,intent_id,permit_id)==context)
+        existing=storage.read(db,workspace_id,call_id,intent_id)
+        if type(existing) is tuple and len(existing)==3:
+            if authorize_capture is not None:
+                authorize_capture(db)
+            db.commit()
+            outcome=reconcile.reconcile(workspace_id,call_id,intent_id)
+            return {**outcome,'spool_state':'not_checked'}
     raw,receipt=spool.load(settings().v2_response_spool_root,context)
     with Session(engine()) as db:
+        # HTTP callers lock and recheck their live role/session immediately
+        # before the write; do not hold those locks during file IO.
+        if authorize_capture is not None:
+            authorize_capture(db)
         store.need(_context(db,workspace_id,call_id,intent_id,permit_id)==context)
         storage.capture(db,workspace_id,call_id,intent_id,raw,receipt)
         db.commit()

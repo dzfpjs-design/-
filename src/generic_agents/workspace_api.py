@@ -30,6 +30,8 @@ from .same_goal_advice_api_v304 import router as business_advice_router
 router.include_router(business_advice_router)
 from .same_goal_advice_offline_api_candidate_v2 import router as offline_document_router
 router.include_router(offline_document_router)
+from .same_goal_advice_recovery_api_candidate_v2 import router as advice_recovery_router
+router.include_router(advice_recovery_router)
 from .same_goal_continuation_api_v312 import router as business_continuation_router
 router.include_router(business_continuation_router)
 from .same_goal_continuation_grant_api_v313 import router as continuation_grant_router
