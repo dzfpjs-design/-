@@ -142,7 +142,8 @@ def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False,context_only=Fals
         env.update(GA_TEST_DATABASE_URL=f'postgresql+psycopg://advice_test@127.0.0.1:{port}/postgres',
             GA_TEST_PG_DATA_DIR=str(data),GA_TEST_PG_SYSTEM_IDENTIFIER=sid,GA_TEST_RETAIN_SYNTHETIC_CLUSTER='1',
             GA_TEST_SYNTHETIC_PROVIDER_PORT=str(provider_port),GA_TEST_SYNTHETIC_HTTP_PORT=str(http_port),
-            GA_TEST_SYNTHETIC_REQUEST_STATS=str(root/'provider-stats.json'),GA_TEST_TIMING_LOG=str(root/'timings.jsonl'),
+            GA_TEST_SYNTHETIC_REQUEST_STATS=str(root/'provider-stats.json'),
+            GA_TEST_SYNTHETIC_CONNECTION_STATS=str(root/'provider-connections.json'),GA_TEST_TIMING_LOG=str(root/'timings.jsonl'),
             GA_SYNTHETIC_FRESH_CHECKPOINT=str(checkpoint),GA_COOKIE_SECURE='false',GA_REDIS_URL='redis://127.0.0.1:1/0',
             PYTHONPATH=str(repo/'src')+os.pathsep+str(repo))
         if retention_probe:env['GA_TEST_RETENTION_PROBE']='1'
