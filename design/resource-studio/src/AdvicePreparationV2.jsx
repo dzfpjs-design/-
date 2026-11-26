@@ -43,8 +43,12 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
       if (alive.current !== generation || reads.current.context !== serial) return;
       if (available?.enabled===false) {
         if(typeof available.has_unfinished!=='boolean')throw Error('unavailable');
-        let saved=true;try{saved=available.has_unfinished||storage.getItem(key)!==null||storage.getItem(key+':active')!==null;}catch{}
-        reads.current.selected++;setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);
+        let saved=true;try{
+          const pendingRaw=storage.getItem(key);
+          if(!available.has_unfinished&&pendingRaw===null){storage.removeItem(key+':active');if(storage.getItem(key+':active')!==null)throw Error('无法核对申请');}
+          saved=available.has_unfinished||pendingRaw!==null||storage.getItem(key+':active')!==null;
+        }catch{}
+        alive.current++;reads.current.selected++;setBusy('');setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);
         if(saved){setContext({enabled:true,can_prepare:false,sources:[]});availability.current?.(true);setError('已有申请暂不可用，请刷新。');}
         else {setContext({enabled:false});availability.current?.(false);setError('');}
         return;
@@ -52,7 +56,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
       if (available?.enabled!==true) throw Error('unavailable');
       const ctx = await requestJSON(base + '/context');
       if (alive.current !== generation || reads.current.context !== serial) return;
-      if (ctx?.enabled===false) {reads.current.selected++;setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);setError('建议暂不可用，请刷新。');return;}
+      if (ctx?.enabled===false) {alive.current++;reads.current.selected++;setBusy('');setReachable(false);setDocuments([]);setPreview(null);setChecked({});setState(null);setError('建议暂不可用，请刷新。');return;}
       if (ctx?.enabled!==true) throw Error('unavailable');
       const list = await requestJSON(base + '/preparations');
       await verifyIdentity();
@@ -89,10 +93,10 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     try {
       if(!locks?.request)throw Error('无法安全保存申请');
       await locks.request(key,{mode:'exclusive'},async()=>{
-        await verifyIdentity();
+        await verifyIdentity();if(alive.current!==generation)return;
         // Another tab may have completed while this tab was waiting.
         const current=await requestJSON(base+'/preparations');
-        await verifyIdentity();
+        await verifyIdentity();if(alive.current!==generation)return;
         let original=JSON.parse(storage.getItem(key)||'null');
         if(current.items.length){
           const matching=original&&current.items.find(item=>item.request_id===original.request_id);
@@ -107,14 +111,17 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
           original=save(storage,key,{policy_id:crypto.randomUUID(),request_id:crypto.randomUUID(),source_title:source.title,
             goal_hash:context.goal_hash,head_hash:context.head_hash,expires_at:context.expires_at,
             max_tokens:context.max_tokens,selection:source.selection});
-          setPending(original);
+          if(alive.current===generation)setPending(original);
         }
+        if(alive.current!==generation)return;
         const issued=await call(base+'/policy',{request_id:original.policy_id,expected_goal_hash:original.goal_hash,
           expected_mature_head_hash:original.head_hash,expires_at:original.expires_at,
           limits:{max_tokens:original.max_tokens,max_request_bytes:50000,max_evidence_items:2},reason:'准备业务建议'});
+        if(alive.current!==generation)return;
         const result=await call(base+'/preparations',{policy_ref:issued.policy_ref,request:{request_id:original.request_id,
           expected_goal_hash:original.goal_hash,expected_mature_head_hash:original.head_hash,
           document_source:original.selection,reason:'准备业务建议'}});
+        if(alive.current!==generation)return;
         storage.setItem(key+':active',result.plan_id);if(storage.getItem(key+':active')!==result.plan_id)throw Error('无法保存申请');
         storage.removeItem(key);
         if(alive.current===generation){setPending(null);setSelected(result.plan_id);await refresh();}
