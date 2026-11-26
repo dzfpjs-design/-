@@ -7,6 +7,7 @@ import json
 import os
 import re
 from datetime import timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -216,7 +217,8 @@ def test_real_http_to_worker_and_recovered_result(monkeypatch, spool_root):
         mark('confirmed')
         assert client.get(dispatch).json()['state'] == 'waiting'
         port = int(os.environ['GA_TEST_SYNTHETIC_PROVIDER_PORT'])
-        with provider(port, content=json.dumps(opinion),
+        request_stats=os.environ.get('GA_TEST_SYNTHETIC_REQUEST_STATS')
+        with provider(port, content=json.dumps(opinion), request_log=Path(request_stats) if request_stats else None,
                 usage={'prompt_tokens': 3, 'completion_tokens': 2, 'total_tokens': 5}) as server:
             run = run_worker_process()
             mark('worker_returned')

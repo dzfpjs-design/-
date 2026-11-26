@@ -49,10 +49,25 @@ def disposable_database():
     yield
     engine().dispose()
     assert _test_name.startswith("ga_test_")
-    with _admin.connect() as conn:
-        conn.execute(text('DROP DATABASE "' + _test_name + '" WITH (FORCE)'))
+    retain = os.environ.get('GA_TEST_RETAIN_SYNTHETIC_CLUSTER') == '1'
+    if retain:
+        # Only the explicitly designated, private disposable runner can retain
+        # this generated DB; never infer a retention request for other suites.
+        import json
+        root=Path(_expected_data_dir).resolve().parent
+        marker=root/'retain-synthetic-run.json'
+        assert root.name.startswith('advice-race-pg-') and marker.is_file() and not marker.is_symlink()
+        assert json.loads(marker.read_text()) == {'schema':'isolated-advice-retention-v1'}
+        import shutil
+        target=root/'evidence'
+        assert not target.exists() and not target.is_symlink()
+        shutil.move(evidence_dir.name, target)
+        evidence_dir._finalizer.detach()
+    else:
+        with _admin.connect() as conn:
+            conn.execute(text('DROP DATABASE "' + _test_name + '" WITH (FORCE)'))
     _admin.dispose()
-    evidence_dir.cleanup()
+    if not retain:evidence_dir.cleanup()
 
 
 @pytest.fixture()
