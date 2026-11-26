@@ -57,6 +57,16 @@ def test_parallel_synthetic_read_counters_are_not_lost(monkeypatch):
     codec._verified_decode_json.cache_clear()
 
 
+def test_counts_loaded_state_checks_without_retaining_identifiers(monkeypatch):
+    from generic_agents import same_goal_advice_read_session_v2 as isolation
+    monkeypatch.setattr(isolation, '_check_loaded_state', lambda *_: None)
+    probe = install(monkeypatch)
+    assert isolation._check_loaded_state(None, None, 'sensitive-synthetic-id') is None
+    metrics = probe.snapshot()
+    assert metrics['check_loaded_state']['calls'] == 1
+    assert 'sensitive-synthetic-id' not in json.dumps(metrics)
+
+
 def test_profiled_worker_help_writes_private_numeric_metrics_without_database(tmp_path):
     metrics = tmp_path / 'worker.jsonl'
     root = Path(__file__).resolve().parents[1]
