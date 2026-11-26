@@ -1,16 +1,8 @@
-.advice-evidence-explanation{background:#fff}
-.advice-evidence-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap}
-.advice-evidence-heading h4{margin:0;font-size:1.1rem}
-.advice-evidence-explanation h5{margin:0;font-size:1rem}
-.advice-evidence-heading p{margin:.4rem 0 .75rem}
-.advice-evidence-explanation button{min-height:36px;padding:.4rem .8rem;border:1px solid #9dbdf2;border-radius:.4rem;background:#fff;color:#145ac8;font:inherit;cursor:pointer}
+.advice-evidence-explanation{margin:.65rem 0;padding:.05rem 0 .05rem .75rem;border-left:2px solid #c6daf7;font-size:.94rem;line-height:1.45}
+.advice-evidence-explanation p{margin:.3rem 0}
+.advice-evidence-explanation button{padding:.1rem .25rem;border:0;background:transparent;color:#145ac8;font:inherit;text-decoration:underline;cursor:pointer}
 .advice-evidence-explanation button:disabled{opacity:.6;cursor:default}
 .advice-evidence-explanation button:focus-visible,.advice-evidence-explanation summary:focus-visible{outline:2px solid #145ac8;outline-offset:2px}
-.advice-evidence-counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem;margin:.8rem 0}
-.advice-evidence-counts div{padding:.7rem;border-radius:.4rem;background:#f3f7fc}
-.advice-evidence-counts dt{font-size:.9rem;color:#536b8c}
-.advice-evidence-counts dd{margin:.2rem 0 0;font-weight:600}
-.advice-evidence-explanation details{margin:.75rem 0}
+.advice-evidence-explanation details{margin:.3rem 0}
 .advice-evidence-explanation summary{cursor:pointer;color:#145ac8}
 .advice-evidence-explanation time{overflow-wrap:anywhere}
-@media(max-width:520px){.advice-evidence-counts{grid-template-columns:1fr}}
