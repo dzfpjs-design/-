@@ -259,3 +259,28 @@ for(const pendingStep of ['policy','preparation']) test(`disabling during ${pend
   assert.equal(prepareWrites,pendingStep==='policy'?0:1);assert.ok(JSON.parse(storage.getItem(key)).request_id);assert.match(document.body.textContent,/已有申请暂不可用/);
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
 });
+
+test('a delayed identity check cannot start a write after service is disabled',async()=>{
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
+ const keys=['window','document','navigator','IS_REACT_ACT_ENVIRONMENT'];const old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
+ globalThis.window=dom.window;globalThis.document=dom.window.document;Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});let root;try{
+  const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/AdvicePreparationV2.jsx');
+  let disabled=false,holdIdentity=false,release,entered,refresh,writes=0;
+  const waiting=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
+  const request=async(path,options={})=>{
+   if(path==='/me'){if(holdIdentity){holdIdentity=false;entered();await waiting;}return {workspace_id:'w',user_id:'u',role:'admin'};}
+   if(path.endsWith('/availability'))return disabled?{enabled:false,has_unfinished:true}:{enabled:true};
+   if(path.endsWith('/context'))return {enabled:true,can_prepare:false,sources:[],model:'DeepSeek'};
+   if(path.endsWith('/preparations'))return {items:[{plan_id:'plan',request_id:'one',phase:'review'}]};
+   if(path.endsWith('/preparations/plan'))return {phase:'review',can_preview:true,version:1,goal_hash:'g',head_hash:'h'};
+   if(path.endsWith('/documents'))return {documents:[{id:'a',text:'合成资料',version:1,authorized:true}]};
+   if(options.method==='POST'){writes++;return {};}
+   throw Error('unexpected');
+  };
+  root=createRoot(document.getElementById('root'));await act(async()=>root.render(React.createElement(Panel,{account:{workspace_id:'w',user_id:'u',role:'admin'},task:{id:'t'},requestJSON:request,storage:dom.window.localStorage,onRefreshReady:value=>{refresh=value;}})));
+  holdIdentity=true;await act(async()=>[...document.querySelectorAll('button')].find(item=>item.textContent==='查看分析内容').click());await started;
+  disabled=true;await act(async()=>{await refresh();});await act(async()=>{release();await new Promise(resolve=>setTimeout(resolve,20));});
+  assert.equal(writes,0);assert.match(document.body.textContent,/已有申请暂不可用/);
+ }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
+});

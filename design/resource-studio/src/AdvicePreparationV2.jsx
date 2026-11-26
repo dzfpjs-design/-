@@ -29,7 +29,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     if(me?.user_id!==account?.user_id||me?.workspace_id!==account?.workspace_id||me?.role!==account?.role)
       throw Object.assign(Error('identity changed'),{status:403});
   },[requestJSON,account?.user_id,account?.workspace_id,account?.role]);
-  const call = useCallback(async(url, body) => {await verifyIdentity();const result=await requestJSON(url, {method:'POST', body:JSON.stringify(body)});await verifyIdentity();return result;}, [requestJSON,verifyIdentity]);
+  const call = useCallback(async(url, body, generation) => {await verifyIdentity();if(alive.current!==generation)throw Error('state changed');const result=await requestJSON(url, {method:'POST', body:JSON.stringify(body)});await verifyIdentity();return result;}, [requestJSON,verifyIdentity]);
   const denied = useCallback((error,generation)=>{
     if(alive.current!==generation||![401,403].includes(error?.status))return false;
     alive.current++;reads.current.context++;reads.current.selected++;setReachable(false);setContext(null);setItems([]);setSelected('');setState(null);setDocuments([]);setChecked({});setPreview(null);setPending(null);setBusy('');setError('登录状态已变化，请重新登录。');
@@ -116,11 +116,11 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
         if(alive.current!==generation)return;
         const issued=await call(base+'/policy',{request_id:original.policy_id,expected_goal_hash:original.goal_hash,
           expected_mature_head_hash:original.head_hash,expires_at:original.expires_at,
-          limits:{max_tokens:original.max_tokens,max_request_bytes:50000,max_evidence_items:2},reason:'准备业务建议'});
+          limits:{max_tokens:original.max_tokens,max_request_bytes:50000,max_evidence_items:2},reason:'准备业务建议'},generation);
         if(alive.current!==generation)return;
         const result=await call(base+'/preparations',{policy_ref:issued.policy_ref,request:{request_id:original.request_id,
           expected_goal_hash:original.goal_hash,expected_mature_head_hash:original.head_hash,
-          document_source:original.selection,reason:'准备业务建议'}});
+          document_source:original.selection,reason:'准备业务建议'}},generation);
         if(alive.current!==generation)return;
         storage.setItem(key+':active',result.plan_id);if(storage.getItem(key+':active')!==result.plan_id)throw Error('无法保存申请');
         storage.removeItem(key);
@@ -131,14 +131,14 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
   };
   const process = async () => {
     if(busy||!reachable||!selected)return;const generation=alive.current;setBusy('process');setError('');
-    try {await call(base+'/preparations/'+encodeURIComponent(selected)+'/documents',{});if(alive.current===generation)await load(selected);}
+    try {await call(base+'/preparations/'+encodeURIComponent(selected)+'/documents',{},generation);if(alive.current===generation)await load(selected);}
     catch (error) {if(!denied(error,generation)&&alive.current===generation)setError('资料暂未整理完成，请刷新后重试。');}
     finally {if(alive.current===generation)setBusy('');}
   };
   const authorize = async item => {
     if(busy||!reachable||!checked[item.id])return;const generation=alive.current;setBusy(item.id);setError('');
     try {await call(base+'/preparations/'+encodeURIComponent(selected)+'/consent',{
-      evidence_id:item.id,expected_version:item.version,confirmed:true,reason:'用户确认发送资料分析'});
+      evidence_id:item.id,expected_version:item.version,confirmed:true,reason:'用户确认发送资料分析'},generation);
       if(alive.current===generation)await load(selected);}
     catch (error) {if(!denied(error,generation)&&alive.current===generation)setError('授权结果待确认，请刷新后查看。');}
     finally {if(alive.current===generation)setBusy('');}
@@ -149,7 +149,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
       let request=JSON.parse(storage.getItem(previewKey)||'null');
       if(!request) request=save(storage,previewKey,{request_id:crypto.randomUUID(),expected_plan_version:state.version,
         expected_goal_hash:state.goal_hash,expected_mature_head_hash:state.head_hash,reason:'核对分析内容'});
-      const result=await call(base+'/preparations/'+encodeURIComponent(selected)+'/preview',request);
+      const result=await call(base+'/preparations/'+encodeURIComponent(selected)+'/preview',request,generation);
       const display=presentPreview(result.display);
       if(alive.current===generation)setPreview(display);
     } catch (error) {if(!denied(error,generation)&&alive.current===generation)setError('预览暂不可用，请刷新后重试。');}
