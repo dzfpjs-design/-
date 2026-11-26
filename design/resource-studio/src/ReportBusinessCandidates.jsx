@@ -25,6 +25,9 @@ export default function ReportBusinessCandidates({bundle, workspace, liveWorkspa
  // person signs in again. The marker is never rendered, logged or persisted.
  const sessionMarker=sessionToken();
  const scope=JSON.stringify([account?.user_id||'',account?.username||'',account?.workspace_id||'',account?.role||'',sessionMarker]);
+ const sessionRef=useRef({scope,epoch:0}),mounted=useRef(false);
+ if(sessionRef.current.scope!==scope)sessionRef.current={scope,epoch:sessionRef.current.epoch+1};
+ const sessionEpoch=sessionRef.current.epoch;
  const identity=JSON.stringify([scope,fingerprint]),identityRef=useRef(identity);identityRef.current=identity;
  const visiblePreview=preview?.identity===identity?preview.value:null;
  const ready=currentCandidateMaterial(bundle,materials,materialReadStatus);
@@ -36,7 +39,7 @@ export default function ReportBusinessCandidates({bundle, workspace, liveWorkspa
   globalThis.window?.addEventListener('focus',check);globalThis.document?.addEventListener('visibilitychange',check);
   return ()=>{globalThis.window?.removeEventListener('focus',check);globalThis.document?.removeEventListener('visibilitychange',check);};
  },[identity]);
- useEffect(()=>()=>{generation.current++;controller.current?.abort();},[]);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;generation.current++;controller.current?.abort();};},[]);
  if(!bundle||!Array.isArray(bundle.candidates)||!bundle.candidates.length)return null;
  async function load() {
   if(busy||!ready||sessionToken()!==sessionMarker)return;
@@ -54,18 +57,21 @@ export default function ReportBusinessCandidates({bundle, workspace, liveWorkspa
  }
  async function revalidate() {
   if(busy||!canManage||!canRevalidate||!prepareDraft||!onAdopt||sessionToken()!==sessionMarker)return;
-  const current=++generation.current,abort=new AbortController(),valid=()=>current===generation.current&&identityRef.current===identity&&sessionToken()===sessionMarker;controller.current=abort;setBusy(true);setError('');setNotice('');let saved=false,dispatched=false;
+  const current=++generation.current,abort=new AbortController(),sameSession=()=>mounted.current&&sessionRef.current.scope===scope&&sessionRef.current.epoch===sessionEpoch&&sessionToken()===sessionMarker,valid=()=>current===generation.current&&identityRef.current===identity&&sameSession();controller.current=abort;setBusy(true);setError('');setNotice('');let saved=false,dispatched=false;
   try {
    const revision=await prepareDraft();if(!valid())return;
    dispatched=true;const result=await request('/setup/candidates/revalidate',{method:'POST',body:JSON.stringify({revision}),signal:abort.signal});
    if(!valid())return;
    if(!result?.draft?.configuration?.businessCandidates||!result?.preview?.material||!Number.isInteger(result.draft.revision))throw Error('核对结果暂无法确认，请刷新后查看。');
    saved=true;await onAdopt(result.draft,{actor_id:account?.user_id,workspace_id:account?.workspace_id});
+   // Adopting the new revision may update the bundle and invalidate the old
+   // preview, but its material list still needs a fresh read in this session.
+   if(!sameSession())return;
+   await onRefreshMaterials?.();
    if(!valid())return;
    const flows=Object.values(result.draft.configuration.flows||{}),unresolved=flows.some(flow=>flow?.candidateKey&&(flow.candidateUnresolvedSources?.length||flow.steps?.some(step=>step.candidateUnresolvedSources?.length)));
    setPreview(null);setNotice(unresolved?'部分依据仍待核，请查看相应业务。':result.preview.material.status==='parsed'?'依据已重新核对。':'依据已重新核对，资料仍有内容待核。');
-   await onRefreshMaterials?.();
-  } catch(e) {if(valid())setError(saved?'核对结果已保存，请刷新后查看。':!dispatched?'当前输入尚未保存，请先处理保存状态。':e?.status===409?'资料或配置已变化，请刷新后重试。':'核对结果暂未确认，请刷新后查看。');}
+  } catch(e) {if(valid()||saved&&sameSession())setError(saved?'核对结果已保存，请刷新后查看。':!dispatched?'当前输入尚未保存，请先处理保存状态。':e?.status===409?'资料或配置已变化，请刷新后重试。':'核对结果暂未确认，请刷新后查看。');}
   finally {if(valid()){setBusy(false);controller.current=null;}}
  }
  function add(key) {
