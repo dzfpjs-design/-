@@ -62,11 +62,16 @@ def _request(client, expected_auth=None):
 
 
 def provider_address():
-    # Restrict to the fixed public IPv4 endpoint; TLS certificate/hostname
-    # verification remains the responsibility of the client end-to-end.
+    # Fixed host only. Some local tunnel clients use the benchmark range as
+    # a DNS fake-IP map. Permit that exact range as well as public unicast;
+    # the client must still validate the provider hostname and TLS chain.
     values = {entry[4][0] for entry in socket.getaddrinfo(HOST, PORT, socket.AF_INET, socket.SOCK_STREAM)}
-    if not values or any(not ipaddress.ip_address(value).is_global for value in values):
-        raise ValueError('provider DNS contained a non-public IPv4 address')
+    def allowed(value):
+        address = ipaddress.ip_address(value)
+        return (address.version == 4 and not address.is_multicast
+                and (address.is_global or address in ipaddress.ip_network('198.18.0.0/15')))
+    if not values or any(not allowed(value) for value in values):
+        raise ValueError('provider DNS contained a disallowed IPv4 address')
     return sorted(values)[0], PORT
 
 

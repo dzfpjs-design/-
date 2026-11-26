@@ -7,10 +7,11 @@ import threading
 import unittest
 import ssl
 import subprocess
+from unittest.mock import patch
 
 import httpx
 
-from scripts.synthetic_once_proxy import tunnel
+from scripts.synthetic_once_proxy import provider_address, tunnel
 
 
 class ProxyTests(unittest.TestCase):
@@ -32,6 +33,7 @@ class ProxyTests(unittest.TestCase):
             except Exception as exc:
                 errors.append(exc)
             finally:
+                upstream.close()
                 proxy.close()
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
@@ -73,6 +75,17 @@ class ProxyTests(unittest.TestCase):
         worker.join(3); c.close(); service.close()
         self.assertEqual(len(errors), 1)
         self.assertFalse((self.root/'provider-connect-attempt').exists())
+
+    def test_only_public_or_specific_virtual_dns_addresses_are_accepted(self):
+        def answer(*values):
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', (value, 443)) for value in values]
+        with patch('socket.getaddrinfo', return_value=answer('198.18.1.3')) as query:
+            self.assertEqual(provider_address(), ('198.18.1.3', 443))
+            query.assert_called_once_with('api.deepseek.com', 443, socket.AF_INET, socket.SOCK_STREAM)
+        for addresses in ((), ('127.0.0.1',), ('10.2.3.4',), ('192.168.1.1',),
+                          ('169.254.2.3',), ('224.0.0.1',), ('198.18.1.3','127.0.0.1')):
+            with self.subTest(addresses=addresses), patch('socket.getaddrinfo', return_value=answer(*addresses)):
+                with self.assertRaises(ValueError): provider_address()
 
     def test_httpx_proxy_preserves_tls_hostname_and_blocks_repeat(self):
         cert, key = self.root/'cert.pem', self.root/'key.pem'
