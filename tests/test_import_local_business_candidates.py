@@ -24,11 +24,16 @@ CREDS = {'cookie': 'session=synthetic-secret', 'csrf_token': 'synthetic-csrf',
 
 
 def candidate():
+    step = {'key': 'observe', 'name': '收集信息', 'purpose': '', 'agent': '业务智能体', 'role': '',
+            'output': '结果', 'condition': '', 'next_key': 'end', 'else_key': 'end',
+            'inference_reason': '建议', 'sources': []}
+    def business(key, name):
+        return {'key': key, 'name': name, 'trigger': '触发', 'output': '结果',
+                'inference_reason': '建议', 'sources': [], 'steps': [copy.deepcopy(step)]}
     return {'schema': 'setup-business-candidates-v1', 'origin': 'local_summary',
             'material': {'id': None, 'version': None, 'hash': HASH,
                          'engine': 'native-docx-v1', 'status': 'needs_binding'},
-            'candidates': [{'key': 'one', 'name': '合成业务', 'sources': [], 'steps': []},
-                           {'key': 'two', 'name': '另一项', 'sources': [], 'steps': []}]}
+            'candidates': [business('one', '合成业务'), business('two', '另一项')]}
 
 
 def material():
@@ -57,9 +62,12 @@ class FakeAPI:
         if path == '/api/setup/candidates/preview':
             material_value = copy.deepcopy(body['material'])
             if self.mode == 'changed_preview': material_value['version'] += 1
-            return 200, {'material': material_value,
-                         'candidates': [{'key': item['key'], 'citations': [], 'unresolved_sources': []}
-                                        for item in body['candidates']]}
+            candidates = copy.deepcopy(body['candidates'])
+            for item in candidates:
+                item.update(citations=[], unresolved_sources=[])
+                for step in item['steps']:step.update(citations=[], unresolved_sources=[])
+            if self.mode == 'changed_step':candidates[0]['steps'][0]['purpose'] = '发生改变'
+            return 200, {'material': material_value, 'candidates': candidates}
         if path == '/api/setup/draft':
             return 200, {'revision': self.revision, 'configuration': copy.deepcopy(self.configuration)}
         if path == '/api/setup/candidates':
@@ -140,7 +148,7 @@ def test_initializes_a_new_empty_draft_without_misreporting_success():
     assert 'businessCandidates' in api.configuration
 
 
-@pytest.mark.parametrize('mode', ['viewer', 'changed_preview'])
+@pytest.mark.parametrize('mode', ['viewer', 'changed_preview', 'changed_step'])
 def test_bad_identity_or_changed_preview_never_writes(mode):
     api = FakeAPI();api.mode = mode
     with pytest.raises(module.ImportStopped):module.import_candidates(api, CREDS, candidate())
@@ -176,6 +184,12 @@ def test_uncertain_result_never_claims_success_or_repeats(mode):
 
 def test_duplicate_candidate_keys_never_write():
     api = FakeAPI();value = candidate();value['candidates'][1]['key'] = value['candidates'][0]['key']
+    with pytest.raises(module.ImportStopped):module.import_candidates(api, CREDS, value)
+    assert calls(api, '/api/setup/candidates') == 0
+
+
+def test_candidate_missing_explicit_default_never_writes():
+    api = FakeAPI();value = candidate();del value['candidates'][0]['steps'][0]['condition']
     with pytest.raises(module.ImportStopped):module.import_candidates(api, CREDS, value)
     assert calls(api, '/api/setup/candidates') == 0
 
