@@ -28,6 +28,8 @@ from .goal_evaluation_append_api_v299 import router as evaluation_append_router
 router.include_router(evaluation_append_router)
 from .same_goal_advice_api_v304 import router as business_advice_router
 router.include_router(business_advice_router)
+from .same_goal_advice_setup_api_candidate_v2 import router as advice_setup_v2_router
+router.include_router(advice_setup_v2_router)
 from .same_goal_advice_offline_api_candidate_v2 import router as offline_document_router
 router.include_router(offline_document_router)
 from .same_goal_advice_recovery_api_candidate_v2 import router as advice_recovery_router
