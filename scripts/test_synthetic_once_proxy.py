@@ -44,11 +44,18 @@ class ProxyTests(unittest.TestCase):
             'dump_sha256': hashlib.sha256(fake_dump).hexdigest(),
             'key_sha256': hashlib.sha256(fake_key).hexdigest(), 'files': {},
         }))
-        argv = ['runner', '--checkpoint', str(checkpoint), '--pg-bin', '/usr/bin',
-                '--mode', 'live', '--credential-fd', '3']
-        with patch.object(sys, 'argv', argv), patch('socket.socket', side_effect=AssertionError('network reached')):
-            with self.assertRaisesRegex(RuntimeError, 'live mode disabled'):
-                runner_main()
+        read_fd, write_fd = os.pipe()
+        os.write(write_fd, b'not-a-real-test-key'); os.close(write_fd)
+        try:
+            argv = ['runner', '--checkpoint', str(checkpoint), '--pg-bin', '/usr/bin',
+                    '--mode', 'live', '--credential-fd', str(read_fd)]
+            with patch.object(sys, 'argv', argv), patch('socket.socket', side_effect=AssertionError('network reached')):
+                with self.assertRaisesRegex(RuntimeError, 'live mode disabled'):
+                    runner_main()
+            # The disabled mode rejects before consuming any supplied secret.
+            self.assertEqual(os.read(read_fd, 4097), b'not-a-real-test-key')
+        finally:
+            os.close(read_fd)
         self.assertFalse((self.root/'provider-connect-attempt').exists())
 
     def test_direct_live_modules_reject_even_fake_mode(self):
