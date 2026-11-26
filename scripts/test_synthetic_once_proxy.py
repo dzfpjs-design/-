@@ -87,6 +87,25 @@ class ProxyTests(unittest.TestCase):
             with self.subTest(addresses=addresses), patch('socket.getaddrinfo', return_value=answer(*addresses)):
                 with self.assertRaises(ValueError): provider_address()
 
+    def test_sender_sandbox_cannot_reach_unapproved_local_port(self):
+        allowed, denied = socket.socket(), socket.socket()
+        try:
+            allowed.bind(('127.0.0.1', 0)); allowed.listen(1)
+            denied.bind(('127.0.0.1', 0)); denied.listen(1)
+            permitted, other = allowed.getsockname()[1], denied.getsockname()[1]
+            profile = (f'(version 1) (allow default) (deny network*) '
+                       f'(allow network-outbound (remote ip "localhost:{permitted}"))')
+            program = ('import socket,sys; '
+                       'a=socket.socket(); a.settimeout(3); good=a.connect_ex(("127.0.0.1",int(sys.argv[1]))); '
+                       'b=socket.socket(); b.settimeout(3); bad=b.connect_ex(("127.0.0.1",int(sys.argv[2]))); '
+                       'raise SystemExit(0 if good==0 and bad==1 else 2)')
+            result = subprocess.run(['/usr/bin/sandbox-exec', '-p', profile, '/usr/bin/python3',
+                                     '-c', program, str(permitted), str(other)],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            self.assertEqual(result.returncode, 0)
+        finally:
+            allowed.close(); denied.close()
+
     def test_httpx_proxy_preserves_tls_hostname_and_blocks_repeat(self):
         cert, key = self.root/'cert.pem', self.root/'key.pem'
         subprocess.run(['/usr/bin/openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
