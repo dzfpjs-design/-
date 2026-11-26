@@ -29,7 +29,7 @@ test('confirmation page exposes business/step evidence, retires stale refs befor
   const Setup=await component(directory),initial=workspace();let saved=initial;
   const props={runtime:true,account,step:1,workspace:initial,onCommit:value=>{saved=structuredClone(value);return true;},onSave:async()=>{},onGo(){},onRegisterGuard(){},Icon:'span',Btn:'button',Field:'label',Dialog:'section'};
   ui=mount(Setup,props);await ui.flush();
-  let rendered=text(ui.render());for(const value of ['业务整体原文-C','业务模型解释-C','步骤模型解释-A','模型推断说明','不是原文证明'])assert.ok(rendered.includes(value),value);
+  let rendered=text(ui.render());for(const value of ['业务整体原文-C','业务模型解释-C','步骤模型解释-A','建议说明','不是原文证明'])assert.ok(rendered.includes(value),value);
   function edit(label,value){const field=nodes(ui.render()).find(node=>node.type==='label'&&node.props.label===label);assert.ok(field,label);nodes(field).find(node=>['input','textarea','select'].includes(node.type)).props.onChange({target:{value}});ui.render();}
   edit('资料依据','B');
   let first=saved.flows.核查业务.steps[0];assert.equal(first.sourceId,'B');assert.equal(first.citation,'');assert.deepEqual(first.citations,[]);assert.equal(first.inferenceReason,'');assert.equal(first.basisHistory[0].sourceId,'A');assert.equal(saved.flows.核查业务.confirmedSignature,null);
@@ -71,4 +71,17 @@ test('flow confirmation blocks explicit incomplete material but preserves histor
  assert.deepEqual(flowProblems(value,flow,[current,{...value.materials[2],status:'parsed'}]),[]);
  value.materials[0].status='parsed';
  assert.deepEqual(flowProblems(value,flow),[]);
+});
+
+test('business page connects saved report candidates to the existing draft commit path',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'flow-candidate-entry-')),previous=Object.fromEntries(['fetch','location','history','window','localStorage','sessionStorage'].map(key=>[key,globalThis[key]]));let ui;
+ const storage={getItem:()=>null,setItem(){},removeItem(){}};
+ Object.assign(globalThis,{localStorage:storage,sessionStorage:storage,fetch:async()=>{throw Error('entry test forbids network');},location:{search:''},history:{replaceState(){}},window:{addEventListener(){},removeEventListener(){}}});
+ try{
+  const Setup=await component(directory),value=workspace();value.businessCandidates={schema:'setup-business-candidates-v1',origin:'local_summary',material:{id:'A',version:1,hash:'hash-A',engine:'native-docx-v1'},candidates:[{key:'one',name:'候选'}]};let saved;
+  const props={runtime:true,account,step:1,workspace:value,canonicalMaterials:[{...value.materials[0],version:1,engine:'native-docx-v1'}],materialStatusRead:'ready',onCommit:next=>{saved=next;return true;},onSave:async()=>{},onGo(){},onRegisterGuard(){},Icon:'span',Btn:'button',Field:'label',Dialog:'section'};
+  ui=mount(Setup,props);await ui.flush();const entry=nodes(ui.render()).find(node=>typeof node.type==='function'&&node.type.name==='ReportBusinessCandidates');
+  assert.ok(entry);assert.equal(entry.props.bundle,value.businessCandidates);assert.equal(entry.props.canManage,true);
+  assert.equal(entry.props.onCommit({...value,businesses:['核查业务','新业务']}),true);assert.deepEqual(saved.businesses,['核查业务','新业务']);
+ }finally{ui?.unmount();Object.assign(globalThis,previous);await rm(directory,{recursive:true,force:true});}
 });
