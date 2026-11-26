@@ -7,7 +7,7 @@ const stamp=value=>{if(!value)return '未知';const date=new Date(value);return 
 const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
 const normal=value=>typeof value==='string'&&value.length<=200&&!/[\u0000-\u001f\u007f]/.test(value);
 const reference=value=>value===''||(typeof value==='string'&&/^GA_MQTT_[A-Z0-9_]{1,80}$/.test(value));
-const notice='本入口读取已上云平台转发的大疆机场状态；不会完成大疆设备上云握手、发送飞行指令或控制设备。';
+const notice='仅接收已上云的机场状态，暂不支持设备上云或飞行控制。';
 const receiverLabel={connecting:'正在连接',subscribing:'正在订阅状态',receiving:'正在接收',backoff:'连接中断，等待重试',blocked:'接入已阻止',stopped:'已停止',standby:'等待其他接收器',paused:'已暂停',stale:'接收器状态已过期',waiting_receiver:'等待接收器'};
 const receiverError={broker_unreachable:'无法连接服务器',broker_rejected:'服务器地址未获授权',subscription_rejected:'服务器拒绝订阅',credentials_missing:'服务端凭据不可用',permission_changed:'接入所有者权限已变化',configuration_changed:'接入配置已变化',storage_failed:'原始报文保存失败',lease_lost:'接收器工作权已失效',connection_lost:'连接已中断',capacity_wait:'等待接收容量',ack_failed:'接收确认失败',packet_rejected:'报文未被接纳',receiver_unavailable:'接收状态暂不可用'};
 
@@ -96,7 +96,7 @@ function Panel({account,Btn,request=json,onRegisterGuard,onOpenMqtt}){
  }
  async function refreshAuthorizations(){try{const o=await req('/dji/cloud/options');if(!Array.isArray(o?.brokers))throw Error('授权选项无法核对');if(alive.current){setOptions(o);setAttempt(x=>x+1)}}catch(e){if(alive.current)setError('服务器授权已更改，但无法刷新选择：'+e.message)}}
  const source=connections?.find(x=>x.id===selected),capability=reading?.connection?.capability??reading?.capability??source?.capability??null,unavailable=source?.configuration_valid===false||source?.authorization_available===false,disabled=busy||!!pending||storageError||!editor;
- return <section className="local-model-card" aria-label="大疆 Cloud API 只读接入"><h2>大疆 Cloud API 只读接入</h2><p>{notice} 当前按 Cloud API 1 机场状态格式接入。</p><p>请先在大疆或第三方上云平台完成设备上云，并准备已授权的 MQTT 接入。精灵 4 RTK 不在 Cloud API 机场支持清单中，须另行核对其遥控器与 SDK。</p>
+ return <section className="local-model-card" aria-label="大疆 Cloud API 只读接入"><h2>大疆 Cloud API 只读接入</h2><p>{notice}</p><details><summary>接入条件</summary><p>本入口不会完成大疆设备上云握手。请先在大疆或第三方上云平台完成设备上云，并准备已授权的 MQTT 接入。当前按 Cloud API 1 机场状态格式接入；精灵 4 RTK 须另行核对其遥控器与 SDK。</p></details>
   {onOpenMqtt&&<Btn onClick={onOpenMqtt}>查看传感器网关</Btn>}
   <ManagedMqttAuthorizations account={account} Btn={Btn} request={request} onChanged={refreshAuthorizations} onRegisterGuard={(guard,previous)=>{if(guard)mqttGuard.current=guard;else if(!previous||mqttGuard.current===previous)mqttGuard.current=null;}}/>
   {error&&<p role="alert">{error}</p>}{statusError&&<p role="alert">{statusError} <Btn onClick={()=>setAttempt(x=>x+1)}>重新读取状态</Btn></p>}{message&&<p role="status">{message}</p>}
