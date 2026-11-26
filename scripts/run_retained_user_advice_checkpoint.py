@@ -113,7 +113,8 @@ def _network_profile(port, provider_port, http_port, context_only):
           (allow network-outbound (remote ip "localhost:{http_port}"))'''
 
 
-def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False,context_only=False):
+def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False,context_only=False,functions_only=False):
+    if functions_only:context_only=True
     if retention_probe and context_only:raise ValueError('probe modes must be distinct')
     pg=Path(pg).resolve();pytest_bin=Path(pytest_bin).resolve();checkpoint=Path(checkpoint).resolve()
     repo=Path(__file__).resolve().parents[1]
@@ -146,6 +147,7 @@ def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False,context_only=Fals
             PYTHONPATH=str(repo/'src')+os.pathsep+str(repo))
         if retention_probe:env['GA_TEST_RETENTION_PROBE']='1'
         if context_only:env['GA_TEST_CONTEXT_ONLY_PROFILE']='1'
+        if functions_only:env['GA_TEST_CONTEXT_FUNCTION_PROFILE']='1'
         profile=_network_profile(port,provider_port,http_port,context_only)
         _write(root/'status.json',{'state':'running','cluster_stopped':False})
         fd=os.open(root/'test.log',os.O_CREAT|os.O_WRONLY|os.O_TRUNC|os.O_NOFOLLOW,0o600)
@@ -154,7 +156,8 @@ def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False,context_only=Fals
             try:
                 process=subprocess.Popen(['/usr/bin/sandbox-exec','-p',profile,sys.executable,
                     str(repo/'scripts'/'synthetic_process_anchor.py'),str(result_write),str(pytest_bin),'-q',
-                    'tests/test_advice_context_profile_only_pg.py' if context_only else
+                    ('tests/test_advice_context_profile_only_pg.py::test_read_only_context_profile_on_fresh_synthetic_checkpoint'
+                        if functions_only else 'tests/test_advice_context_profile_only_pg.py') if context_only else
                     'tests/test_synthetic_retention_probe_pg.py' if retention_probe else
                     'tests/test_advice_user_real_http_checkpoint_pg.py'],cwd=repo,env=env,
                     stdin=subprocess.PIPE,stdout=out,stderr=subprocess.STDOUT,start_new_session=True,
@@ -199,12 +202,14 @@ def main():
     parser.add_argument('--timeout',type=int,default=1200)
     parser.add_argument('--retention-probe',action='store_true',help='run only the deliberate isolated failure probe')
     parser.add_argument('--context-only',action='store_true',help='profile only context GET in an isolated PG with outbound limited to PG')
+    parser.add_argument('--functions-only',action='store_true',help='profile one GET handler using a fixed function whitelist')
     args=parser.parse_args()
     if args.cleanup:cleanup(args.cleanup);return 0
-    if args.retention_probe and args.context_only:parser.error('choose only one probe mode')
+    if args.retention_probe and (args.context_only or args.functions_only):parser.error('choose only one probe mode')
     if not args.pg_bin or not args.pytest or not args.checkpoint or not 1<=args.timeout<=7200:
         parser.error('supply --pg-bin, --pytest and --checkpoint')
-    return run(args.pg_bin,args.pytest,args.checkpoint,args.timeout,args.retention_probe,args.context_only)
+    return run(args.pg_bin,args.pytest,args.checkpoint,args.timeout,args.retention_probe,
+               args.context_only or args.functions_only,args.functions_only)
 
 
 if __name__=='__main__':sys.exit(main())
