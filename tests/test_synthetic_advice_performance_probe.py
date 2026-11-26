@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from types import ModuleType, SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -77,6 +78,7 @@ def test_sql_timings_record_only_counts_even_on_error(monkeypatch):
         metrics = probe.snapshot()
         assert metrics['session_execute']['calls'] == 2
         assert metrics['connection_execute']['calls'] == 2
+        assert metrics['connection_other']['calls'] == 2
         assert metrics['driver_execute']['calls'] == 1
         assert all(type(value) is int and value >= 0
                    for entry in metrics.values() for value in entry.values())
@@ -85,6 +87,47 @@ def test_sql_timings_record_only_counts_even_on_error(monkeypatch):
             assert secret not in encoded
     finally:
         engine.dispose()
+
+
+def test_sql_unknown_module_is_aggregated_without_its_name(monkeypatch):
+    probe = install(monkeypatch)
+    namespace = {'__name__': 'generic_agents.private_synthetic_module', 'text': text}
+    exec('def query(conn):\n    return conn.execute(text("select 1"))', namespace)
+    engine = create_engine('sqlite:///:memory:')
+    try:
+        with engine.connect() as conn:
+            assert namespace['query'](conn).scalar_one() == 1
+        metrics = probe.snapshot()
+        assert metrics['connection_other_app']['calls'] == 1
+        assert 'private_synthetic_module' not in json.dumps(metrics)
+    finally:
+        engine.dispose()
+
+
+def test_scoped_repeat_counts_are_ephemeral_and_aliases_are_instrumented(monkeypatch):
+    from generic_agents import services
+    alias = ModuleType('generic_agents.synthetic_alias_test')
+    alias.scoped = services.scoped
+    monkeypatch.setitem(sys.modules, alias.__name__, alias)
+    probe = install(monkeypatch)
+    assert alias.scoped is services.scoped
+    original_salt = probe._scoped_salt
+    actor = SimpleNamespace(workspace_id='private-workspace', user_id='private-user')
+    class SyntheticModel: pass
+    session_a, session_b = object(), object()
+    probe.record_scoped(session_a, SyntheticModel, 'private-record', actor, False)
+    probe.record_scoped(session_a, SyntheticModel, 'private-record', actor, False)
+    probe.record_scoped(session_b, SyntheticModel, 'private-record', actor, False)
+    probe.record_scoped(session_b, SyntheticModel, 'private-record', actor, True)
+    result = probe.snapshot()
+    repeats = result['scoped_repeats']
+    assert repeats['calls'] == 4
+    assert repeats['repeated_keys'] == 2
+    assert repeats['repeated_in_session'] == 1
+    assert repeats['locked_calls'] == 1
+    assert not probe._scoped_seen and not probe._scoped_sessions
+    assert probe._scoped_salt != original_salt
+    assert all(value not in json.dumps(result) for value in ('private-workspace', 'private-user', 'private-record'))
 
 
 def test_counts_loaded_state_checks_without_retaining_identifiers(monkeypatch):

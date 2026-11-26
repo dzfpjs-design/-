@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -26,6 +27,28 @@ def test_synthetic_ports_exclude_formal_services_and_each_other(monkeypatch):
     candidates = iter((55486, 8766, 32001, 32001, 32002, 55486, 32003))
     monkeypatch.setattr(module, '_port', lambda: next(candidates))
     assert module._isolated_ports() == (32001, 32002, 32003)
+
+
+@pytest.mark.skipif(not Path('/usr/bin/sandbox-exec').is_file(), reason='macOS sandbox required')
+def test_context_only_sandbox_allows_only_its_dedicated_database_port():
+    module = runner_module()
+    pg_port, provider_port, http_port = module._isolated_ports()
+    with socket.socket() as pg, socket.socket() as provider:
+        pg.bind(('127.0.0.1', pg_port)); pg.listen(1)
+        provider.bind(('127.0.0.1', provider_port)); provider.listen(1)
+        program = '''import errno, socket, sys
+with socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=2): pass
+try:
+    socket.create_connection(("127.0.0.1", int(sys.argv[2])), timeout=2)
+except OSError as exc:
+    assert exc.errno in (errno.EPERM, errno.EACCES)
+else:
+    raise AssertionError("unexpected provider access")
+'''
+        result = subprocess.run(['/usr/bin/sandbox-exec', '-p', module._network_profile(
+            pg_port, provider_port, http_port, True), sys.executable, '-c', program,
+            str(pg_port), str(provider_port)], capture_output=True, timeout=10)
+        assert result.returncode == 0
 
 
 def test_synthetic_ports_fail_closed_when_only_conflicts_are_available(monkeypatch):
