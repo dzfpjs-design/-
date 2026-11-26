@@ -14,7 +14,6 @@ import TaskApprovalPanelV175 from './TaskApprovalPanelV175';
 import SameGoalAdviceV310 from './SameGoalAdviceV310.jsx';
 import OfflineDocumentDelegationV2 from './OfflineDocumentDelegationV2.jsx';
 import AdviceResponseRecoveryV2 from './AdviceResponseRecoveryV2.jsx';
-import AdviceEvidenceExplanationV2 from './AdviceEvidenceExplanationV2.jsx';
 import {isManagedApprovalTask,approvalExecutionAllowed} from './layered-approval-v175.mjs';
 import {readWorkspaceBuckets} from './graph-task-controller.mjs';
 import {createWorkspaceReadCoalescerV142,WORKSPACE_READ_STALE_V142} from './workspace-read-coalescer-v142.mjs';
@@ -503,7 +502,6 @@ export default function BusinessWorkspace({instanceId,account,Btn,Field,onBack,o
  {task&&<OfflineDocumentDelegationV2 key={account.user_id+':'+account.workspace_id+':offline-document:'+task.id} account={taskAccount} task={task} requestJSON={json}/>}
  {task&&<AdviceResponseRecoveryV2 key={account.user_id+':'+account.workspace_id+':advice-recovery:'+task.id} account={account} task={task} requestJSON={json} onRecovered={()=>refreshCurrentTask(task.id)}/>}
  {task&&<SameGoalAdviceV310 key={account.user_id+':'+account.workspace_id+':business-advice:'+task.id} account={taskAccount} task={task} Btn={Btn} requestJSON={json} onRegisterGuard={registerSameGoalAdviceGuard} onSaved={()=>refreshCurrentTask(task.id)}/> }
- {task&&<AdviceEvidenceExplanationV2 key={account.user_id+':'+account.workspace_id+':advice-evidence:'+task.id} account={taskAccount} task={task} requestJSON={json}/>}
  {task?.graph_runtime&&<GraphHumanBudgetPanel task={task} account={taskAccount} request={json} Btn={Btn}
   onSaved={()=>refreshCurrentTask(task.id)} onRegisterGuard={registerGraphHumanBudgetGuard}/>}
  {task&&task.perception_event&&(task.graph_runtime||isManagedApprovalTask(task))&&<section className="local-model-card"><PerceptionTaskEvidence {...{task,account,Btn}}/></section>}

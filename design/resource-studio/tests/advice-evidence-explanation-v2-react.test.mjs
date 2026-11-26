@@ -8,7 +8,7 @@ const capability={kind:'capability_declaration',source_scope:'provided_excerpt',
 const observation={kind:'observation',source_scope:'provided_source_text',observed_at:'2026-11-25T00:00:00Z',freshness:'current',source_types:['observation']};
 const evidence=(overrides={})=>({has_recommendation:true,capability_count:1,observation_count:0,other_count:0,observation_state:'not_cited',partial_source_count:1,items:[capability],...overrides});
 
-test('evidence display stays truthful across disabled, uncertainty, paging and account changes',async()=>{
+test('one selected plan controls visible evidence and stale responses cannot cross plans',async()=>{
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/'});
  const keys=['window','document','navigator','IS_REACT_ACT_ENVIRONMENT'];
  const old=new Map(keys.map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
@@ -18,77 +18,68 @@ test('evidence display stays truthful across disabled, uncertainty, paging and a
  let root;try{
   const {createRoot}=await import('react-dom/client');
   const {default:Panel}=await server.ssrLoadModule('/src/AdviceEvidenceExplanationV2.jsx');
+  const {Opinion}=await server.ssrLoadModule('/src/SameGoalAdviceV310.jsx');
   root=createRoot(document.getElementById('root'));
-  let enabled=false,items=[],cursor=null,fail=false,failPage=false,calls=[];
-  const request=async(path)=>{
-   calls.push(path);if(fail)throw Error('PRIVATE-ERROR');
-   if(path.includes('?cursor=')){
-    if(failPage)throw Error('PRIVATE-PAGE-ERROR');
-    return {enabled:true,items:[{state:'ready',evidence:evidence({partial_source_count:0})}],next_cursor:null};
-   }
-   return {enabled,items,next_cursor:cursor};
-  };
-  const account={workspace_id:'work',user_id:'user',role:'operator'};
-  const render=(id='task',who=account)=>React.createElement(Panel,{account:who,task:{id},requestJSON:request});
+  let enabled=false,items=[],fail=false,calls=[];
+  const request=async(path)=>{calls.push(path);if(fail)throw Error('PRIVATE-ERROR');return {enabled,items,next_cursor:null};};
+  const account={workspace_id:'work',user_id:'user',role:'operator'}, task={id:'task'};
+  const render=(planId='plan-A',who=account)=>React.createElement(Panel,{account:who,task,planId,requestJSON:request});
+  const remount=async element=>{await act(async()=>{root.unmount();root=createRoot(document.getElementById('root'));root.render(element);});};
   await act(async()=>root.render(render()));
-  assert.equal(document.body.textContent,'');assert.match(calls[0],/\/workspace\/tasks\/task\/business-advice\/evidence-explanation$/);
-  enabled=true;items=[{state:'ready',evidence:evidence()},{state:'needs_review',evidence:{capability_count:999,source_text:'PRIVATE-TEXT'}}];
-  await act(async()=>{root.unmount();root=createRoot(document.getElementById('root'));root.render(render());});
+  assert.equal(document.body.textContent,'');assert.match(calls[0],/\/workspace\/tasks\/task\/business-advice\/evidence-explanation\?plan_id=plan-A$/);
+  enabled=true;items=[{state:'ready',evidence:evidence()}];await remount(render());
   assert.match(document.body.textContent,/已登记能力1 条/);assert.match(document.body.textContent,/现场观测0 条/);
   assert.match(document.body.textContent,/未引用现场观测，设备状态待核/);
   assert.match(document.body.textContent,/包含资料摘录，尚不能代表全文/);
   assert.match(document.body.textContent,/来源：能力资料、资料包、来源待核/);
-  assert.match(document.body.textContent,/依据待核实/);
-  assert.doesNotMatch(document.body.textContent,/PRIVATE-ID|PRIVATE-TEXT|PRIVATE-TYPE|999/);
-  assert.doesNotMatch(document.body.textContent,/校验|内部|实验|候选|Schema|账本/);
+  assert.doesNotMatch(document.body.textContent,/PRIVATE-ID|PRIVATE-TEXT|PRIVATE-TYPE|校验|内部|实验|候选|Schema|账本/);
+  items=[{state:'needs_review',evidence:{capability_count:999,source_text:'PRIVATE-TEXT'}}];
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
+  assert.match(document.body.textContent,/依据待核实/);assert.doesNotMatch(document.body.textContent,/PRIVATE-TEXT|999 条/);
   items=[{state:'ready',evidence:evidence({has_recommendation:false,capability_count:0,partial_source_count:0,items:[]})}];
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
-  assert.match(document.body.textContent,/暂无推荐方案/);assert.doesNotMatch(document.body.textContent,/建议 1/);
-  items=[{state:'ready',evidence:evidence({has_recommendation:undefined})}];
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
-  assert.match(document.body.textContent,/依据待核实/);assert.doesNotMatch(document.body.textContent,/建议 1/);
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());assert.equal(document.body.textContent,'');
+  items=[{state:'ready',evidence:evidence({has_recommendation:undefined})}];await remount(render());
+  assert.match(document.body.textContent,/依据待核实/);
   items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'current',partial_source_count:0,items:[observation]})}];
   await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
   assert.match(document.body.textContent,/已引用现场观测，设备当前状态仍需确认/);
-  assert.doesNotMatch(document.body.textContent,/设备在线|现场已确认/);
-  assert.match(document.body.textContent,/北京时间/);
-  assert.match(document.body.textContent,/在原设定有效期内/);
-  assert.match(document.body.textContent,/来源：观测记录/);
+  assert.match(document.body.textContent,/北京时间/);assert.match(document.body.textContent,/在原设定有效期内/);
+  assert.match(document.body.textContent,/来源：观测记录/);assert.doesNotMatch(document.body.textContent,/设备在线|现场已确认/);
   items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'unknown',partial_source_count:0,
    items:[{...observation,observed_at:null,observed_start:'2026-11-24T00:00:00Z',observed_end:'2026-11-25T00:00:00Z',freshness:'unknown'}]})}];
   await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
-  assert.match(document.body.textContent,/观测时效待核/);assert.match(document.body.textContent,/至/);
-  assert.doesNotMatch(document.body.textContent,/已过期/);
-  items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'stale',partial_source_count:0,
-   items:[{...observation,freshness:'stale'}]})}];
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
-  assert.match(document.body.textContent,/已过期/);
-  items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'current',partial_source_count:0,
-   items:[{...observation,observed_at:'2026-02-30T00:00:00Z'}]})}];
+  assert.match(document.body.textContent,/观测时效待核/);assert.match(document.body.textContent,/至/);assert.doesNotMatch(document.body.textContent,/已过期/);
+  items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'stale',partial_source_count:0,items:[{...observation,freshness:'stale'}]})}];
+  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());assert.match(document.body.textContent,/已过期/);
+  items=[{state:'ready',evidence:evidence({capability_count:0,observation_count:1,observation_state:'current',partial_source_count:0,items:[{...observation,observed_at:'2026-02-30T00:00:00Z'}]})}];
   await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
   assert.match(document.body.textContent,/依据待核实/);assert.doesNotMatch(document.body.textContent,/有效期内/);
   items=[{state:'ready',evidence:evidence({capability_count:99})}];
   await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
   assert.match(document.body.textContent,/依据待核实/);assert.doesNotMatch(document.body.textContent,/99 条/);
-  items=[{state:'ready',evidence:evidence()}];cursor='PRIVATE-CURSOR';
+  items=[{state:'ready',evidence:evidence()},{state:'ready',evidence:evidence()}];
   await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
-  failPage=true;
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='加载更多建议').click());
-  assert.match(document.body.textContent,/加载更多依据失败/);assert.equal(document.querySelectorAll('article').length,1);
-  assert.doesNotMatch(document.body.textContent,/PRIVATE-PAGE-ERROR/);failPage=false;
-  await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='加载更多建议').click());
-  assert.equal(document.querySelectorAll('article').length,2);assert.doesNotMatch(document.body.textContent,/PRIVATE-CURSOR/);
+  assert.match(document.body.textContent,/暂时无法读取建议依据/);assert.doesNotMatch(document.body.textContent,/已登记能力1 条/);
+  items=[{state:'ready',evidence:evidence()}];await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
   fail=true;await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
   assert.match(document.body.textContent,/暂时无法读取建议依据/);assert.doesNotMatch(document.body.textContent,/PRIVATE-ERROR|暂无建议依据/);
-  fail=false;cursor=null;await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());
-  assert.match(document.body.textContent,/未引用现场观测/);
-  enabled=false;await act(async()=>root.render(render('other-task',{...account,workspace_id:'another'})));
-  assert.equal(document.body.textContent,'');
-  let resolveOld;const delayed=path=>path.includes('/old-task/')?new Promise(resolve=>{resolveOld=resolve;}):Promise.resolve({enabled:false,items:[]});
-  const late=(id,who=account)=>React.createElement(Panel,{account:who,task:{id},requestJSON:delayed});
-  await act(async()=>root.render(late('old-task')));
-  await act(async()=>root.render(late('new-task')));
-  await act(async()=>resolveOld({enabled:true,items:[{state:'ready',evidence:evidence()}]}));
-  assert.equal(document.body.textContent,'');
+  fail=false;items=[];await act(async()=>[...document.querySelectorAll('button')].find(x=>x.textContent==='刷新').click());assert.equal(document.body.textContent,'');
+  let resolveOld;const delayed=path=>path.includes('plan_id=old-plan')?new Promise(resolve=>{resolveOld=resolve;}):Promise.resolve({enabled:true,items:[]});
+  const late=planId=>React.createElement(Panel,{account,task,planId,requestJSON:delayed});
+  await act(async()=>root.render(late('old-plan')));await act(async()=>root.render(late('new-plan')));
+  await act(async()=>resolveOld({enabled:true,items:[{state:'ready',evidence:evidence()}]}));assert.equal(document.body.textContent,'');
+  const seen=[], api=async path=>{seen.push(path);return {enabled:true,items:[{state:'ready',evidence:evidence()}]}};
+  const result={model_value:{recommendation:{candidate_ref:'candidate',reason:'请进一步观察',supporting_fact_refs:[]},candidate_reviews:[{candidate_ref:'candidate'}],source_reviews:[],conflicts:[]}};
+  const opinion=(value,planId)=>React.createElement(Opinion,{result:value,account,task,planId,requestJSON:api});
+  await act(async()=>root.render(opinion(result,'plan-A')));
+  const opinionNode=document.querySelector('[aria-label="已保存的模型原建议"]');
+  assert.ok(opinionNode?.querySelector('[aria-label="建议依据"]'));assert.match(seen.at(-1),/plan_id=plan-A$/);
+  const before=seen.length;await act(async()=>root.render(opinion({model_value:{...result.model_value,recommendation:{candidate_ref:null}}},'plan-A')));
+  assert.equal(seen.length,before);assert.equal(document.querySelector('[aria-label="建议依据"]'),null);
+  await act(async()=>root.render(opinion(result,'plan-B')));assert.match(seen.at(-1),/plan_id=plan-B$/);
+  const afterPlanB=seen.length;await act(async()=>root.render(opinion(null,'plan-B')));
+  assert.equal(seen.length,afterPlanB);assert.equal(document.querySelector('[aria-label="建议依据"]'),null);
+  await act(async()=>root.render(opinion(result,'')));assert.equal(seen.length,afterPlanB);
+  await act(async()=>root.render(opinion(result,'plan/unsafe?x=1')));assert.match(seen.at(-1),/plan_id=plan%2Funsafe%3Fx%3D1$/);
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}
 });
