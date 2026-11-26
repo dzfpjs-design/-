@@ -20,6 +20,38 @@ def runner_module():
     return module
 
 
+def test_synthetic_ports_exclude_formal_services_and_each_other(monkeypatch):
+    module = runner_module()
+    candidates = iter((55486, 8766, 32001, 32001, 32002, 55486, 32003))
+    monkeypatch.setattr(module, '_port', lambda: next(candidates))
+    assert module._isolated_ports() == (32001, 32002, 32003)
+
+
+def test_synthetic_ports_fail_closed_when_only_conflicts_are_available(monkeypatch):
+    module = runner_module()
+    attempts = []
+    monkeypatch.setattr(module, '_port', lambda: attempts.append(55486) or 55486)
+    with pytest.raises(RuntimeError, match='isolated ports'):
+        module._isolated_ports()
+    assert 0 < len(attempts) <= 100
+
+
+def test_no_retention_directory_when_port_selection_exhausted(tmp_path, monkeypatch):
+    module = runner_module()
+    pg = tmp_path / 'pg'
+    pg.mkdir()
+    for name in ('initdb', 'pg_ctl', 'psql'):
+        (pg / name).touch()
+    checkpoint = tmp_path / 'checkpoint'
+    checkpoint.mkdir()
+    monkeypatch.setattr(module, '_port', lambda: 8766)
+    roots = []
+    monkeypatch.setattr(module, 'private_root', lambda: roots.append('created'))
+    with pytest.raises(RuntimeError, match='isolated ports'):
+        module.run(pg, Path(sys.executable), checkpoint, 10, retention_probe=True)
+    assert not roots
+
+
 def test_failed_parent_does_not_leave_a_running_child(tmp_path):
     marker = tmp_path / 'child-continued'
     ready = tmp_path / 'child-ready'

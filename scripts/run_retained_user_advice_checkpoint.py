@@ -17,6 +17,7 @@ import tempfile
 import time
 
 SCHEMA = 'isolated-advice-retention-v1'
+PROTECTED_SERVICE_PORTS = frozenset({55486, 8766})
 
 
 def _write(path, value):
@@ -58,6 +59,18 @@ def _port():
         s.bind(('127.0.0.1',0));return s.getsockname()[1]
 
 
+def _isolated_ports():
+    """Select distinct loopback ports without choosing known service ports."""
+    selected=[]
+    for _ in range(60):
+        candidate=_port()
+        if (type(candidate) is int and 1 <= candidate <= 65535
+            and candidate not in PROTECTED_SERVICE_PORTS and candidate not in selected):
+            selected.append(candidate)
+            if len(selected)==3:return tuple(selected)
+    raise RuntimeError('could not select three distinct isolated ports')
+
+
 def _stop_test_process_group(process):
     """Stop our session and confirm its process group has disappeared."""
     try:os.killpg(process.pid,signal.SIGTERM)
@@ -89,8 +102,8 @@ def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False):
         or not pytest_bin.is_file() or not checkpoint.is_dir() or (repo/'.env').exists()
         or not Path('/usr/bin/sandbox-exec').is_file()):
         raise RuntimeError('isolated runtime requirements not met')
-    root=private_root();data=root/'data';port,provider_port,http_port=_port(),_port(),_port()
-    if len({port,provider_port,http_port})!=3:raise RuntimeError('could not reserve distinct ports')
+    port,provider_port,http_port=_isolated_ports()
+    root=private_root();data=root/'data'
     base={key:os.environ[key] for key in ('PATH','HOME','TMPDIR','LANG','LC_ALL') if key in os.environ}
     base.update(DEEPSEEK_API_KEY='',DASHSCOPE_API_KEY='')
     start_attempted=False;test_processes_stopped=True;outcome='error';exit_code=None;began=time.monotonic()
