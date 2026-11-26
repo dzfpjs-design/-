@@ -47,9 +47,10 @@ def _source_expiry(db,p,prep):
     return min(deadlines) if deadlines else None
 
 
-def issue(db,p,task_id,plan_id,job_id,lease_token,call_id,intent_id):
+def issue(db,p,task_id,plan_id,job_id,lease_token,call_id,intent_id,*,worker_proof=None):
     guard.require_disposable_database(db)
     old.need(db.get_nested_transaction() is None and not db.new and not db.dirty and not db.deleted)
+    worker=leases._worker_scope(db,p,task_id,plan_id,job_id,worker_proof)
     old._reader(db,p,write=True)
     task=old.existing._task(db,p,task_id,lock=True);lock_current_actor(db,p)
     plan=db.scalar(select(Plan).where(Plan.workspace_id==p.workspace_id,Plan.id==plan_id,Plan.task_id==task.id)
@@ -64,15 +65,30 @@ def issue(db,p,task_id,plan_id,job_id,lease_token,call_id,intent_id):
     preview=old._fresh(db,p,Audit,data['preview_ref']['id'])
     safety.lock_current(db,p,task,prep,preview.data['preview_record'])
     previews.verify_current_for_start(db,p,task,plan,prep,preview,started=True,
-        reserved_test_only=True,intent_test_only=True)
+        reserved_test_only=True,intent_test_only=True,**leases._worker_kwargs(worker_proof))
     # This is only a locked local absence check, not an unsent proof or grant.
     storage.check_no_local_response_for_permit(db,p.workspace_id,call_id,intent_id)
-    current._check_current(db,p,task.id,prep['budget']['policy_ref'])
+    current._check_current(db,p,task.id,prep['budget']['policy_ref'],**leases._worker_kwargs(worker_proof))
     safety.check_goal(db,p,task.id,prep);safety.check_freshness(db,p,prep)
     safety.check_evidence_bytes(db,p,preview.data['preview_record'])
-    session=db.get(AuthSession,p.session_id);policy=db.get(Audit,prep['budget']['policy_ref']['id'])
+    policy=db.get(Audit,prep['budget']['policy_ref']['id'])
+    if worker is None:
+        session=db.get(AuthSession,p.session_id)
+        control_until=None;grant_until=None
+    else:
+        from . import same_goal_advice_dispatch_delegation_candidate_v2 as delegation
+        original=delegation.verify_original(db,p.workspace_id,task.id,plan.id,worker['delegation_id'])
+        old.need(original['actor_id']==p.user_id and original['job_id']==job.id)
+        session=db.get(AuthSession,original['session_id'])
+        control_job=db.get(Job,worker_proof['control_id'])
+        old.need(session is not None and session.user_id==p.user_id and control_job is not None
+            and control_job.workspace_id==p.workspace_id and control_job.lease_until is not None)
+        control_until=control_job.lease_until;grant_until=instant(original['expires_at'])
+    old.need(session is not None and policy is not None)
     now=db.scalar(select(func.clock_timestamp()));tick=time.monotonic()
     deadlines=[now+timedelta(seconds=MAX_SECONDS),job.lease_until,session.expires_at,instant(policy.data['expires_at'])]
+    if control_until is not None:deadlines.append(control_until)
+    if grant_until is not None:deadlines.append(grant_until)
     if task.data['goal_spec'].get('deadline'):deadlines.append(instant(task.data['goal_spec']['deadline']))
     source_expiry=_source_expiry(db,p,prep)
     if source_expiry:deadlines.append(source_expiry)
@@ -89,7 +105,7 @@ def issue(db,p,task_id,plan_id,job_id,lease_token,call_id,intent_id):
     value['record_hash']=contracts.record_hash(value)
     permit=Audit(id=value['audit_id'],workspace_id=p.workspace_id,actor_id=p.user_id,action=ACTION,
         object_id=plan.id,created_at=now,data=value)
-    current._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'])
+    current._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'],**leases._worker_kwargs(worker_proof))
     safety.bind_commit_guard(db,p,task.id,prep,preview.data['preview_record'])
     leases._bind_commit_guard(db,p,job.id,lease_token)
     call=old._fresh(db,p,CloudCall,call_id);allocated=old._fresh(db,p,Audit,data['reservation_ref']['id'])

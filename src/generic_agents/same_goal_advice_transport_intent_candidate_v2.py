@@ -30,7 +30,7 @@ _FIELDS={'schema','audit_id','workspace_id','actor_id','task_id','plan_id','job_
     'request_hash','dispatch_options_hash','token_bound','created_at','record_hash'}
 
 
-def _verify_live_reservation(db,p,task,plan,job,lease_token,call_id):
+def _verify_live_reservation(db,p,task,plan,job,lease_token,call_id,*,worker_proof=None):
     # This fixed test-only reader checks original Start, lease, document,
     # preview, v2 claim, CloudCall, receipt and daily ledger. It accepts no
     # caller-provided verifier and is not a transport grant.
@@ -41,8 +41,8 @@ def _verify_live_reservation(db,p,task,plan,job,lease_token,call_id):
     preview=store._fresh(db,p,Audit,reservation.data['preview_ref']['id'])
     call=store._fresh(db,p,CloudCall,call_id)
     safety.lock_current(db,p,task,prep,preview.data['preview_record'])
-    previews.verify_current_for_start(db,p,task,plan,prep,preview,started=True,reserved_test_only=True)
-    current._check_current(db,p,task.id,prep['budget']['policy_ref'])
+    previews.verify_current_for_start(db,p,task,plan,prep,preview,started=True,reserved_test_only=True,**leases._worker_kwargs(worker_proof))
+    current._check_current(db,p,task.id,prep['budget']['policy_ref'],**leases._worker_kwargs(worker_proof))
     return {'prep':prep,'preview':preview,'reservation':reservation,'call':call}
 
 
@@ -122,9 +122,10 @@ def _bind(db,p,rows,expected):
 
 
 @store.checked
-def issue(db,p,task_id,plan_id,job_id,lease_token,call_id):
+def issue(db,p,task_id,plan_id,job_id,lease_token,call_id,*,worker_proof=None):
     guard.require_disposable_database(db)
     store.need(db.get_nested_transaction() is None and not db.new and not db.dirty and not db.deleted)
+    leases._worker_scope(db,p,task_id,plan_id,job_id,worker_proof)
     store._reader(db,p,write=True)
     task=store.existing._task(db,p,task_id,lock=True);lock_current_actor(db,p)
     plan=db.scalar(select(Plan).where(Plan.workspace_id==p.workspace_id,Plan.id==plan_id,Plan.task_id==task.id)
@@ -140,7 +141,7 @@ def issue(db,p,task_id,plan_id,job_id,lease_token,call_id):
     except DBAPIError as error:
         if getattr(error.orig,'sqlstate',None)!='55P03':raise
         raise HTTPException(409,'原云账本正在修改，请保留原记录稍后核对') from error
-    proof=_verify_live_reservation(db,p,task,plan,job,lease_token,call_id)
+    proof=_verify_live_reservation(db,p,task,plan,job,lease_token,call_id,**leases._worker_kwargs(worker_proof))
     store.need(type(proof) is dict and set(proof)=={'prep','preview','reservation','call'} )
     prep,preview,reservation,call=(proof[k] for k in ('prep','preview','reservation','call'))
     store.need(type(call) is CloudCall and call.id==call_id and call.workspace_id==p.workspace_id
@@ -190,7 +191,7 @@ def issue(db,p,task_id,plan_id,job_id,lease_token,call_id):
     old_file=db.info.get('v2_file_intent_commit_guard');old_goal=db.info.get('v2_start_goal_commit_guard')
     old_lease=db.info.get('v2_send_lease_commit_guard')
     try:
-        current._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'])
+        current._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'],**leases._worker_kwargs(worker_proof))
         safety.bind_commit_guard(db,p,task.id,prep,preview.data['preview_record'])
         leases._bind_commit_guard(db,p,job.id,lease_token)
         db.add(audit);db.flush()

@@ -25,6 +25,7 @@ from . import same_goal_advice_response_spool_test_v2 as spool
 from . import same_goal_advice_spool_recovery_candidate_v2 as spool_recovery
 from . import same_goal_advice_store_v302 as store
 from . import same_goal_advice_transport_intent_candidate_v2 as intents
+from . import same_goal_advice_unlimited_lease_candidate_v2 as leases
 from . import same_goal_advice_unlimited_store_v2 as custody
 from .config import settings
 from .db import engine
@@ -60,20 +61,28 @@ def _test_endpoint():
     return 'http://127.0.0.1:'+value+'/chat/completions'
 
 
-def execute(p,task_id,plan_id,job_id,lease_token,call_id):
+def execute(p,task_id,plan_id,job_id,lease_token,call_id,*,worker_proof=None):
     """Provider candidate: disabled by default and still disposable-DB-only."""
+    if worker_proof is not None:
+        raise gateway.ModelBlocked('后台委托派发暂不可用于真实服务')
     if settings().v2_deepseek_dispatch_enabled is not True:
         raise gateway.ModelBlocked('V2 DeepSeek 派发尚未启用')
     return _execute(p,task_id,plan_id,job_id,lease_token,call_id,_PRODUCTION)
 
 
-def execute_synthetic_test_only(p,task_id,plan_id,job_id,lease_token,call_id):
+def execute_synthetic_test_only(p,task_id,plan_id,job_id,lease_token,call_id,*,worker_proof=None):
     """Use only a test server on 127.0.0.1, never a provider credential."""
-    return _execute(p,task_id,plan_id,job_id,lease_token,call_id,_SYNTHETIC)
+    return _execute(p,task_id,plan_id,job_id,lease_token,call_id,_SYNTHETIC,**leases._worker_kwargs(worker_proof))
 
 
-def _execute(p,task_id,plan_id,job_id,lease_token,call_id,mode):
+def _execute(p,task_id,plan_id,job_id,lease_token,call_id,mode,*,worker_proof=None):
     store.need(mode is _PRODUCTION or mode is _SYNTHETIC)
+    store.need(worker_proof is None or mode is _SYNTHETIC)
+    if worker_proof is not None:
+        with Session(engine()) as db:
+            guard.require_disposable_database(db)
+            leases._worker_scope(db,p,task_id,plan_id,job_id,worker_proof)
+            db.rollback()
     if mode is _PRODUCTION and settings().v2_deepseek_dispatch_enabled is not True:
         raise gateway.ModelBlocked('V2 DeepSeek 派发尚未启用')
     if settings().v2_response_spool_enabled is not True or settings().v2_response_spool_root is None:
@@ -97,18 +106,18 @@ def _execute(p,task_id,plan_id,job_id,lease_token,call_id,mode):
     try:reservation=spool.allocate(settings().v2_response_spool_root,call_id)
     except spool.SpoolError as error:raise gateway.ModelBlocked('业务建议首答暂存不可用，当前派发已拒绝，请核查已有记录：'+error.code) from None
     with reservation:
-        return _execute_reserved(p,task_id,plan_id,job_id,lease_token,call_id,mode,execution,reservation)
+        return _execute_reserved(p,task_id,plan_id,job_id,lease_token,call_id,mode,execution,reservation,**leases._worker_kwargs(worker_proof))
 
 
-def _execute_reserved(p,task_id,plan_id,job_id,lease_token,call_id,mode,execution,reservation):
+def _execute_reserved(p,task_id,plan_id,job_id,lease_token,call_id,mode,execution,reservation,*,worker_proof=None):
     with Session(engine()) as db:
         guard.require_disposable_database(db)
-        made=intents.issue(db,p,task_id,plan_id,job_id,lease_token,call_id)
+        made=intents.issue(db,p,task_id,plan_id,job_id,lease_token,call_id,**leases._worker_kwargs(worker_proof))
         store.need(made['replayed'] is False and made['transport_authorized'] is False)
         db.commit()
     intent_id=made['intent_audit_id']
     with Session(engine()) as db:
-        permission=permits.issue(db,p,task_id,plan_id,job_id,lease_token,call_id,intent_id)
+        permission=permits.issue(db,p,task_id,plan_id,job_id,lease_token,call_id,intent_id,**leases._worker_kwargs(worker_proof))
         if mode is _PRODUCTION:
             endpoint,key,current_execution=_production_access_after_permit(db,p,plan_id)
             store.need(current_execution==execution and current_execution['model']==permission['model'])

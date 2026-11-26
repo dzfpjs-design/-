@@ -15,6 +15,7 @@ from . import same_goal_advice_unlimited_preview_candidate_v2 as previews
 from .contracts import digest
 from .models import Audit, Job, Plan, uid
 from .relations import lock_current_actor
+from .security import Principal
 from .temporal import instant
 from . import same_goal_advice_contracts_v302 as contracts
 
@@ -73,23 +74,41 @@ def verify(db,p,task,plan,send_job,start_event,event):
     return value
 
 
+def _worker_scope(db,p,task_id,plan_id,job_id,worker_proof):
+    """Verify the isolated control lease; never invent an HTTP principal."""
+    if worker_proof is None:
+        return None
+    from . import same_goal_advice_dispatch_control_candidate_v2 as control
+    store.need(type(p) is Principal and p.session_id=='worker' and p.role in {'admin','operator'})
+    checked=control.verify_worker(db,worker_proof)
+    store.need(checked['workspace_id']==p.workspace_id and checked['actor_id']==p.user_id
+        and checked['task_id']==task_id and checked['plan_id']==plan_id
+        and (job_id is None or checked['job_id']==job_id))
+    return checked
+
+
+def _worker_kwargs(worker_proof):
+    return {} if worker_proof is None else {'worker_proof':worker_proof}
+
+
 @store.checked
-def acquire(db,p,task_id,plan_id):
+def acquire(db,p,task_id,plan_id,*,worker_proof=None):
     guard.require_disposable_database(db);store._reader(db,p,write=True)
+    checked_worker=_worker_scope(db,p,task_id,plan_id,None,worker_proof)
     task=store.existing._task(db,p,task_id,lock=True);lock_current_actor(db,p)
     plan=db.scalar(select(Plan).where(Plan.id==store.existing._id(plan_id),Plan.workspace_id==p.workspace_id,
         Plan.task_id==task.id).with_for_update().execution_options(populate_existing=True))
     store.need(plan is not None and plan.status=='awaiting_dispatch')
     prep,_=custody.read_started(db,p,task,plan)
     start_event=store._fresh(db,p,Audit,plan.data[start.POINTER]['audit_id'])
-    store.need(start_event.actor_id==p.user_id)
+    store.need(start_event.actor_id==p.user_id and (checked_worker is None or checked_worker['job_id']==plan.data[start.POINTER]['job_id']))
     job=db.scalar(select(Job).where(Job.workspace_id==p.workspace_id,Job.id==plan.data[start.POINTER]['job_id'])
         .with_for_update().execution_options(populate_existing=True))
     preview=store._fresh(db,p,Audit,plan.data[start.POINTER]['preview_id'])
     store.need(preview.action==previews.ACTION)
     safety.lock_current(db,p,task,prep,preview.data['preview_record'])
-    previews.verify_current_for_start(db,p,task,plan,prep,preview,started=True)
-    current._check_current(db,p,task.id,prep['budget']['policy_ref'])
+    previews.verify_current_for_start(db,p,task,plan,prep,preview,started=True,**_worker_kwargs(worker_proof))
+    current._check_current(db,p,task.id,prep['budget']['policy_ref'],**_worker_kwargs(worker_proof))
     now=db.scalar(select(func.clock_timestamp()))
     if job.status=='running':
         store.need(job.lease_until>now,'原发送租约已到期；保留原号等待核对')
@@ -105,7 +124,7 @@ def acquire(db,p,task_id,plan_id):
     previous_file=db.info.get('v2_file_intent_commit_guard');previous_goal=db.info.get('v2_start_goal_commit_guard')
     previous_lease=db.info.get('v2_send_lease_commit_guard')
     try:
-        current._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'])
+        current._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'],**_worker_kwargs(worker_proof))
         safety.bind_commit_guard(db,p,task.id,prep,preview.data['preview_record'])
         with db.begin_nested():
             job.status='running';job.attempts=1;job.version+=1;job.lease_token=token;job.lease_until=end

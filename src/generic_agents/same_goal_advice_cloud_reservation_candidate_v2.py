@@ -58,12 +58,12 @@ def _ended(db,transaction):
     if transaction.parent is None:_unbind(db)
 
 
-def _bind(db,p,task_id,plan_id,job_id,lease_token,lease_id,start_id,preview_id,call_id,audit_id,expected):
+def _bind(db,p,task_id,plan_id,job_id,lease_token,lease_id,start_id,preview_id,call_id,audit_id,expected,*,worker_proof=None):
     store.need(db.info.get('v2_cloud_reservation_test_guard') is None)
     def check(session):
         # Fail closed on caller changes made after our explicit flush.
         store.need(not session.new and not session.dirty and not session.deleted)
-        current._check_current(session,p,task_id,expected['policy_ref'])
+        current._check_current(session,p,task_id,expected['policy_ref'],**leases._worker_kwargs(worker_proof))
         task=store.existing._task(session,p,task_id,lock=True)
         plan=store._fresh(session,p,Plan,plan_id)
         job=session.scalar(select(Job).where(Job.workspace_id==p.workspace_id,Job.id==job_id)
@@ -105,9 +105,10 @@ def _bind(db,p,task_id,plan_id,job_id,lease_token,lease_id,start_id,preview_id,c
 
 
 @store.checked
-def reserve(db,p,task_id,plan_id,job_id,lease_token):
+def reserve(db,p,task_id,plan_id,job_id,lease_token,*,worker_proof=None):
     guard.require_disposable_database(db)
     store.need(db.get_nested_transaction() is None and not db.new and not db.dirty and not db.deleted)
+    leases._worker_scope(db,p,task_id,plan_id,job_id,worker_proof)
     store._reader(db,p,write=True)
     task=store.existing._task(db,p,task_id,lock=True);lock_current_actor(db,p)
     plan=db.scalar(select(Plan).where(Plan.workspace_id==p.workspace_id,Plan.id==plan_id,Plan.task_id==task.id)
@@ -125,8 +126,8 @@ def reserve(db,p,task_id,plan_id,job_id,lease_token):
     lease_event=events[0];leases.verify(db,p,task,plan,job,start_event,lease_event)
     recheck_started=db.scalar(select(func.clock_timestamp()))
     safety.lock_current(db,p,task,prep,saved_preview.data['preview_record'])
-    preview.verify_current_for_start(db,p,task,plan,prep,saved_preview,started=True)
-    current._check_current(db,p,task.id,prep['budget']['policy_ref'])
+    preview.verify_current_for_start(db,p,task,plan,prep,saved_preview,started=True,**leases._worker_kwargs(worker_proof))
+    current._check_current(db,p,task.id,prep['budget']['policy_ref'],**leases._worker_kwargs(worker_proof))
     recheck_completed=db.scalar(select(func.clock_timestamp()))
     store.need(type(recheck_started) is datetime and type(recheck_completed) is datetime
         and recheck_started.tzinfo is not None and recheck_completed.tzinfo is not None
@@ -180,7 +181,7 @@ def reserve(db,p,task_id,plan_id,job_id,lease_token):
     db.execute(text('INSERT INTO public.ga_test_advice_v2_dispatch_claims '
         '(workspace_id,job_id,plan_id,cloud_call_id,audit_id) VALUES (:w,:j,:p,:c,:a)'),
         {'w':p.workspace_id,'j':job.id,'p':plan.id,'c':call_id,'a':audit_id})
-    current._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'])
+    current._bind_commit_guard(db,p,task.id,prep['budget']['policy_ref'],**leases._worker_kwargs(worker_proof))
     safety.bind_commit_guard(db,p,task.id,prep,saved_preview.data['preview_record'])
     expected={'policy_ref':copy.deepcopy(prep['budget']['policy_ref']),'start_hash':digest(start_event.data),
         'lease_hash':digest(lease_event.data),'preview_hash':digest(saved_preview.data),
@@ -191,7 +192,7 @@ def reserve(db,p,task_id,plan_id,job_id,lease_token):
         'audit_created_at':receipt.created_at,'scalar_pins':{name:_scalar_pin(row) for name,row in
             {'task':task,'plan':plan,'job':job,'start':start_event,'lease':lease_event,
              'preview':saved_preview,'audit':receipt,'cloud':call,'daily':daily}.items()}}
-    _bind(db,p,task.id,plan.id,job.id,lease_token,lease_event.id,start_event.id,saved_preview.id,call_id,audit_id,expected)
+    _bind(db,p,task.id,plan.id,job.id,lease_token,lease_event.id,start_event.id,saved_preview.id,call_id,audit_id,expected,**leases._worker_kwargs(worker_proof))
     return {'cloud_call_id':call_id,'reservation_audit_id':audit_id,'transport_authorized':False,
         'send_outcome':'unknown','usage_unavailable':True}
 
