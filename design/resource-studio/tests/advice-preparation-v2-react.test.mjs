@@ -212,6 +212,8 @@ for (const operation of ['process','authorize','preview']) test(`disabling while
   if(operation==='authorize')await act(async()=>document.querySelector('input[type=checkbox]').click());
   const label={process:'整理资料',authorize:'确认授权',preview:'查看分析内容'}[operation];
   await act(async()=>[...document.querySelectorAll('button')].find(item=>item.textContent===label).click());await started;
+  const pendingLabel={process:'正在整理…',authorize:'正在保存…',preview:'正在准备…'}[operation];
+  assert.ok([...document.querySelectorAll('button')].some(item=>item.textContent===pendingLabel&&item.disabled),'pending action remains visible and disabled');
   disabled=true;await act(async()=>{await refresh();});const before=docReads,beforeMe=meReads;
   await act(async()=>{release();await new Promise(resolve=>setTimeout(resolve,20));});
   assert.match(document.body.textContent,/已有申请暂不可用/);
@@ -255,6 +257,7 @@ for(const pendingStep of ['policy','preparation']) test(`disabling during ${pend
   };
   root=createRoot(document.getElementById('root'));await act(async()=>root.render(React.createElement(Panel,{account:{workspace_id:'w',user_id:'u',role:'admin'},task:{id:'t'},requestJSON:request,storage,locks:{request:async(_name,_opts,callback)=>callback()},onRefreshReady:value=>{refresh=value;}})));
   await act(async()=>[...document.querySelectorAll('button')].find(item=>item.textContent==='使用批准资料').click());await started;
+  assert.ok([...document.querySelectorAll('button')].some(item=>item.textContent==='正在准备…'&&item.disabled),'preparation shows that work is in progress');
   disabled=true;await act(async()=>{await refresh();});await act(async()=>{release();await new Promise(resolve=>setTimeout(resolve,20));});
   assert.equal(prepareWrites,pendingStep==='policy'?0:1);assert.ok(JSON.parse(storage.getItem(key)).request_id);assert.match(document.body.textContent,/已有申请暂不可用/);
  }finally{if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [k,v] of old){if(v)Object.defineProperty(globalThis,k,v);else delete globalThis[k];}}

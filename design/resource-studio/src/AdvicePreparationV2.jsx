@@ -164,7 +164,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
   if(!context?.enabled&&!error)return null;
   return <div className="advice-user-panel">
     {error&&<p role="alert">{error}</p>}
-    {!selected&&context?.can_prepare&&context.sources.filter(source=>!pending||JSON.stringify(source.selection)===JSON.stringify(pending.selection)).map((source,index)=><button className="btn primary" key={index} type="button" disabled={!!busy||!reachable} onClick={()=>prepare(source)}>{pending?'继续准备':'使用'+source.title}</button>)}
+    {!selected&&context?.can_prepare&&context.sources.filter(source=>!pending||JSON.stringify(source.selection)===JSON.stringify(pending.selection)).map((source,index)=><button className="btn primary" key={index} type="button" aria-live="polite" disabled={!!busy||!reachable} onClick={()=>prepare(source)}>{busy==='prepare'?'正在准备…':pending?'继续准备':'使用'+source.title}</button>)}
     {!selected&&pending&&context?.enabled&&!context.sources.some(source=>JSON.stringify(source.selection)===JSON.stringify(pending.selection))&&<p>原资料暂不可用，请联系管理员核对。</p>}
     {!selected&&context?.enabled&&!context.can_prepare&&<p>请联系管理员准备建议。</p>}
     {state?.phase==='waiting'&&(state.can_process?<button className="btn primary" type="button" disabled={!!busy||!reachable} onClick={process}>{busy==='process'?'正在整理…':'整理资料'}</button>:<p>等待资料整理</p>)}
@@ -172,7 +172,7 @@ export default function AdvicePreparationV2({account, task, requestJSON, onAvail
     {state?.phase==='review'&&state.can_preview&&<><h5>核对资料</h5>{documents.map((item,index)=><article key={item.id}>
       <details><summary>资料 {index+1}</summary><pre style={{whiteSpace:'pre-wrap'}}>{item.text}</pre></details>
       {item.authorized?<p>已授权</p>:<><label><input type="checkbox" checked={!!checked[item.id]} onChange={event=>setChecked({...checked,[item.id]:event.target.checked})}/>同意将资料发送给 {context?.model} 分析</label>{' '}
-      <button className="btn" type="button" disabled={!!busy||!reachable||!checked[item.id]} onClick={()=>authorize(item)}>确认授权</button></>}
+      <button className="btn" type="button" aria-live="polite" disabled={!!busy||!reachable||!checked[item.id]} onClick={()=>authorize(item)}>{busy===item.id?'正在保存…':'确认授权'}</button></>}
     </article>)}
     <button className="btn primary" type="button" disabled={!!busy||!reachable||!state.can_preview||documents.length===0||documents.some(item=>!item.authorized)} onClick={showPreview}>{busy==='preview'?'正在准备…':'查看分析内容'}</button></>}
     {preview&&<><details><summary>分析内容</summary>
