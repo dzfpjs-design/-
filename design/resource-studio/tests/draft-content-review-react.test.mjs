@@ -13,13 +13,12 @@ test('content approval is separate from publication and expires on a local edit'
  const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});
  let root;try{
   const {createRoot}=await import('react-dom/client');
-  const {default:Panel}=await server.ssrLoadModule('/src/DraftContentReview.jsx');
-  const {flowSignature}=await server.ssrLoadModule('/src/setup-schema.js');
+  const {default:Panel,draftContentSignature}=await server.ssrLoadModule('/src/DraftContentReview.jsx');
   const account={user_id:'u',workspace_id:'w',role:'admin'};dom.window.sessionStorage.setItem('ga-setup-csrf','one');
   let w={instanceProfile:{domain:'林业',goal:''},materials:[],businesses:['巡护'],flows:{'巡护':{candidateKey:'patrol',trigger:'按计划',output:'记录',steps:[{id:'1',name:'检查',agent:'业务智能体',output:'记录'}]}}};
   let calls=0,adopted=0;
   const request=async(_path,options)=>{calls++;const body=JSON.parse(options.body);assert.equal(body.action,'confirm');assert.equal(body.revision,7);
-   const next=structuredClone(w);next.flows['巡护'].candidateContentReview={business:'巡护',signature:flowSignature(w,w.flows['巡护']),confirmedAt:'2026-01-01',actor_id:'u'};
+   const next=structuredClone(w);next.flows['巡护'].candidateContentReview={business:'巡护',signature:draftContentSignature(w,w.flows['巡护'],'巡护'),confirmedAt:'2026-01-01',actor_id:'u'};
    return {draft:{revision:8,configuration:next}};};
   const Btn=({children,...props})=>React.createElement('button',props,children);
   const render=()=>React.createElement(Panel,{account,business:'巡护',flow:w.flows['巡护'],workspace:w,liveWorkspace:()=>w,
@@ -31,6 +30,17 @@ test('content approval is separate from publication and expires on a local edit'
   w={...w,flows:{...w.flows,'巡护':{...w.flows['巡护'],output:'新的产出'}}};await act(async()=>root.render(render()));
   assert.match(document.body.textContent,/草案内容待确认/);assert.equal(w.flows['巡护'].confirmedAt,undefined);
  } finally {if(root)await act(async()=>root.unmount());await server.close();dom.window.close();for(const [key,value] of old){if(value)Object.defineProperty(globalThis,key,value);else delete globalThis[key];}}
+});
+
+test('business provenance is part of the local content signature',async()=>{
+ const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});
+ try{
+  const {draftContentSignature}=await server.ssrLoadModule('/src/DraftContentReview.jsx');
+  const flow={candidateKey:'original',trigger:'定时',output:'记录',steps:[]},workspace={instanceProfile:{},materials:[],flows:{巡护:flow}};
+  const original=draftContentSignature(workspace,flow,'巡护');
+  assert.notEqual(original,draftContentSignature(workspace,{...flow,candidateKey:'other'},'巡护'));
+  assert.notEqual(original,draftContentSignature(workspace,{...flow,candidateBasisHash:'changed'},'巡护'));
+ } finally {await server.close();}
 });
 
 test('late approval is never adopted into another session',async()=>{
@@ -85,12 +95,11 @@ test('a material version change immediately conceals an old content approval',as
  Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});globalThis.IS_REACT_ACT_ENVIRONMENT=true;
  const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true}});let root;
  try{
-  const {createRoot}=await import('react-dom/client');const {default:Panel}=await server.ssrLoadModule('/src/DraftContentReview.jsx');
-  const {flowSignature}=await server.ssrLoadModule('/src/setup-schema.js');
+  const {createRoot}=await import('react-dom/client');const {default:Panel,draftContentSignature}=await server.ssrLoadModule('/src/DraftContentReview.jsx');
   const saved={id:'material',name:'报告',version:1,hash:'hash',archived:false};
   const flow={candidateKey:'x',trigger:'定时',output:'记录',steps:[{id:'1',name:'检查',agent:'业务智能体',output:'记录'}],candidateUnresolvedSources:[{material_id:'material',source_text:'原文',quote:'原文',reason:'not_found'}]};
   const w={instanceProfile:{},materials:[saved],flows:{巡护:flow}};
-  flow.candidateContentReview={business:'巡护',signature:flowSignature(w,flow),confirmedAt:'now',actor_id:'u'};
+  flow.candidateContentReview={business:'巡护',signature:draftContentSignature(w,flow,'巡护'),confirmedAt:'now',actor_id:'u'};
   const account={user_id:'u',workspace_id:'w',role:'admin'},Btn=({children,...props})=>React.createElement('button',props,children);
   let canonical=[saved];const render=()=>React.createElement(Panel,{account,business:'巡护',flow,workspace:w,liveWorkspace:()=>w,
    canonicalMaterials:canonical,materialStatusRead:'ready',canManage:true,prepareDraft:async()=>1,onAdopt:async()=>{},Btn});
