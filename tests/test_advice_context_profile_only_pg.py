@@ -90,8 +90,11 @@ def test_read_only_context_profile_on_fresh_synthetic_checkpoint(monkeypatch):
     from generic_agents import typed_payload_codec_v131 as codec, typed_payload_orm_v131 as orm
     from tests.synthetic_request_decode_cache import SyntheticBudget, install as install_cache
     baseline_codec, baseline_orm, baseline_verified = codec.decode_payload, orm.decode_payload, codec._verified_decode_json
-    budget = SyntheticBudget()
-    candidate_decode = install_cache(monkeypatch, budget)
+    cache_mib = int(os.environ.get('GA_TEST_CONTEXT_CACHE_MIB', '4'))
+    assert cache_mib in (4, 16, 32)
+    budget = SyntheticBudget(limit=32 * 1024 * 1024, per_scope=cache_mib * 1024 * 1024)
+    coexist_global = os.environ.get('GA_TEST_CONTEXT_CACHE_COEXIST_GLOBAL') == '1'
+    candidate_decode = install_cache(monkeypatch, budget, disable_process_cache=not coexist_global)
     cache_stats = {}
     @wraps(original_call)
     def scoped_context(*args, **kwargs):
@@ -104,19 +107,29 @@ def test_read_only_context_profile_on_fresh_synthetic_checkpoint(monkeypatch):
     stable = ('enabled', 'title', 'goal_hash', 'head_hash', 'sources', 'model', 'max_tokens', 'can_prepare', 'can_start')
     baseline_response = None
     runs = []
-    for mode in ('baseline', 'candidate', 'baseline', 'candidate'):
+    measure_mode = os.environ.get('GA_TEST_CONTEXT_MEASURE_MODE')
+    assert measure_mode in (None, 'baseline', 'candidate')
+    modes = (measure_mode,) if measure_mode else ('baseline', 'candidate', 'baseline', 'candidate')
+    for mode in modes:
         candidate = mode == 'candidate'
         monkeypatch.setattr(route.dependant, 'call', scoped_context if candidate else original_call)
         monkeypatch.setattr(codec, 'decode_payload', candidate_decode if candidate else baseline_codec)
         monkeypatch.setattr(orm, 'decode_payload', candidate_decode if candidate else baseline_orm)
-        monkeypatch.setattr(codec, '_verified_decode_json', baseline_verified.__wrapped__ if candidate else baseline_verified)
+        monkeypatch.setattr(codec, '_verified_decode_json', baseline_verified.__wrapped__ if candidate and not coexist_global else baseline_verified)
         cache_stats.clear()
         # On macOS this is a process-lifetime high-water mark in bytes, not a
         # per-request allocation measurement; retain both absolute readings.
         rss_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        sampler = None
+        if measure_mode:
+            from tests.synthetic_process_rss import SyntheticRssSampler
+            sampler = SyntheticRssSampler(); sampler.start()
         started = perf_counter_ns()
-        response = client.get(f'/api/workspace/tasks/{task_id}/business-advice-v2/context')
-        elapsed = perf_counter_ns() - started
+        try:
+            response = client.get(f'/api/workspace/tasks/{task_id}/business-advice-v2/context')
+            elapsed = perf_counter_ns() - started
+        finally:
+            sampled_rss = sampler.finish() if sampler else None
         rss_after = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         metrics = probe.snapshot()
         assert response.status_code == 200 and budget.used == 0
@@ -125,7 +138,7 @@ def test_read_only_context_profile_on_fresh_synthetic_checkpoint(monkeypatch):
         else: assert current == baseline_response
         if candidate: assert cache_stats['hits'] > 0
         runs.append({'mode': mode, 'elapsed_ns': elapsed, 'rss_highwater_before_bytes': rss_before,
-                     'rss_highwater_after_bytes': rss_after, 'cache': dict(cache_stats),
+                     'rss_highwater_after_bytes': rss_after, 'sampled_rss': sampled_rss, 'cache': dict(cache_stats),
                      'inclusive_synthetic_metrics': metrics})
     path = Path(os.environ['GA_TEST_TIMING_LOG'])
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
@@ -194,7 +207,9 @@ def test_decode_cache_does_not_hide_committed_data_change_or_permission_revocati
         db.add(task); db.commit()
         user_id, workspace_id, task_id, membership_id = user.id, workspace.id, task.id, membership.id
     principal = Principal(user_id, workspace_id, 'admin', 'synthetic-session')
-    budget = SyntheticBudget()
+    cache_mib = int(os.environ.get('GA_TEST_CONTEXT_CACHE_MIB', '4'))
+    assert cache_mib in (4, 16, 32)
+    budget = SyntheticBudget(limit=32 * 1024 * 1024, per_scope=cache_mib * 1024 * 1024)
     install_cache(monkeypatch, budget)
     with budget.bind(user_id, workspace_id) as scope, Session(engine()) as reader:
         store._reader(reader, principal)

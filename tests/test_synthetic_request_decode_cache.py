@@ -160,3 +160,99 @@ def test_global_budget_remains_bounded_across_concurrent_scopes(monkeypatch):
     with ThreadPoolExecutor(max_workers=8) as pool:
         retained = list(pool.map(task, range(8)))
     assert any(retained) and budget.used == 0
+
+
+def test_sixteen_mib_scopes_compete_under_one_thirty_two_mib_pool(monkeypatch):
+    owner, marker, _value, _envelope, _projection = _record()
+    budget = SyntheticBudget(limit=32 * 1024 * 1024, per_scope=16 * 1024 * 1024)
+    decode = install(monkeypatch, budget)
+    records = []
+    for index in range(24):
+        current_owner = {**owner, 'owner_id': f'synthetic-{index}'}
+        value = {'payload': 'x' * 200_000, 'index': index}
+        records.append((current_owner, value, codec.encode_payload(value, current_owner, marker), codec.canonical_json(value)))
+    barrier = threading.Barrier(4)
+    def task(index):
+        with budget.bind(f'synthetic-actor-{index}', owner['workspace_id']) as scope:
+            for current_owner, value, envelope, projection in records:
+                assert decode(envelope, marker, current_owner, projection) == value
+            barrier.wait(timeout=60)
+            with budget.lock:
+                assert budget.used <= budget.limit and scope.used <= budget.per_scope
+                retained = scope.used
+                bypassed = scope.bypassed
+            return retained, bypassed
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(task, range(4)))
+    assert sum(item[0] for item in results) <= budget.limit
+    assert sum(item[1] for item in results) > 0
+    assert budget.used == 0
+
+
+def test_existing_process_lru_remains_unchanged_and_scope_cache_is_separate(monkeypatch):
+    owner, marker, value, envelope, projection = _record()
+    codec._verified_decode_json.cache_clear()
+    calls = _spy_uncached(monkeypatch)
+    budget = SyntheticBudget()
+    decode = install(monkeypatch, budget, disable_process_cache=False)
+    try:
+        with budget.bind('actor-a', owner['workspace_id']) as first:
+            assert decode(envelope, marker, owner, projection) == value
+            assert decode(envelope, marker, owner, projection) == value
+            assert first.hits == 1 and len(calls) == 1
+        with budget.bind('actor-b', owner['workspace_id']) as second:
+            assert decode(envelope, marker, owner, projection) == value
+            # The new scope did not hit; the pre-existing process LRU can hit.
+            assert second.hits == 0 and len(calls) == 1
+            assert codec._verified_decode_json.cache_info().hits >= 1
+            with pytest.raises(codec.TypedPayloadError):
+                decode(envelope, marker, {**owner, 'owner_id': 'other'}, projection)
+        assert budget.used == 0
+    finally:
+        codec._verified_decode_json.cache_clear()
+
+
+def test_thread_reuse_and_nested_scopes_do_not_reuse_old_cache(monkeypatch):
+    owner, marker, value, envelope, projection = _record()
+    calls = _spy_uncached(monkeypatch)
+    budget = SyntheticBudget()
+    decode = install(monkeypatch, budget)
+    def request(actor):
+        with budget.bind(actor, owner['workspace_id']) as outer:
+            assert decode(envelope, marker, owner, projection) == value
+            with budget.bind(actor + '-nested', owner['workspace_id']) as inner:
+                assert decode(envelope, marker, owner, projection) == value
+                assert inner.hits == 0
+            assert decode(envelope, marker, owner, projection) == value
+            return outer.hits, threading.get_ident()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        first = pool.submit(request, 'actor-a').result()
+        second = pool.submit(request, 'actor-b').result()
+    assert first[0] == second[0] == 1 and first[1] == second[1]
+    assert len(calls) == 4 and budget.used == 0
+
+
+def test_exception_and_cancel_close_scope_and_clear_retained_entries(monkeypatch):
+    owner, marker, value, envelope, projection = _record()
+    budget = SyntheticBudget()
+    decode = install(monkeypatch, budget)
+    with pytest.raises(RuntimeError):
+        with budget.bind('actor-a', owner['workspace_id']) as scope:
+            assert decode(envelope, marker, owner, projection) == value
+            assert scope.used > 0
+            raise RuntimeError('synthetic failure')
+    assert scope.closed and not scope.entries and budget.used == 0
+    async def exercise():
+        ready = asyncio.Event()
+        scope_ref = []
+        async def request():
+            with budget.bind('actor-b', owner['workspace_id']) as active:
+                scope_ref.append(active)
+                assert decode(envelope, marker, owner, projection) == value
+                ready.set()
+                await asyncio.Event().wait()
+        task = asyncio.create_task(request())
+        await ready.wait(); task.cancel()
+        with pytest.raises(asyncio.CancelledError): await task
+        assert scope_ref[0].closed and not scope_ref[0].entries and budget.used == 0
+    asyncio.run(exercise())

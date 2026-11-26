@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 from types import ModuleType, SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 
@@ -18,6 +19,19 @@ from generic_agents import typed_payload_codec_v131 as codec
 from generic_agents import typed_payload_orm_v131 as orm
 from tests.synthetic_advice_performance_probe import install
 from tests.synthetic_context_function_profile import summarize
+
+
+@pytest.mark.skipif(sys.platform != 'darwin', reason='macOS isolated RSS sampler')
+def test_rss_sampler_records_only_self_and_stops_cleanly():
+    from tests.synthetic_process_rss import SyntheticRssSampler
+    sampler = SyntheticRssSampler(interval_seconds=0.005)
+    sampler.start()
+    sample_allocation = bytearray(2 * 1024 * 1024)
+    time.sleep(0.03)
+    result = sampler.finish()
+    assert sample_allocation and result['start_bytes'] > 0 and result['end_bytes'] > 0
+    assert result['sampled_peak_bytes'] >= result['start_bytes']
+    assert all(type(value) is int and value >= 0 for value in result.values())
 
 
 def test_function_profile_exports_only_whitelisted_names_and_numbers():
