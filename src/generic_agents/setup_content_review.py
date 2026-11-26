@@ -11,6 +11,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import DBAPIError
 
 from .contracts import Contract
 from .db import session
@@ -31,15 +32,23 @@ class ContentReview(Contract):
 
 
 def _lock_actor(db, p):
-    """Keep the HTTP session and write role current until the review commits."""
+    """Try to pin the current session/role; never wait while holding the draft."""
     query = (select(User.id).join(Membership, Membership.user_id == User.id)
         .join(AuthSession, AuthSession.user_id == User.id)
         .where(User.id == p.user_id, User.active.is_(True),
                Membership.workspace_id == p.workspace_id, Membership.role.in_(['admin', 'operator']),
                AuthSession.id == p.session_id, AuthSession.revoked.is_(False),
                AuthSession.expires_at > func.clock_timestamp())
-        .with_for_update(read=True, of=[User, Membership, AuthSession]))
-    if db.scalar(query.execution_options(populate_existing=True)) != p.user_id:
+        .with_for_update(read=True, nowait=True, of=[User, Membership, AuthSession]))
+    try:
+        actor = db.scalar(query.execution_options(populate_existing=True))
+    except DBAPIError as exc:
+        code = getattr(exc.orig, 'sqlstate', None) or getattr(exc.orig, 'pgcode', None)
+        if code not in {'55P03', '40P01'}:
+            raise
+        db.rollback()
+        raise HTTPException(409, '账号权限正在更新，请刷新后重试') from None
+    if actor != p.user_id:
         raise HTTPException(403, '当前账号或权限已变化，请重新登录')
 
 
@@ -136,10 +145,10 @@ def _reviewable(flow):
 @router.post('/candidates/content-review')
 def content_review(body: ContentReview, p: P, db: DB):
     require(p, 'admin', 'operator')
-    _lock_actor(db, p)
     from .setup_api import draft, draft_view
     from .setup_business_candidates import _save_candidates
     row = draft(db, p, True)
+    _lock_actor(db, p)
     check_version(row, body.revision)
     value = copy.deepcopy(row.data)
     flow = value.get('flows', {}).get(body.business)
