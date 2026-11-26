@@ -159,7 +159,12 @@ def save_draft(body: SaveDraft, p: P, db: DB):
     if has_rename and rename_intent is None:
         raise HTTPException(409, '业务改名范围无法核对，原配置保留。')
     validate_configuration(submitted)
-    row = draft(db, p, True); check_version(row, body.revision)
+    row = draft(db, p, True)
+    # Recheck without waiting while holding the draft: older flows sometimes
+    # acquire these locks in the opposite order.
+    from .setup_content_review import _lock_actor
+    _lock_actor(db, p)
+    check_version(row, body.revision)
     from .setup_content_review import reject_client_review_changes, invalidate_content_reviews
     reject_client_review_changes(row.data, submitted)
     from .setup_business_candidates import protect_transitions

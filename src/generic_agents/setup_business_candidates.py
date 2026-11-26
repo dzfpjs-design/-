@@ -406,7 +406,9 @@ def append_candidates(body: AppendCandidates, p: P, db: DB):
     from .setup_api import draft, initial_configuration
 
     require(p, 'admin', 'operator')
+    from .setup_content_review import _lock_actor
     row = draft(db, p, True)
+    _lock_actor(db, p)
     check_version(row, body.revision)
     if row.data.get('businessCandidates') is not None:
         raise HTTPException(409, '已有业务候选，请先处理当前候选')
@@ -495,7 +497,9 @@ def revalidate_candidates(body: RevalidateCandidates, p: P, db: DB):
     from .setup_api import draft, draft_view
 
     require(p, 'admin', 'operator')
+    from .setup_content_review import _lock_actor
     row = draft(db, p, True)
+    _lock_actor(db, p)
     check_version(row, body.revision)
     bundle = validate_bundle(row.data.get('businessCandidates'))
     material = material_snapshot(db, p, bundle.material, check_pin=False)
