@@ -3,6 +3,9 @@ import copy
 import hashlib
 import os
 import stat
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -20,6 +23,60 @@ from tests.test_same_goal_advice_unlimited_store_v2_pg import synthetic_custody
 
 def intent_record(db, p, job_id):
     return db.scalar(select(Job).where(Job.workspace_id == p.workspace_id, Job.idempotency_key == intent._key(job_id)))
+
+
+@pytest.mark.parametrize('block_gate', [False, True])
+def test_registration_slow_source_does_not_hold_gate_and_rechecks_index(ready, monkeypatch, block_gate):
+    """Real PG locks; synthetic source resolver, not an approval-chain test."""
+    from generic_agents import same_goal_advice_intent_index_gate_candidate_v2 as gate
+    s, created, resolved = ready; p = s['principal']; job_id = created['job_id']
+    with Session(engine()) as db:
+        original = intent_record(db, p, job_id)
+        for row in db.scalars(select(Audit).where(Audit.object_id == original.id, Audit.action == intent.ACTION)):
+            db.delete(row)
+        db.delete(original); db.commit()
+    entered, release = Event(), Event()
+    def slow_source(*_):
+        entered.set()
+        assert release.wait(15)
+        return copy.deepcopy(resolved)
+    monkeypatch.setattr(intent.sources, 'resolve_documents', slow_source)
+    def register():
+        with Session(engine()) as db:
+            try:
+                value = intent.register(db, p, s['task_id'], job_id)
+                db.commit()
+                return ('saved', value)
+            except HTTPException as exc:
+                db.rollback()
+                return ('refused', exc.status_code)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(register)
+        try:
+            assert entered.wait(15)
+            with Session(engine()) as db:
+                # Simulates another workspace, which must be able to finish
+                # its own gate check while this workspace reads a slow source.
+                assert gate.require(db, str(uuid4()))['index_checked']
+                if block_gate:
+                    # A competing fenced operation acquired the gate during
+                    # the read: the writer must recheck and fail before write.
+                    release.set()
+                    outcome = future.result(timeout=15)
+                    db.rollback()
+                else:
+                    db.commit()
+                    release.set()
+                    outcome = future.result(timeout=15)
+        finally:
+            release.set()
+    if block_gate:
+        assert outcome == ('refused', 409)
+        with Session(engine()) as db: assert intent_record(db, p, job_id) is None
+    else:
+        assert outcome[0] == 'saved'
+        with Session(engine()) as db:
+            assert intent_record(db, p, job_id).id == outcome[1]
 
 
 def test_crash_after_write_recovers_same_original_without_duplicate_record(ready, monkeypatch):

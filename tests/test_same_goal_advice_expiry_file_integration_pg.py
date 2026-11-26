@@ -25,6 +25,8 @@ from tests import test_same_goal_advice_unlimited_store_v2_pg as synthetic
 
 @pytest.fixture
 def natural(client,account,monkeypatch):
+    from generic_agents.same_goal_advice_intent_index_migration_candidate_v2 import rehearse
+    assert rehearse()['status'] in {'installed', 'already_installed'}
     # Only choose a short lifetime when constructing new synthetic facts; no
     # clock, existing timestamp, real approval or existing state is altered.
     duration=timedelta
@@ -59,6 +61,22 @@ def state_counts(db,s):
         db.scalar(select(func.count()).select_from(Audit).where(Audit.action==intent.ACTION)),
         db.scalar(select(func.count()).select_from(Evidence)),len(list(db.scalars(select(CloudCall)))),
         len(list(db.scalars(select(Invocation)))))
+
+
+def test_policy_expiring_during_registration_source_read_cannot_write(natural, monkeypatch):
+    s, resolved = natural; p = s['principal']
+    def expires_during_read(*_):
+        wait_expired(s)
+        return copy.deepcopy(resolved)
+    monkeypatch.setattr(intent.sources, 'resolve_documents', expires_during_read)
+    with Session(engine()) as db:
+        with pytest.raises(HTTPException):
+            intent.register(db, p, s['task_id'], s['job_id'])
+        db.rollback()
+    with Session(engine()) as db:
+        assert db.scalar(select(func.count()).select_from(Audit).where(Audit.action == intent.ACTION)) == 0
+        assert db.scalar(select(func.count()).select_from(Evidence)) == 0
+        assert db.scalar(select(func.count()).select_from(CloudCall)) == 0
 
 
 def test_register_cannot_commit_after_natural_policy_expiry(natural):

@@ -193,13 +193,35 @@ def test_real_original_job_conflict_and_same_number_retry(monkeypatch, reject_no
             created = writer.prepare(db, p, task_id, request, issued['policy_ref']); db.commit()
         assert migration.rehearse()['status'] in {'installed', 'already_installed'}
         with Session(engine()) as db:
-            intent_id = intent.register(db, p, task_id, created['job_id']); db.commit()
+            second = Workspace(name='Synthetic other workspace'); db.add(second); db.commit(); other = second.id
+        # Exercise the actual original approved source and local file under
+        # registration, not merely a standalone resolver test.
+        entered, release = Event(), Event()
+        real_read = runtime_documents.evidence_bytes
+        def slow_registration_read(db, actor, identity):
+            if identity == evidence_id and not entered.is_set():
+                entered.set()
+                if not release.wait(30): raise TimeoutError('registration stall not released')
+            return real_read(db, actor, identity)
+        def register_intent():
+            with Session(engine()) as db:
+                result = intent.register(db, p, task_id, created['job_id']); db.commit(); return result
+        with monkeypatch.context() as patch:
+            patch.setattr(runtime_documents, 'evidence_bytes', slow_registration_read)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(register_intent)
+                try:
+                    assert entered.wait(120), 'registration did not read its actual approved source'
+                    with Session(engine()) as db:
+                        assert gate.require(db, other)['index_checked']; db.commit()
+                    release.set()
+                    intent_id = future.result(timeout=120)
+                finally:
+                    release.set()
         with Session(engine()) as db:
             control_id = control.register(db, p, task_id, created['job_id']); db.commit()
         with Session(engine()) as db:
             token = control.claim(db, p, control_id); db.commit()
-        with Session(engine()) as db:
-            second = Workspace(name='Synthetic other workspace'); db.add(second); db.commit(); other = second.id
         with Session(engine()) as blocker:
             gate.require(blocker, other)
             deferred = sequential.process_or_defer(p, control_id, token)

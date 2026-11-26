@@ -104,9 +104,6 @@ def _load(db, p, job_id, target, *, lock):
 def register(db, p, task_id, job_id):
     """Record intended bytes; caller must commit before attempting processing."""
     guard.require_disposable_database(db); old._reader(db, p, write=True)
-    # Fence schema DDL before taking Task locks, matching other intent writers.
-    from . import same_goal_advice_intent_index_gate_candidate_v2 as index_gate
-    index_gate.require(db, p.workspace_id)
     task = old.existing._task(db, p, task_id, lock=True); lock_current_actor(db, p)
     job = db.scalar(select(Job).where(Job.workspace_id == p.workspace_id, Job.id == job_id).with_for_update())
     old.need(job is not None and job.kind == v2.PREPARE_KIND and job.available_at == guard.UNAVAILABLE_TO_GENERAL_WORKERS)
@@ -121,6 +118,13 @@ def register(db, p, task_id, job_id):
     _check_current(db, p, task.id, prep['budget']['policy_ref'])
     _bind_commit_guard(db, p, task.id, prep['budget']['policy_ref'])
     target = _target(p, task, plan, job, prep, resolved)
+    # Reading and validating the source is potentially slow.  It does not
+    # write a file or create an intent.  Take the global DDL/index fence only
+    # after that read, then recheck the exact unique index before any write.
+    # The fence is NOWAIT, so a competing writer fails closed rather than
+    # waiting while holding this task's row locks.
+    from . import same_goal_advice_intent_index_gate_candidate_v2 as index_gate
+    index_gate.require(db, p.workspace_id)
     record = db.scalar(select(Job).where(Job.workspace_id == p.workspace_id,
         Job.idempotency_key == _key(job.id)).with_for_update())
     if record is not None:
