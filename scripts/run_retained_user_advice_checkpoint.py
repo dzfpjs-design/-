@@ -8,8 +8,8 @@ import argparse
 import json
 import os
 from pathlib import Path
+import select
 import shutil
-import signal
 import socket
 import subprocess
 import sys
@@ -72,27 +72,33 @@ def _isolated_ports():
 
 
 def _stop_test_process_group(process):
-    """Stop our session and confirm its process group has disappeared."""
-    try:os.killpg(process.pid,signal.SIGTERM)
-    except ProcessLookupError:return True
-    except OSError:return False
-    try:process.wait(timeout=10)
-    except subprocess.TimeoutExpired:pass
-    except OSError:return False
-    # A child may outlive its pytest parent after any exit, not just timeout.
-    try:os.killpg(process.pid,signal.SIGKILL)
-    except ProcessLookupError:return True
-    except OSError:return False
+    """Ask our live anchor over its private pipe; never signal a numeric PGID."""
+    if process.returncode is not None:return False
     try:
-        if process.poll() is None:process.wait(timeout=10)
-    except (OSError,subprocess.TimeoutExpired):return False
+        process.stdin.write(b'S');process.stdin.flush();process.stdin.close()
+        process.wait(timeout=10)
+    except (OSError,ValueError,subprocess.TimeoutExpired):return False
     deadline=time.monotonic()+5
     while True:
-        try:os.killpg(process.pid,0)
-        except ProcessLookupError:return True
-        except OSError:return False
+        try:
+            output=subprocess.check_output(['/bin/ps','-ax','-o','pgid='],text=True,timeout=2)
+            groups=output.split()
+            if not groups or any(not item.isdecimal() for item in groups):return False
+            if str(process.pid) not in groups:return True
+        except (OSError,subprocess.SubprocessError):return False
         if time.monotonic()>=deadline:return False
         time.sleep(0.05)
+
+
+def _await_test_result(fd,timeout):
+    ready,_,_=select.select([fd],[],[],timeout)
+    if not ready:return None
+    value=os.read(fd,256)
+    try:result=json.loads(value)
+    except (ValueError,UnicodeError):raise RuntimeError('synthetic test result unavailable')
+    if not isinstance(result,dict) or type(result.get('exit_code')) is not int:
+        raise RuntimeError('synthetic test result unavailable')
+    return result['exit_code']
 
 
 def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False):
@@ -135,19 +141,29 @@ def run(pg,pytest_bin,checkpoint,timeout,retention_probe=False):
         _write(root/'status.json',{'state':'running','cluster_stopped':False})
         fd=os.open(root/'test.log',os.O_CREAT|os.O_WRONLY|os.O_TRUNC|os.O_NOFOLLOW,0o600)
         with os.fdopen(fd,'w') as out:
-            process=subprocess.Popen(['/usr/bin/sandbox-exec','-p',profile,str(pytest_bin),'-q',
+            result_read,result_write=os.pipe()
+            try:
+                process=subprocess.Popen(['/usr/bin/sandbox-exec','-p',profile,sys.executable,
+                    str(repo/'scripts'/'synthetic_process_anchor.py'),str(result_write),str(pytest_bin),'-q',
                     'tests/test_synthetic_retention_probe_pg.py' if retention_probe else
                     'tests/test_advice_user_real_http_checkpoint_pg.py'],cwd=repo,env=env,
-                    stdout=out,stderr=subprocess.STDOUT,start_new_session=True)
+                    stdin=subprocess.PIPE,stdout=out,stderr=subprocess.STDOUT,start_new_session=True,
+                    pass_fds=(result_write,))
+            except BaseException:
+                os.close(result_read);os.close(result_write);raise
+            os.close(result_write)
             test_processes_stopped=False
             try:
-                exit_code=process.wait(timeout=timeout);outcome='passed' if exit_code==0 else 'failed'
-            except subprocess.TimeoutExpired:
-                outcome='timeout'
+                exit_code=_await_test_result(result_read,timeout)
+                outcome='finished' if exit_code is not None else 'timeout'
+            except (OSError,RuntimeError):
+                outcome='process_identity_unconfirmed'
             finally:
-                # A worker's sending state may be unknown; stop it and never restart it.
+                os.close(result_read)
+                # The anchor's private pipe remains bound to this exact process.
                 test_processes_stopped=_stop_test_process_group(process)
-                if not test_processes_stopped and outcome=='passed':outcome='process_cleanup_unconfirmed'
+                if outcome=='finished':
+                    outcome=('passed' if exit_code==0 else 'failed') if test_processes_stopped else 'process_cleanup_unconfirmed'
     finally:
         stopped=not start_attempted
         if start_attempted:
