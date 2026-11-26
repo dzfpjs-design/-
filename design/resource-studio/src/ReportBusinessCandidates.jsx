@@ -43,7 +43,7 @@ export default function ReportBusinessCandidates({bundle, workspace, liveWorkspa
   const current=++generation.current,abort=new AbortController(),valid=()=>current===generation.current&&identityRef.current===identity&&sessionToken()===sessionMarker;controller.current=abort;setBusy(true);setError('');setNotice('');setPreview(null);
   try {
    const material=bundle.material;
-   const result=await request('/setup/candidates/preview',{method:'POST',body:JSON.stringify({material:{id:material.id,version:material.version,hash:material.hash,engine:material.engine},candidates:bundle.candidates}),signal:abort.signal});
+   const result=await request('/setup/candidates/preview',{method:'POST',body:JSON.stringify({schema:bundle.schema,origin:bundle.origin,material:{id:material.id,version:material.version,hash:material.hash,engine:material.engine},candidates:bundle.candidates}),signal:abort.signal});
    if(valid()){
     if(!result||!Array.isArray(result.candidates)||!result.material||result.candidates.length!==bundle.candidates.length)throw Error('候选暂不可用，请重新核对。');
     for(const item of bundle.candidates)addReportCandidate({businesses:[],flows:{}},bundle,result,item.key,materials,materialReadStatus,()=> 'check');
